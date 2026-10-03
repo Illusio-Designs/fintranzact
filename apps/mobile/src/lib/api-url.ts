@@ -46,3 +46,8 @@ export function getWebUrl(): string {
 export function getBillingUrl(): string {
   return `${getWebUrl()}${BILLING_UPGRADE_PATH}`;
 }
+
+/** The public pricing page, where anyone (owner or not) can look at the plans. */
+export function getPricingUrl(): string {
+  return `${getWebUrl()}/pricing`;
+}

@@ -22,6 +22,8 @@ import { useColors } from "../../../../src/contexts/ThemeContext";
 import { haptic } from "../../../../src/lib/haptics";
 import { DatePickerField } from "../../../../src/components/ui";
 import { LineItemNotesField } from "../../../../src/components/LineItemNotesField";
+import { FeatureNotice } from "../../../../src/components/FeatureNotice";
+import { useFeature } from "../../../../src/hooks/useFeature";
 
 /* ── Types & Helpers ──────────────────────────────────────────── */
 
@@ -202,6 +204,7 @@ function LineItemRow({ item, index, onChange, onRemove }: LineItemRowProps) {
 
 export default function CreateRecurringInvoiceScreen() {
   const styles = useStyles();
+  const feature = useFeature("recurringInvoices");
   const colors = useColors();
   const router = useRouter();
 
@@ -298,6 +301,7 @@ export default function CreateRecurringInvoiceScreen() {
         keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}
       >
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <FeatureNotice flag="recurringInvoices" />
           {/* Name */}
           <View style={styles.section}>
             <Text style={styles.label}>Template Name *</Text>
@@ -472,9 +476,9 @@ export default function CreateRecurringInvoiceScreen() {
 
           {/* Submit */}
           <TouchableOpacity
-            style={[styles.submitBtn, createMutation.isPending && styles.submitBtnDisabled]}
+            style={[styles.submitBtn, (createMutation.isPending || !feature.allowed) && styles.submitBtnDisabled]}
             onPress={handleSubmit}
-            disabled={createMutation.isPending || !selectedParty || !lineItems.some((li) => li.itemName.trim() && li.unitPrice)}
+            disabled={!feature.allowed || createMutation.isPending || !selectedParty || !lineItems.some((li) => li.itemName.trim() && li.unitPrice)}
             activeOpacity={0.85}
           >
             {createMutation.isPending ? (

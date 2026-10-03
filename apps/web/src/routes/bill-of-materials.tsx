@@ -6,6 +6,8 @@ import { toast } from "@/hooks/useToast";
 import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { FeatureNotice } from "@/components/billing/FeatureNotice";
+import { useFeature } from "@/hooks/useFeature";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField, TextareaField } from "@/components/ui/FormField";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -158,13 +160,16 @@ function BillOfMaterialsPage() {
     setOpen(true);
   };
 
+  const feature = useFeature("manufacturing");
+
   return (
     <div>
       <PageHeader
         title="Bill of Materials"
         description="What goes into each item you make. Manufacturing uses these to know what to take out of stock."
-        actions={<button className="btn-primary" onClick={openNew}>+ New BOM</button>}
+        actions={<button className="btn-primary" onClick={openNew} {...feature.lockedProps}>+ New BOM</button>}
       />
+      <FeatureNotice flag="manufacturing">Your existing bills of material stay readable.</FeatureNotice>
 
       <ListCard
         filters={
@@ -182,7 +187,7 @@ function BillOfMaterialsPage() {
             <EmptyState
               title={debounced ? "No BOMs match" : "No bills of material yet"}
               description="Set up a BOM for each item you manufacture: the components and how much of each it takes."
-              action={!debounced ? <button className="btn-primary" onClick={openNew}>Create a BOM</button> : undefined}
+              action={!debounced ? <button className="btn-primary" onClick={openNew} {...feature.lockedProps}>Create a BOM</button> : undefined}
             />
           ) : undefined
         }

@@ -4,7 +4,7 @@ import { API_BASE_URL } from "./api-base";
 export const bankReconEndpoints: EndpointGroup = {
   id: "bank-recon",
   title: "Bank Reconciliation",
-  description: "Import bank statements and reconcile against your books. Pre-built templates for 10 Indian banks (SBI, HDFC, ICICI, Axis, Kotak, PNB, BOB, Union, IDBI, IndusInd). 4-tier auto-matching: exact, strong, narration parse, partial. Auto-categorization rules for recurring entries.",
+  description: "Import bank statements and reconcile against your books. Pre-built templates for 10 Indian banks (SBI, HDFC, ICICI, Axis, Kotak, PNB, BOB, Union, IDBI, IndusInd). 4-tier auto-matching: exact, strong, narration parse, partial. Auto-categorization rules for recurring entries. Plan feature: bank reconciliation. Importing, matching, rules and templates are refused with `feature_not_in_plan` when the plan does not include it; statements already imported stay readable.",
   endpoints: [
     {
       id: "bank-recon-upload",

@@ -10,6 +10,7 @@
  */
 import { useId, useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { useFeature } from "@/hooks/useFeature";
 import { cn, formatDate } from "@/lib/utils";
 import { DateInput } from "@/components/ui/DateInput";
 import { Listbox } from "@/components/ui/Listbox";
@@ -289,15 +290,24 @@ export function BatchTrackingFields({
   onOpeningBatchChange?: (patch: BatchInValue) => void;
 }) {
   const uid = useId();
+  const feature = useFeature("batchesExpiry");
+  // Switching tracking ON needs the plan; an item that already tracks keeps its setting (and can switch it off).
+  const locked = !feature.allowed && !trackBatches;
   const hasOpening = !!onOpeningBatchChange && parseFloat(openingStock || "0") > 0;
   return (
     <div className="space-y-3">
-      <label htmlFor={`${uid}-batches`} className="flex cursor-pointer items-start gap-2 text-sm text-text-primary">
+      {locked && (
+        <p role="status" data-testid="batch-plan-note" className="rounded-lg border border-border-light bg-surface-1 px-3 py-2 text-xs text-text-secondary">
+          {feature.message}
+        </p>
+      )}
+      <label htmlFor={`${uid}-batches`} className={cn("flex items-start gap-2 text-sm", locked ? "text-text-tertiary" : "cursor-pointer text-text-primary")}>
         <input
           id={`${uid}-batches`}
           type="checkbox"
           className="mt-0.5 rounded"
           checked={trackBatches}
+          disabled={locked}
           onChange={(e) => onChange({ trackBatches: e.target.checked, ...(e.target.checked ? {} : { trackExpiry: false }) })}
         />
         <span>

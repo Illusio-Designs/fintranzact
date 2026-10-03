@@ -4,7 +4,7 @@ import { API_BASE_URL } from "./api-base";
 export const posEndpoints: EndpointGroup = {
   id: "pos",
   title: "Point of Sale",
-  description: "Catalogue for the point-of-sale register. The register rings up sales through `invoice.create` with `source: \"pos\"` (usually against the walk-in party from `business.ensureWalkInParty`); the POS router only serves the product grid. POS is switched on per business with `business.setPosEnabled`.",
+  description: "Catalogue for the point-of-sale register. The register rings up sales through `invoice.create` with `source: \"pos\"` (usually against the walk-in party from `business.ensureWalkInParty`); the POS router only serves the product grid. POS is switched on per business with `business.setPosEnabled`. Plan feature: POS. The catalog is refused with `feature_not_in_plan` when the plan does not include POS, and so is saving an invoice with `source: \"pos\"`.",
   endpoints: [
     {
       id: "pos-catalog",

@@ -20,6 +20,7 @@ import {
 } from "@fintranzact/shared";
 import { router, publicProcedure, protectedProcedure, tenantProcedure } from "../trpc.js";
 import { getEntitlements } from "../lib/entitlements.js";
+import { featureCatalogInfo } from "../lib/feature-gate.js";
 import { PLAN_MANAGER_ROLES } from "../lib/plan-manager.js";
 import { getPlanCatalog } from "../lib/plan-catalog.js";
 import { requirePlanManagerTenant } from "../lib/plan-manager.js";
@@ -191,6 +192,7 @@ export const billingRouter = router({
       .from(tenantMembers)
       .where(and(eq(tenantMembers.tenantId, ctx.tenantId), eq(tenantMembers.userId, ctx.user.id)))
       .limit(1);
+    const featureInfo = await featureCatalogInfo();
     return {
       state: ent.state,
       readOnly: ent.readOnly,
@@ -205,6 +207,12 @@ export const billingRouter = router({
       effectivePlan: ent.effectivePlan,
       graceUntil: ent.graceUntil,
       addons: ent.addons,
+      // The plan's feature flags in force now (trial = Business-level, grandfathered = all), and
+      // for each flag the cheapest plan that has it in the stored plan settings (for badges and prompts).
+      plan: ent.plan,
+      features: ent.features,
+      featureRequiredPlans: featureInfo.requiredPlans,
+      topPlanName: featureInfo.topPlanName,
       upgradePath: BILLING_UPGRADE_PATH,
       canManageBilling: !!membership && PLAN_MANAGER_ROLES.includes(membership.role),
     };

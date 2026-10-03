@@ -7,6 +7,7 @@ import { Logo } from "@/components/ui/Logo";
 import { Spinner } from "@/components/ui/Spinner";
 import { trpc, getBusinessId, setBusinessId } from "@/lib/trpc";
 import { POSShell } from "@/features/pos/POSShell";
+import { useFeature } from "@/hooks/useFeature";
 
 export const Route = createFileRoute("/pos")({
   component: POSRoute,
@@ -29,6 +30,7 @@ export const Route = createFileRoute("/pos")({
  */
 function POSRoute() {
   const navigate = useNavigate();
+  const feature = useFeature("pos");
   const { data: bizRows, isPending } = trpc.business.list.useQuery();
 
   // Prefer an already-selected business; otherwise fall back to the first
@@ -86,6 +88,23 @@ function POSRoute() {
 
   if (isPending) {
     return <POSGate busy title="Opening the register…" />;
+  }
+
+  // The plan has no POS: say so, with the way to the plans (existing sales stay in Invoices).
+  if (!feature.allowed) {
+    return (
+      <POSGate
+        title="POS is not on your plan"
+        description={feature.message}
+        note="Sales you already made at the counter stay in Invoices."
+        actions={
+          <>
+            <Link to="/" className="btn-secondary">Back to Dashboard</Link>
+            <Link to="/pricing" className="btn-primary">See plans</Link>
+          </>
+        }
+      />
+    );
   }
 
   if (!activeBiz) {

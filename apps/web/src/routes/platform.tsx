@@ -20,7 +20,7 @@ import {
   formatYearlyPlanPrice,
   PLAN_FLAG_GROUPS,
   PLAN_IDS,
-  PLAN_FLAGS_ENFORCED,
+  planFlagNote,
   planSettingsWarnings,
   PLAN_NAMES,
   YEARLY_SAVING_MONTHS,
@@ -445,6 +445,7 @@ function OrganisationsView({ onOpen }: { onOpen: (id: string) => void }) {
                     <td>
                       {PLAN_LABELS[t.plan] ?? t.plan}
                       {t.accessGrandfathered ? <span className="ml-2"><Chip tone="amber">Grandfathered</Chip></span> : null}
+                      <SupportBadges labels={t.support?.labels} />
                     </td>
                     <td><StatusPill status={t.status} /></td>
                     <td>
@@ -489,8 +490,6 @@ const LIMIT_FIELDS: { key: keyof StoredPlanLimits; label: string; unit?: string 
   { key: "maxApiKeys", label: "API keys" },
   { key: "auditRetentionDays", label: "Audit log kept for", unit: "days" },
 ];
-/** The flags the API enforces today; the rest only describe the plan. */
-const ENFORCED_FLAGS: ReadonlySet<string> = new Set(PLAN_FLAGS_ENFORCED);
 
 /** Every plan: what it costs, what it includes, and its limits. Each can be edited. */
 function PlansView() {
@@ -574,6 +573,18 @@ function Chip({ tone, children }: { tone: "green" | "grey" | "blue" | "amber" | 
     red: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
   };
   return <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", tones[tone])}>{children}</span>;
+}
+
+/** The plan's operational flags for the support team: Priority support / Onboarding help included. */
+function SupportBadges({ labels }: { labels?: string[] }) {
+  if (!labels || labels.length === 0) return null;
+  return (
+    <span className="ml-2 inline-flex flex-wrap gap-1" data-testid="support-badges">
+      {labels.map((l) => (
+        <Chip key={l} tone={l.startsWith("Priority") ? "green" : "blue"}>{l}</Chip>
+      ))}
+    </span>
+  );
 }
 
 function Limit({ label, value }: { label: string; value: number | boolean | null }) {
@@ -772,8 +783,10 @@ function PlanEditor({ plan, onClose }: { plan: AdminPlan | null; onClose: () => 
           <section className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wide text-text-tertiary">Features</h3>
             <p className="text-xs text-text-tertiary">
-              Data export, Online store and the “Powered by Fintranzact” PDF line are enforced. Every other feature below is{" "}
-              <strong>shown on the plan; not enforced yet</strong>: switching it off does not stop anyone using it.
+              Switching a feature off stops that plan creating or changing it in the app, the API and scheduled jobs; what the
+              organisation already has stays readable. A trial gets Business-level features and grandfathered organisations keep
+              everything. Support flags are <strong>operational</strong> (the support team sees a badge) and Approvals is{" "}
+              <strong>not built yet</strong>.
             </p>
             {PLAN_FLAG_GROUPS.map((group) => (
               <div key={group.group} className="space-y-1 rounded-xl border border-border-light px-3 py-2">
@@ -782,7 +795,7 @@ function PlanEditor({ plan, onClose }: { plan: AdminPlan | null; onClose: () => 
                   <Check
                     key={flag.key}
                     label={flag.label}
-                    hint={ENFORCED_FLAGS.has(flag.key) ? undefined : "Shown on the plan; not enforced yet"}
+                    hint={planFlagNote(flag.key)}
                     checked={form.limits[flag.key] as boolean}
                     onChange={(v) => setLimit(flag.key, v)}
                   />
@@ -1330,6 +1343,7 @@ function OrganisationPanel({ id, onClose }: { id: string | null; onClose: () => 
           <div className="flex items-center gap-2">
             <StatusPill status={detail.status} />
             {detail.accessGrandfathered ? <Chip tone="amber">Grandfathered</Chip> : null}
+            <SupportBadges labels={detail.support?.labels} />
             <span className="font-mono text-xs text-text-tertiary">{detail.slug}</span>
           </div>
 

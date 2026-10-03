@@ -4,7 +4,7 @@ import { API_BASE_URL } from "./api-base";
 export const recurringInvoiceEndpoints: EndpointGroup = {
   id: "recurring",
   title: "Recurring Invoices",
-  description: "Create recurring invoice templates that auto-generate invoices on schedule. Supports daily, weekly, monthly, and yearly frequencies. In-process scheduler with 60s tick.",
+  description: "Create recurring invoice templates that auto-generate invoices on schedule. Supports daily, weekly, monthly, and yearly frequencies. In-process scheduler with 60s tick. Plan feature: recurring invoices. Creating, editing, resuming and running templates is refused with `feature_not_in_plan` when the plan does not include it, and no invoices are generated from existing templates; pausing and deleting a template always work.",
   endpoints: [
     {
       id: "recurring-list",

@@ -4,7 +4,7 @@ import { API_BASE_URL } from "./api-base";
 export const eInvoiceEndpoints: EndpointGroup = {
   id: "einvoice",
   title: "E-Invoicing",
-  description: "Generate e-invoices via NIC IRP (Invoice Registration Portal). Configure IRP credentials, generate IRN numbers, cancel within 24 hours, and track e-invoice status across all invoices.",
+  description: "Generate e-invoices via NIC IRP (Invoice Registration Portal). Configure IRP credentials, generate IRN numbers, cancel within 24 hours, and track e-invoice status across all invoices. Plan feature: e-invoicing. Every write here (and the automatic IRN submission after an invoice is saved) is refused with `feature_not_in_plan` when the organisation's plan does not include it; reads of existing e-invoice data keep working.",
   endpoints: [
     {
       id: "einvoice-configure",

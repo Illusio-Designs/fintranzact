@@ -15,6 +15,7 @@ import { CA_ROLES, type PlanLimits } from "@fintranzact/shared";
 import { getPlanLimits } from "./plan-catalog.js";
 import { getEntitlements, assertWritable } from "./entitlements.js";
 import { limitError } from "./entitlement-error.js";
+import { apiAccessMessage, featureRefusal } from "./feature-gate.js";
 
 // ── Plan limit definitions ────────────────────────────────────────────────────
 // Defined once in @fintranzact/shared so the pricing page shows exactly the
@@ -188,9 +189,8 @@ export async function countCaSlots(tenantId: string): Promise<{ memberCaCount: n
 export async function enforceApiKeyLimit(tenantId: string): Promise<void> {
   const limits = await getTenantLimits(tenantId);
   if (limits.maxApiKeys === 0) {
-    throw limitError(
-      "API keys are available on paid plans. Upgrade to Growth to use the CLI and MCP server.",
-    );
+    // API access is the plan's maxApiKeys: the wording names the cheapest plan that has it, from the stored settings.
+    throw limitError(`${await apiAccessMessage()} Upgrade to use the CLI and MCP server.`);
   }
   if (limits.maxApiKeys === Infinity) return;
 
@@ -253,9 +253,6 @@ export async function enforceSessionLimit(userId: string, parentTx?: ControlTxLi
   }
 }
 
-/** The message for a plan without data export. */
-export const DATA_EXPORT_DENIED_MESSAGE = "Data export is available on paid plans. Upgrade to export your data.";
-
 /**
  * Enforce data export access. This checks the plan's `dataExport` flag only:
  * a read-only organisation (trial over, payment failed) can still export when
@@ -264,9 +261,10 @@ export const DATA_EXPORT_DENIED_MESSAGE = "Data export is available on paid plan
  * and GET /api/export/:tenantId.
  */
 export async function enforceDataExport(tenantId: string): Promise<void> {
-  const limits = await getTenantLimits(tenantId);
-  if (!limits.dataExport) {
-    throw limitError(DATA_EXPORT_DENIED_MESSAGE);
+  const ent = await getEntitlements(tenantId);
+  if (!ent.limits.dataExport) {
+    // feature_not_in_plan: "Data export is available on the Growth plan and above."
+    throw await featureRefusal("dataExport", ent.plan);
   }
 }
 
@@ -339,12 +337,10 @@ export function auditWindowStart(retentionDays: number | null, now: Date = new D
   return new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
 }
 
-/** Message for a plan without the online store. Staff-facing only: buyers never see it. */
-export const ONLINE_STORE_DENIED_MESSAGE = "The online store is available on paid plans. Upgrade to turn it on.";
-
-/** Refuse enabling or configuring the online store on a plan without it. */
+/** Refuse enabling or configuring the online store on a plan without it. Staff-facing only: buyers never see it. */
 export async function enforceOnlineStore(tenantId: string): Promise<void> {
-  if (!(await getTenantLimits(tenantId)).onlineStore) {
-    throw limitError(ONLINE_STORE_DENIED_MESSAGE);
+  const ent = await getEntitlements(tenantId);
+  if (!ent.limits.onlineStore) {
+    throw await featureRefusal("onlineStore", ent.plan);
   }
 }

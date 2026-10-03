@@ -45,8 +45,8 @@ export interface PlanLimits {
   onlineStore: boolean;
   pdfBranding: boolean; // true = the small "Powered by Fintranzact" line on PDFs; on for all three plans, editable per plan
   // Feature flags. Editable per plan in the admin console and shown on the
-  // pricing page. Only the flags listed in PLAN_FLAGS_ENFORCED are enforced by
-  // the API today; the rest describe the plan and gate nothing yet.
+  // pricing page. feature-gates.ts (FEATURE_GATES) says what each one gates;
+  // PLAN_FLAGS_ENFORCED is derived from it.
   gstReports: boolean;
   eWayBills: boolean;
   recurringInvoices: boolean;
@@ -90,13 +90,6 @@ export const PLAN_COUNT_KEYS = [
   "maxApiKeys",
 ] as const;
 export type PlanCountKey = (typeof PLAN_COUNT_KEYS)[number];
-
-/**
- * Flags the API enforces today. Everything else in PLAN_FLAG_KEYS is
- * descriptive until its feature gets an enforcement hook. (API access is the
- * maxApiKeys limit: 0 means none.)
- */
-export const PLAN_FLAGS_ENFORCED: readonly PlanFlagKey[] = ["dataExport", "onlineStore", "pdfBranding"];
 
 /** Plan names for places that only have an id (admin lists, subscriptions). */
 export const PLAN_NAMES: Record<PlanId, string> = { starter: "Starter", growth: "Growth", business: "Business" };

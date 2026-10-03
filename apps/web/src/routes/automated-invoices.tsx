@@ -10,6 +10,8 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useHotkeys } from "@/hooks/useHotkeys";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { FeatureNotice } from "@/components/billing/FeatureNotice";
+import { useFeature } from "@/hooks/useFeature";
 import { SlideOver } from "@/components/ui/SlideOver";
 import { InputField, TextareaField } from "@/components/ui/FormField";
 import { Listbox } from "@/components/ui/Listbox";
@@ -448,17 +450,22 @@ function AutomatedInvoicesPage() {
   // Deleting the last template of the last page: step back a page.
   useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
 
+  const feature = useFeature("recurringInvoices");
+
   return (
     <div>
       <PageHeader
         title="Recurring Invoices"
         description="Manage recurring invoice templates"
         actions={
-          <button className="btn-primary" onClick={openAdd}>
+          <button className="btn-primary" onClick={openAdd} {...feature.lockedProps}>
             + New Template
           </button>
         }
       />
+      <FeatureNotice flag="recurringInvoices">
+        No new invoices are generated from your templates while the plan lacks it; you can still pause or delete them.
+      </FeatureNotice>
 
       {/* Plan Usage Bar — the limit comes from the organization's plan */}
       {planUsage && (
@@ -569,7 +576,7 @@ function AutomatedInvoicesPage() {
               }
               action={
                 !search && !statusFilter ? (
-                  <button className="btn-primary text-sm" onClick={openAdd}>
+                  <button className="btn-primary text-sm" onClick={openAdd} {...feature.lockedProps}>
                     + Create Template
                   </button>
                 ) : undefined

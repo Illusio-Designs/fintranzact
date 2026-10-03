@@ -102,7 +102,7 @@ describe("data export", () => {
 
   it("is refused by selfExport.request and the export route when the plan's dataExport is false", async () => {
     const { owner, tenant, caller } = await org({ plan: "starter" });
-    await expect(caller().selfExport.request({ tenantId: tenant.id })).rejects.toThrow(/Data export is available on paid plans/);
+    await expect(caller().selfExport.request({ tenantId: tenant.id })).rejects.toThrow(/Data export is available on the Growth plan and above/);
     // A token that predates a downgrade is refused by the route too.
     const { token } = signExportToken(tenant.id, owner.id);
     const res = await download(tenant.id, token);
@@ -160,7 +160,7 @@ describe("online store availability", () => {
 
   it("store.updateSettings refuses enabling the store on a plan without it, but allows turning it off", async () => {
     const { caller } = await org({ plan: "starter" });
-    await expect(caller().store.updateSettings({ storeEnabled: true })).rejects.toThrow(/online store is available on paid plans/);
+    await expect(caller().store.updateSettings({ storeEnabled: true })).rejects.toThrow(/Online store is available on the Growth plan and above/);
     await expect(caller().store.updateSettings({ storeEnabled: false })).resolves.toBeTruthy();
   });
 });

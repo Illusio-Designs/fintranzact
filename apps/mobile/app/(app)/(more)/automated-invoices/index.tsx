@@ -15,6 +15,8 @@ import { formatDateShort } from "../../../../src/lib/utils";
 import { makeStyles } from "../../../../src/lib/makeStyles";
 import { useColors } from "../../../../src/contexts/ThemeContext";
 import { FAB, EmptyState } from "../../../../src/components/ui";
+import { FeatureNotice } from "../../../../src/components/FeatureNotice";
+import { useFeature } from "../../../../src/hooks/useFeature";
 
 /* ── Status styling ───────────────────────────────────────────── */
 
@@ -51,6 +53,7 @@ const PAGE_SIZE = 20;
 
 export default function AutomatedInvoicesScreen() {
   const styles = useStyles();
+  const feature = useFeature("recurringInvoices");
   const colors = useColors();
   const router = useRouter();
   const [selectedStatus, setSelectedStatus] = useState<TemplateStatus | null>(null);
@@ -90,6 +93,8 @@ export default function AutomatedInvoicesScreen() {
         <Text style={styles.title}>Recurring Invoices</Text>
         <View style={{ width: 44 }} />
       </View>
+
+      <FeatureNotice flag="recurringInvoices" />
 
       {/* Usage Summary */}
       <View style={styles.summaryCard}>
@@ -221,7 +226,7 @@ export default function AutomatedInvoicesScreen() {
         />
       )}
 
-      <FAB onPress={() => router.push("/(more)/automated-invoices/create" as never)} />
+      <FAB disabled={!feature.allowed} onPress={() => router.push("/(more)/automated-invoices/create" as never)} />
     </SafeAreaView>
   );
 }

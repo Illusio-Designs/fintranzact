@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/Badge";
 import { toast } from "@/hooks/useToast";
 import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { FeatureNotice } from "@/components/billing/FeatureNotice";
+import { useFeature } from "@/hooks/useFeature";
 import { PillTabs } from "@/components/ui/Tabs";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SlideOver } from "@/components/ui/SlideOver";
@@ -135,6 +137,7 @@ function BankReconciliationPage() {
         title="Bank Reconciliation"
         description="Match bank statement imports with payments and expenses"
       />
+      <FeatureNotice flag="bankReconciliation">Statements you have already imported stay readable.</FeatureNotice>
 
       <div className="mb-5 overflow-x-auto">
         <PillTabs
@@ -186,6 +189,7 @@ function HubTab({
   onOpenSummary: (accountId: string) => void;
   onUpload: () => void;
 }) {
+  const feature = useFeature("bankReconciliation");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = usePageSize("bank_imports", 25);
   const tableRef = useRef<HTMLDivElement>(null);
@@ -235,7 +239,7 @@ function HubTab({
                   </p>
                 </div>
                 <div className="mt-4 flex gap-2">
-                  <button className="btn-primary flex-1 justify-center" onClick={onUpload}>
+                  <button className="btn-primary flex-1 justify-center" onClick={onUpload} {...feature.lockedProps}>
                     Import statement
                   </button>
                   <button className="btn-secondary flex-1 justify-center" onClick={() => onOpenSummary(acc.id)}>
@@ -264,7 +268,7 @@ function HubTab({
       <section className={cn(PANEL, "overflow-clip")}>
         <PanelHeader title="Recent imports">
           {imports && imports.data.length > 0 && (
-            <button className="btn-secondary" onClick={onUpload}>Import statement</button>
+            <button className="btn-secondary" onClick={onUpload} {...feature.lockedProps}>Import statement</button>
           )}
         </PanelHeader>
         {isLoading ? (
@@ -335,7 +339,7 @@ function HubTab({
               title="No imports yet"
               description="Upload a bank statement to get started"
               action={
-                <button className="btn-primary" onClick={onUpload}>
+                <button className="btn-primary" onClick={onUpload} {...feature.lockedProps}>
                   Import statement
                 </button>
               }
@@ -1483,6 +1487,7 @@ const EMPTY_RULE_FORM: RuleForm = {
 };
 
 function RulesTab() {
+  const feature = useFeature("bankReconciliation");
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<RuleForm>(EMPTY_RULE_FORM);
@@ -1570,6 +1575,7 @@ function RulesTab() {
         <button
           className="btn-primary"
           onClick={() => { setEditId(null); setForm(EMPTY_RULE_FORM); setShowForm(true); }}
+          {...feature.lockedProps}
         >
           + New Rule
         </button>
@@ -1654,7 +1660,7 @@ function RulesTab() {
           title="No rules yet"
           description="Create rules to auto-categorize recurring bank transactions"
           action={
-            <button className="btn-primary" onClick={() => { setForm(EMPTY_RULE_FORM); setShowForm(true); }}>
+            <button className="btn-primary" onClick={() => { setForm(EMPTY_RULE_FORM); setShowForm(true); }} {...feature.lockedProps}>
               + New Rule
             </button>
           }

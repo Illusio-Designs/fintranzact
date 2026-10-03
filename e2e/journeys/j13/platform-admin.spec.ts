@@ -128,8 +128,10 @@ test.describe("J13 platform admin", () => {
     await editor.getByLabel("Yearly price (₹)").fill("30000");
     await expect(editor.getByRole("status")).toContainText("more than 12 months");
     await editor.getByLabel("Yearly price (₹)").fill("19999");
-    // Feature flags: the ones the API does not enforce yet say so.
-    await expect(editor.getByText("Shown on the plan; not enforced yet").first()).toBeVisible();
+    // Feature flags: enforced ones carry no note; the feature that is not built yet (approvals) and the operational ones say so.
+    await expect(editor.getByText("Not built yet: shown on the plan only")).toBeVisible();
+    await expect(editor.getByText(/^Operational: the support team sees a badge/).first()).toBeVisible();
+    await expect(editor.getByText("Shown on the plan; not enforced yet")).toHaveCount(0);
     await editor.getByRole("checkbox", { name: /^e-invoicing/ }).uncheck();
     await editor.getByLabel("Team members", { exact: true }).fill("25");
     await expectNoHorizontalScroll(page, "plan editor");

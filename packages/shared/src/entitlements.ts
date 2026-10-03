@@ -33,6 +33,7 @@ import {
   type TrialCaps,
   type TrialInfo,
 } from "./trial.js";
+import { PLAN_FLAG_KEYS, type PlanFlagKey } from "./plans.js";
 
 export type EntitlementReason =
   | "read_only_halted"
@@ -40,6 +41,7 @@ export type EntitlementReason =
   | "read_only_subscription_ended"
   | "plan_limit"
   | "addon_required"
+  | "feature_not_in_plan"
   | "tenant_suspended";
 
 export type AccessState =
@@ -61,6 +63,16 @@ export interface EntitlementErrorData {
   reason: EntitlementReason;
   upgradePath: string;
   addon?: AddonId;
+  /** feature_not_in_plan only (same value as `reason`, for clients that branch on `code`). */
+  code?: "feature_not_in_plan";
+  /** feature_not_in_plan: the plan flag, e.g. "eInvoicing". */
+  feature?: PlanFlagKey;
+  /** feature_not_in_plan: the feature as people read it, e.g. "E-invoicing". */
+  featureName?: string;
+  /** feature_not_in_plan: the cheapest plan with the feature in the CURRENT plan settings; null when no plan has it. */
+  requiredPlan?: string | null;
+  /** feature_not_in_plan: the organisation's plan name. */
+  currentPlan?: string;
 }
 
 export const READ_ONLY_MESSAGE =
@@ -75,6 +87,7 @@ export const READ_ONLY_REASON_MESSAGES: Record<EntitlementReason, string> = {
     "Your plan has ended. Choose a plan to keep creating and editing — you can still view, search, download PDFs and export your data.",
   plan_limit: "You have reached a limit on your plan. Upgrade to continue.",
   addon_required: "This feature needs an add-on. Add it from Settings → Billing.",
+  feature_not_in_plan: "This feature is not included in your plan. Upgrade to use it.",
   tenant_suspended: "This organisation is suspended. Contact support to restore access.",
 };
 
@@ -92,6 +105,8 @@ export interface EntitlementPrompt {
   description: string;
   /** Button label, or null when the person cannot act on it (non-owner, suspended). */
   actionLabel: string | null;
+  /** Where the action goes: the owner's billing page, the public pricing page, or nowhere. */
+  actionTarget?: "billing" | "pricing" | null;
   /** Suspended organisations get a message that stays until closed. */
   blocking: boolean;
 }
@@ -102,6 +117,7 @@ const ENTITLEMENT_REASONS: readonly EntitlementReason[] = [
   "read_only_subscription_ended",
   "plan_limit",
   "addon_required",
+  "feature_not_in_plan",
   "tenant_suspended",
 ];
 
@@ -114,6 +130,15 @@ export function entitlementFromError(error: unknown): EntitlementInfo | null {
     reason: ent.reason,
     upgradePath: typeof ent.upgradePath === "string" ? ent.upgradePath : BILLING_UPGRADE_PATH,
     addon: ent.addon,
+    ...(ent.reason === "feature_not_in_plan"
+      ? {
+          code: "feature_not_in_plan" as const,
+          feature: (PLAN_FLAG_KEYS as readonly string[]).includes(ent.feature as string) ? ent.feature : undefined,
+          featureName: typeof ent.featureName === "string" ? ent.featureName : undefined,
+          requiredPlan: typeof ent.requiredPlan === "string" ? ent.requiredPlan : null,
+          currentPlan: typeof ent.currentPlan === "string" ? ent.currentPlan : undefined,
+        }
+      : {}),
   };
 }
 
@@ -135,8 +160,18 @@ export function describeEntitlement(
       blocking: true,
     };
   }
-  const readOnly = isReadOnlyReason(info.reason);
   const owner = canManageBilling === true;
+  if (info.reason === "feature_not_in_plan") {
+    return {
+      title: info.featureName ? `${info.featureName}: not on your plan` : "Not on your plan",
+      description: owner ? message : `${message} Ask your organisation owner to upgrade.`.trim(),
+      // Anyone can look at the plans; only the owner can change one.
+      actionLabel: "See plans",
+      actionTarget: owner ? "billing" : "pricing",
+      blocking: false,
+    };
+  }
+  const readOnly = isReadOnlyReason(info.reason);
   const ask = readOnly ? "Ask your organisation owner to choose a plan." : "Ask your organisation owner to upgrade.";
   return {
     title: readOnly ? "Your account is read-only" : info.reason === "addon_required" ? "Add-on required" : "Plan limit reached",

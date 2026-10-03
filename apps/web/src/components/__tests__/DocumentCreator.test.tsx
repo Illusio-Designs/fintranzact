@@ -70,6 +70,8 @@ const {
 vi.mock("@/lib/trpc", () => ({
   getBusinessId: () => "biz-1",
   trpc: {
+    // No plan features in this mock: every feature counts as allowed.
+    billing: { status: { useQuery: () => ({ data: undefined, isLoading: false }) } },
     business: {
       list: {
         useQuery: () => businessListQuery(),

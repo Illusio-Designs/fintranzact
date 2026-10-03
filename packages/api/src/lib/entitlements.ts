@@ -30,12 +30,14 @@ import {
   type AccessAddon,
   type AccessPlanSubscription,
   type AddonId,
+  type PlanFeatures,
   type PlanLimits,
   type SubscriptionStatus,
   type TrialSettings,
 } from "@fintranzact/shared";
 import { getTrialSettings } from "./trial-settings.js";
 import { getPlanLimits } from "./plan-catalog.js";
+import { resolveFeatures } from "./plan-features.js";
 import { applyLazyTransitions } from "./billing/service.js";
 import { cacheGet, cacheSet } from "./entitlements-cache.js";
 import { entitlementError } from "./entitlement-error.js";
@@ -50,6 +52,12 @@ export interface Entitlements extends Access {
   /** The plan whose limits apply: Business during a trial, otherwise the organisation's own plan. */
   effectivePlan: string;
   limits: PlanLimits;
+  /**
+   * The feature flags in force right now: the plan's stored flags, all on for a
+   * grandfathered organisation, and Business-level during an active trial
+   * (lib/plan-features.ts). Feature gates read this, never the plan name.
+   */
+  features: PlanFeatures;
 }
 
 /** What is cached: the subscription-derived data. The tenant row (plan, status, trial) is read fresh. */
@@ -172,9 +180,12 @@ export async function getEntitlements(tenantId: string, now: Date = new Date()):
     addons: snap.addons,
     now,
   });
-  // A running trial is Business-level whatever plan was picked at sign-up.
   const effectivePlan = access.state === "trialing" ? "business" : tenant.plan;
-  const limits = await getPlanLimits(effectivePlan);
+  const planLimits = await getPlanLimits(effectivePlan);
+  const features = await resolveFeatures(access.state, tenant.plan === effectivePlan ? planLimits : await getPlanLimits(tenant.plan));
+  // The feature flags inside `limits` follow the same rules (trial = Business-level, grandfathered = all), so
+  // every existing read of limits.dataExport / limits.onlineStore sees them. Counts stay the plan's own.
+  const merged: PlanLimits = { ...planLimits, ...features };
   return {
     ...access,
     plan: tenant.plan,
@@ -182,7 +193,8 @@ export async function getEntitlements(tenantId: string, now: Date = new Date()):
     accessGrandfathered: tenant.accessGrandfathered,
     tenantStatus: tenant.tenantStatus,
     // Read-only keeps data export on every plan (the banner promises it).
-    limits: access.readOnly && access.state !== "suspended" ? { ...limits, dataExport: true } : limits,
+    limits: access.readOnly && access.state !== "suspended" ? { ...merged, dataExport: true } : merged,
+    features,
   };
 }
 

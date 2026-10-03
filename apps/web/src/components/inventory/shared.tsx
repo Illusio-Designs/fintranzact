@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { Add01Icon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { trpc } from "@/lib/trpc";
+import { useFeature } from "@/hooks/useFeature";
 import { Combobox, type ComboboxOption } from "@/components/ui/Combobox";
 import { Listbox } from "@/components/ui/Listbox";
 import { Icon } from "@/components/ui/Icon";
@@ -96,6 +97,8 @@ export function StockLinesEditor({
   batchMode?: "in" | "out";
 }) {
   const [query, setQuery] = useState("");
+  // Batch entry needs the plan's batches-and-expiry feature; without it the server picks batches itself.
+  const batchFeature = useFeature("batchesExpiry");
   const { data, isFetching } = trpc.stock.balances.useQuery(
     { search: query || undefined, page: 1, limit: 30 },
     { placeholderData: keepPreviousData },
@@ -179,7 +182,11 @@ export function StockLinesEditor({
             )}
             {batchMode && info?.trackBatches && (
               <div className="col-span-3 rounded-lg border border-border-light px-3 py-2">
-                {batchMode === "out" ? (
+                {!batchFeature.allowed ? (
+                  <p role="status" className="text-xs text-text-secondary" data-testid="batch-plan-note">
+                    {batchFeature.message} Batches are picked for you, earliest expiry first.
+                  </p>
+                ) : batchMode === "out" ? (
                   <BatchOutSelect
                     itemId={parseUnitKey(line.unitKey).itemId}
                     variantId={parseUnitKey(line.unitKey).variantId}
