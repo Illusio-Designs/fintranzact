@@ -494,7 +494,7 @@ export const tenantRouter = router({
           .onConflictDoUpdate({
             target: [userTenantPrefs.userId, userTenantPrefs.tenantId],
             set: { lastOpenedAt: now },
-            setWhere: sql`${userTenantPrefs.lastOpenedAt} is null or ${userTenantPrefs.lastOpenedAt} < ${lastOpenedCutoff(now)}`,
+            setWhere: sql`${userTenantPrefs.lastOpenedAt} is null or ${userTenantPrefs.lastOpenedAt} < ${lastOpenedCutoff(now).toISOString()}::timestamptz`,
           });
       } catch (err) {
         logger.warn({ err }, "tenant.select: could not record last opened");

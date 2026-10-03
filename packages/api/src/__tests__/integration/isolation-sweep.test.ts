@@ -74,6 +74,17 @@ const FOREIGN_ID_NOOP: Record<string, string> = {
 };
 
 /**
+ * Mutations that act on the caller's own organisation by id. In the
+ * cross-business scenarios (A admin / seller, A2 ids) the "foreign" business
+ * belongs to the caller's own organisation, so its organisation id is the
+ * caller's own and the call may succeed. Only those two scenarios are
+ * excused: the cross-org scenarios (B's organisation id) must still be refused.
+ */
+const OWN_ORG_ID_OK: Record<string, string> = {
+  "tenant.setPinned": "writes only the caller's own pin for an organisation they belong to; A2 shares organisation A, and a foreign organisation's id is refused (cross-org scenarios)",
+};
+
+/**
  * `procedure#kind`: a mutation acting on the caller's own record may succeed
  * while one reference of this kind points at another org, because the
  * reference is ignored (and the fingerprint proves nothing of B changed).
@@ -188,7 +199,7 @@ async function run(proc: ProcInfo, s: Scenario): Promise<Outcome> {
     const leaked = leaks(s, result, inputIds);
     if (leaked.length) violations.push(`response leaks ${leaked.length} marker(s) of ${s.target.tag}: ${leaked.slice(0, 3).join(", ")}`);
     const allowed = s.foreign === "all"
-      ? proc.path in FOREIGN_ID_NOOP
+      ? proc.path in FOREIGN_ID_NOOP || (s.name.startsWith("cross-business") && proc.path in OWN_ORG_ID_OK)
       : [...s.foreign].every((k) => `${proc.path}#${k}` in FOREIGN_REF_IGNORED);
     if (proc.type === "mutation" && usedForeign && !allowed) {
       violations.push(`mutation succeeded with ${s.target.tag} ids`);

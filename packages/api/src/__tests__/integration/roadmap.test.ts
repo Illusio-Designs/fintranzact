@@ -134,7 +134,7 @@ describe("starting roadmap", () => {
     const before = await adminCaller().platform.roadmapList({ launchStage: "before_launch" });
     expect(before.data).toHaveLength(18);
     expect(before.data.every((i) => i.launchStage === "before_launch")).toBe(true);
-    expect(before.counts.planned).toBe(8);
+    expect(before.counts.planned).toBe(7); // 8 before the CA access item (2026-10-02-ca-access) moved to in_progress
     expect(before.stageCounts).toEqual({ before_launch: 18, after_launch: 52 });
   });
 
