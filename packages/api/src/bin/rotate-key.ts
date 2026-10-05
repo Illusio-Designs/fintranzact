@@ -209,6 +209,41 @@ async function rotateTenantDb(tenantId: string, tenantSlug: string): Promise<Rot
     }
   }
 
+  // ── razorpay_connections (a business's own Razorpay keys, webhook secret and token) ──
+  const { razorpayConnections } = await import("@fintranzact/db");
+  const rzpRows = await db.select().from(razorpayConnections);
+  for (const row of rzpRows) {
+    const fields = ["keyIdEncrypted", "keySecretEncrypted", "webhookSecretEncrypted", "webhookTokenEncrypted"] as const;
+    for (const field of fields) {
+      const value = row[field];
+      if (!value) continue;
+      try {
+        const version = getKeyVersion(value);
+        if (version === CURRENT_KEY_VERSION) {
+          stats.alreadyCurrent++;
+          continue;
+        }
+        const reEncrypted = reEncryptField(value);
+        if (reEncrypted === value) {
+          stats.alreadyCurrent++;
+          continue;
+        }
+        log(`  razorpayConnection ${row.id}.${field}: ${version === 0 ? "plaintext" : `v${version}`} -> v${CURRENT_KEY_VERSION}`);
+        if (version === 0) stats.plaintext++;
+        else stats.rotated++;
+        if (EXECUTE) {
+          await db
+            .update(razorpayConnections)
+            .set({ [field]: reEncrypted, updatedAt: new Date() })
+            .where(eq(razorpayConnections.id, row.id));
+        }
+      } catch (err) {
+        stats.errors++;
+        log(`  ERROR razorpayConnection ${row.id}.${field}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  }
+
   // ── businesses.carrierCredentials ──────────────────────────────────────
   const bizRows = await db.select({ id: businesses.id, carrierCredentials: businesses.carrierCredentials }).from(businesses);
   for (const biz of bizRows) {

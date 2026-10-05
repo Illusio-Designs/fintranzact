@@ -1,0 +1,91 @@
+---
+title: Accept online payments on invoices
+description: Connect your own Razorpay account so customers can pay an invoice online from a payment link or the share page, and paid invoices update by themselves.
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+
+<ForDesktop>
+
+With online payments, your customer opens an invoice, taps **Pay now**, and pays by UPI, card or net banking. The money goes **straight to your own Razorpay account and bank**. Fintranzact never holds it. When the payment succeeds, Razorpay tells Fintranzact and the invoice is marked paid (or part paid) automatically.
+
+Online payments are set up on the web and desktop app, by an **owner or admin**. Your team can then send payment links from the invoice, and customers can pay from the shared invoice page.
+
+## What you need
+
+- A **Razorpay account** of your own, with **Payment Links** enabled.
+- Your Razorpay **Key ID** and **Key secret**. In the Razorpay dashboard, open **Account & Settings**, then **API keys**, and generate a key. Use a `rzp_test_` key to try it without real money, then switch to a `rzp_live_` key.
+
+Fintranzact's own Razorpay account is only used for Fintranzact subscription billing. It is never used to collect your customers' money.
+
+## Connect your Razorpay account
+
+1. Go to **Settings** and open the **Online payments** tab.
+2. Enter the **Key ID** and **Key secret**.
+3. Leave the **Webhook secret** blank for now and click **Connect Razorpay**.
+4. Click **Test connection**. You should see *Connected. Razorpay accepted your keys.*
+
+Your keys are encrypted when saved and are never shown again. The page only shows a masked Key ID such as `rzp_live_••••AbCd`, and whether you are in test or live mode.
+
+## Add the webhook in your Razorpay dashboard
+
+The webhook is how Razorpay tells Fintranzact that a customer paid. Without it, links still work but payments are **not** recorded automatically.
+
+1. After connecting, the **Online payments** tab shows a **Webhook URL**. It is unique to your business. Click **Copy**.
+2. In your Razorpay dashboard open **Settings**, then **Webhooks**, then **Add New Webhook**.
+3. Paste the URL, and enter a **secret** of your own choosing.
+4. Tick these events: `payment_link.paid`, `payment_link.partially_paid`, `payment_link.cancelled`, `payment_link.expired`, `payment.captured` and `payment.failed`.
+5. Save the webhook in Razorpay.
+6. Back in Fintranzact, click **Change keys**, enter the same secret in **Webhook secret**, and save. Leave the key fields as they were.
+
+The webhook address contains a private token. Do not share it. If you change your keys later, the address stays the same, so you do not need to edit the webhook in Razorpay.
+
+## Send a payment link from an invoice
+
+1. Open an issued invoice from **Invoices**.
+2. In the **Pay online** section click **Get payment link**. The link is copied.
+3. Use **Copy**, **WhatsApp** or **Open** to send it to your customer.
+
+The link always asks for the invoice's **balance due**, worked out by Fintranzact (the total, less payments received and credit notes or returns). Customers may pay part of it. If the balance changes later, for example after a part payment, the section offers a **New link** for the new balance and the old link is cancelled.
+
+You cannot make a link for a draft, a cancelled invoice or an invoice that is already paid. The section only appears once Razorpay is connected.
+
+## The customer's Pay now button
+
+The shared invoice page (see [Share Links](/help/documents/share-links)) shows a **Pay now** button next to **Download PDF** while money is still due and Razorpay is connected. It opens a Razorpay payment page for the balance due. Afterwards the customer comes back to the invoice page.
+
+## How payments are recorded
+
+When Razorpay confirms a payment, Fintranzact:
+
+- Records a payment against the invoice for the **amount actually paid**, with Razorpay's payment ID as the reference, and a payment mode of **UPI**, **Credit card**, **Debit card**, **Net banking**, **Wallet** or **Other**.
+- Updates the invoice to **Paid**, or **Partial** if only part was paid.
+- Does this **once per Razorpay payment**. If Razorpay sends the same event twice, nothing is duplicated.
+- If a customer pays more than the balance, the whole payment is recorded, the invoice is paid, and the extra stays on the customer's account as an advance.
+
+If an invoice was cancelled, deleted, or falls in a locked period, the payment is not booked automatically. Fintranzact leaves a note in the **Audit log** so you can record it by hand.
+
+### Gateway charges
+
+Razorpay deducts its fee before settling to your bank. To track it, create a **payment gateway** account named **Razorpay** under **Cash & Bank** (see [Payment Gateways](/help/banking/payment-gateways)). Online payments are then booked to that account, the charge is recorded as an expense, and the net amount moves to your settlement account.
+
+The charge uses the fee Razorpay reports for the payment. If Razorpay does not report one, the rates you set on the gateway account are used. Without a Razorpay gateway account, the payment is recorded on its own, with no charge.
+
+## Disconnect
+
+Click **Disconnect** on the **Online payments** tab to delete your keys. Open payment links are cancelled and payments already recorded stay as they are.
+
+## If your plan is read-only
+
+If your organisation is read-only (for example the trial ended), you cannot connect keys or make new links, and the **Pay now** button is not shown. A payment a customer already made is still recorded when Razorpay reports it. **Test connection** and **Disconnect** keep working.
+
+## Troubleshooting
+
+| Problem | What to check |
+|---|---|
+| *Razorpay rejected these keys* | Copy the Key ID and Key secret again. Make sure they are both test keys or both live keys. |
+| Invoice not marked paid after paying | Check the webhook is added in Razorpay with the exact URL, the six events, and that the same secret is saved in **Webhook secret**. |
+| **Pay online** section missing | Razorpay is not connected, or the invoice is a draft, cancelled, paid, or has less than ₹1 due. |
+| Payment link could not be created | Make sure **Payment Links** is enabled on your Razorpay account. |
+
+</ForDesktop>

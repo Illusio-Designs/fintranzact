@@ -4,7 +4,7 @@ import { API_BASE_URL } from "./api-base";
 export const shareEndpoints: EndpointGroup = {
   id: "share-links",
   title: "Share Links",
-  description: "Public links to a single sales-side document (invoice, quotation, proforma, delivery challan, credit/debit note, return) that a customer can open without signing in. The web app serves the page at `<APP_URL>/i/<token>` and reads the three public REST endpoints in this group. A link is a 32-byte random token (43 URL-safe characters); the server stores its SHA-256 hash for lookup plus the token encrypted, so the business can copy the same link again instead of minting a new one. Each document has at most one live link; revoking it stops the old URL working and sharing again mints a new token. A token reaches exactly one document and nothing else in the organization. Unknown, malformed, revoked and suspended-organization tokens — and deleted documents — all answer the same 404. The public endpoints share the PDF rate limit per client IP (429 when exceeded) and send `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow` and `Referrer-Policy: no-referrer`.",
+  description: "Public links to a single sales-side document (invoice, quotation, proforma, delivery challan, credit/debit note, return) that a customer can open without signing in. The web app serves the page at `<APP_URL>/i/<token>` and reads the public REST endpoints in this group (document, PDF, logo, and Pay now). A link is a 32-byte random token (43 URL-safe characters); the server stores its SHA-256 hash for lookup plus the token encrypted, so the business can copy the same link again instead of minting a new one. Each document has at most one live link; revoking it stops the old URL working and sharing again mints a new token. A token reaches exactly one document and nothing else in the organization. Unknown, malformed, revoked and suspended-organization tokens — and deleted documents — all answer the same 404. The public endpoints share the PDF rate limit per client IP (429 when exceeded) and send `Cache-Control: no-store`, `X-Robots-Tag: noindex, nofollow` and `Referrer-Policy: no-referrer`.",
   endpoints: [
     {
       id: "share-get",
@@ -114,7 +114,7 @@ await navigator.clipboard.writeText(url);`,
         { name: "token", type: "string (path)", required: true, description: "The 43-character share token from the link URL" },
       ],
       output: {
-        description: "`payment` is present when the business has a UPI id (with a pay URL and a QR code data URL); `bank` when it has a bank account number on its documents. `business.hasLogo` tells the page whether to request `/api/share/:token/logo`. `poweredBy` is true when the plan shows the small \"Made with Fintranzact\" line (all three built-in plans do); `poweredByUrl` is where it links: sign-up with the referring partner's referral code (`/register?ref=CODE`), or null for the plain site. Errors: 404 `{ error: \"This link is not valid any more\" }`, 429 when rate limited.",
+        description: "`payment` is present when the business has a UPI id (with a pay URL and a QR code data URL); `bank` when it has a bank account number on its documents. `business.hasLogo` tells the page whether to request `/api/share/:token/logo`. `onlinePayment.available` says whether to offer Pay now (see `POST /api/share/:token/pay`). `poweredBy` is true when the plan shows the small \"Made with Fintranzact\" line (all three built-in plans do); `poweredByUrl` is where it links: sign-up with the referring partner's referral code (`/register?ref=CODE`), or null for the plain site. Errors: 404 `{ error: \"This link is not valid any more\" }`, 429 when rate limited.",
         example: {
           document: {
             documentType: "invoice",
@@ -150,6 +150,7 @@ await navigator.clipboard.writeText(url);`,
           ],
           payment: { upiId: "mehtahardware@okicici", payUrl: "https://api.example.com/pay/upi?...", qrDataUrl: "data:image/png;base64,iVBOR..." },
           bank: { accountName: "Mehta Hardware Pvt Ltd", accountNumber: "50200012345678", ifsc: "HDFC0000123", bankName: "HDFC Bank" },
+          onlinePayment: { available: true },
           poweredBy: false,
           poweredByUrl: null,
         },
@@ -165,6 +166,30 @@ const { document, business, lineItems } = await res.json();`,
         "Every successful request increments the link's `viewCount`, including automated fetches.",
       ],
       relatedEndpoints: ["share-public-pdf", "share-public-logo", "share-create"],
+    },
+    {
+      id: "share-public-pay",
+      method: "mutation",
+      path: "POST /api/share/:token/pay",
+      title: "Public: Pay Now",
+      description: "Raw HTTP endpoint (not tRPC), no authentication, no request body. Makes (or reuses) a Razorpay payment link for the shared invoice's current balance due on the business's own Razorpay account and returns its URL; the share page sends the customer there. The amount comes from the database, never from the request. Only offered when `onlinePayment.available` is true in `GET /api/share/:token` (the business connected Razorpay, the invoice is an issued sales invoice with at least ₹1 due, and the organisation is not read-only). Stricter rate limit than the page (10 per minute per client IP). No key or secret is ever in the response.",
+      auth: "public",
+      input: [
+        { name: "token", type: "string (path)", required: true, description: "Share token" },
+      ],
+      output: {
+        description: "`{ url }` with the Razorpay payment link. Errors: 404 `{ error: \"This link is not valid any more\" }` (unknown link, Razorpay not connected, read-only organisation), 409 when nothing can be paid online on the invoice, 502 when Razorpay could not make the link, 429 when rate limited.",
+        example: { url: "https://rzp.io/i/abc123" },
+      },
+      codeExamples: {
+        curl: `curl -X POST "${API_BASE_URL}/api/share/SHARE_TOKEN/pay"`,
+        javascript: `const res = await fetch(\`${API_BASE_URL}/api/share/\${token}/pay\`, { method: "POST", credentials: "omit" });
+if (res.ok) window.location.assign((await res.json()).url);`,
+      },
+      gotchas: [
+        "The customer returns to the share page after paying; the invoice is updated by the business's Razorpay webhook, so it can take a moment.",
+      ],
+      relatedEndpoints: ["share-public-document", "online-payments-create-invoice-link"],
     },
     {
       id: "share-public-pdf",

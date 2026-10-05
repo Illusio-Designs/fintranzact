@@ -2430,6 +2430,33 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-05-payment-links",
+    updates: [
+      {
+        // Built on each business's OWN Razorpay account (keys pasted in
+        // Settings, Online payments, encrypted; the platform's Razorpay keys
+        // are never used for customer money). Tested against a real Postgres
+        // with a mocked Razorpay HTTP layer: payment link for the balance due
+        // (reused while unchanged, replaced when the balance moves) on the
+        // invoice and a Pay now button on the public share page; the
+        // per-business signed webhook records payments once per Razorpay
+        // payment id, partial and over-payments included, and books the
+        // gateway charge on a gateway account named Razorpay. Not run against
+        // the real Razorpay (no account here), so test and live keys still
+        // need one manual pass. The reminder lines belong to the reminders
+        // work and are left unticked here.
+        title: "Payment reminders, Razorpay payment links and UPI QR on invoices",
+        status: "in_progress",
+        done: [
+          "Razorpay payment link on invoice and share page",
+          "Razorpay webhook: verify signature and mark invoice paid",
+          "Record gateway charges on the payment",
+          "Partial payments and balance-due links",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

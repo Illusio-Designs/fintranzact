@@ -28,6 +28,12 @@ export interface ProcessGatewayPaymentParams {
   amount: string;
   mode: string;
   paymentDate: Date;
+  /**
+   * The gateway's own fee for this payment (money string), when it reported
+   * one (a Razorpay webhook does). Used instead of the account's configured
+   * rate; capped at the payment amount.
+   */
+  chargeOverride?: string;
 }
 
 export interface ProcessGatewayResult {
@@ -64,11 +70,17 @@ export async function processGatewayPayment(
   }
 
   // 2. Calculate gateway charge
-  const { chargeAmount, netSettlement } = calculateGatewayCharge(
+  const calculated = calculateGatewayCharge(
     params.amount,
     config.chargeConfig,
     params.mode,
   );
+  let { chargeAmount, netSettlement } = calculated;
+  if (params.chargeOverride !== undefined) {
+    chargeAmount = money.max0(params.chargeOverride);
+    if (money.compare(chargeAmount, params.amount) > 0) chargeAmount = params.amount;
+    netSettlement = money.max0(money.sub(params.amount, chargeAmount));
+  }
 
   let expenseId: string | null = null;
 

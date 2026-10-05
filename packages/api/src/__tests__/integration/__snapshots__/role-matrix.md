@@ -275,6 +275,12 @@
 | manufacturing.journals | query | authorized | read:Item | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | manufacturing.manufacture | mutation | authorized | update:Item | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
 | manufacturing.plan | query | authorized | read:Item | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| onlinePayments.connect | mutation | authorized | manage:Business | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| onlinePayments.createInvoiceLink | mutation | authorized | create:Payment | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| onlinePayments.disconnect | mutation | authorized | manage:Business | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| onlinePayments.getSettings | query | authorized | manage:Business | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| onlinePayments.invoiceLink | query | authorized | read:Invoice | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| onlinePayments.testConnection | mutation | authorized | manage:Business | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | orders.close | mutation | authorized | update:Invoice | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ |
 | orders.fulfilment | query | authorized | read:Invoice | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | orders.pending | query | authorized | read:Invoice | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |

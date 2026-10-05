@@ -14,6 +14,7 @@ import { AccountTab } from "@/components/settings/AccountTab";
 import { BillingTab } from "@/components/settings/BillingTab";
 import { StoreTab } from "@/components/settings/StoreTab";
 import { POSTab } from "@/components/settings/POSTab";
+import { OnlinePaymentsTab } from "@/components/settings/OnlinePaymentsTab";
 import { BarcodesTab } from "@/components/settings/BarcodesTab";
 import { ShippingTab } from "@/components/settings/ShippingTab";
 import { useTwoFactorRequirement } from "@/hooks/useTwoFactorRequirement";
@@ -273,6 +274,7 @@ function SettingsPage() {
           {shownTab === "account" && <AccountTab initialPane={twoFactor.blocked ? "security" : linkedPane} />}
           {shownTab === "billing" && isOwner && <BillingTab />}
           {shownTab === "store" && <StoreTab />}
+          {shownTab === "payments" && hasRole && <OnlinePaymentsTab />}
           {shownTab === "pos" && biz && <POSTab biz={biz} />}
           {shownTab === "barcodes" && <BarcodesTab />}
         </div>
