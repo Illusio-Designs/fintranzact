@@ -172,6 +172,11 @@ export const businesses = pgTable("businesses", {
   carrierCredentials: jsonb("carrier_credentials").$type<Record<string, { apiKey?: string; apiSecret?: string; accountId?: string; enabled: boolean }>>(),
   nextStoreOrderNumber: integer("next_store_order_number").default(1).notNull(),
   storeOrderPrefix: text("store_order_prefix").default("ORD").notNull(),
+  // Store policy pages. Return window feeds the Refund policy template; the
+  // policies map holds only pages the owner has edited (kind -> markdown), so
+  // untouched pages keep following the default template and business details.
+  storeReturnWindowDays: integer("store_return_window_days").default(7).notNull(),
+  storePolicies: jsonb("store_policies").$type<Partial<Record<"terms" | "refund" | "shipping" | "contact" | "privacy", { content: string; updatedAt: string }>>>(),
   // Point-of-Sale mode. When enabled: a /pos fullscreen register route is
   // reachable and the "Switch to POS" entry button appears on invoice
   // create. Off by default; toggle lives on Settings → POS.

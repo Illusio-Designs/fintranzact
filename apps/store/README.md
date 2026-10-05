@@ -22,7 +22,7 @@ When a customer places an order, the API creates an unfulfilled invoice in the b
 - Minimum order amount enforcement
 - WhatsApp notification to the business owner on new orders
 - Business-defined accent color, tagline, and delivery notes
-- Auto-generated Privacy Policy, Terms of Service, and Refund Policy pages
+- Five policy pages (Terms & Conditions, Refund & Cancellation, Shipping & Delivery, Contact Us, Privacy Policy) at `/<slug>/policies/<page>`, filled from the business details and editable in Settings → Online Store, linked in the footer and at checkout
 - Mobile-first, no-dependency design
 
 ---

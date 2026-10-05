@@ -2367,6 +2367,54 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-05-mobile-batch",
+    updates: [
+      {
+        // Built with jest tests for the helpers and components. Purchase
+        // invoice lines take the batch number, manufacturing and expiry dates;
+        // sales invoice and delivery challan lines get a batch picker (earliest
+        // expiry first, quantity left, near-expiry and expired badges, no more
+        // than the batch holds, expired stock only when allowed); all of it
+        // follows the batchesExpiry plan flag. Kept in progress with two lines
+        // unticked on purpose: the mobile app has no GRN screen (a GRN is still
+        // a web screen) and the batch-wise stock report keeps its parity
+        // exception. Not run on a device or emulator when this was written.
+        title: "Batch fields in the mobile app",
+        status: "in_progress",
+        done: [
+          "Batch picker on mobile sales and challan lines (FEFO)",
+          "Show available quantity per batch",
+          "Near-expiry and expired warnings",
+        ],
+      },
+    ],
+  },
+  {
+    key: "2026-10-05-store-policies",
+    updates: [
+      {
+        // Built: five default templates with placeholders filled from the
+        // business (unit tests), the Policies editor in Settings → Online Store
+        // (component tests), a return window setting, and footer plus checkout
+        // links in the storefront (rendered and checked). Left unticked on
+        // purpose: "Public URLs per page for Razorpay review". The public
+        // routes (/store/:slug/policies.json and the server-rendered
+        // /store/:slug/policies/:kind), the storefront page and the copy-links
+        // box are written and covered by an integration test that was not run
+        // (no Postgres here), and nothing was opened in a browser or sent to
+        // Razorpay. Tick it once those pass against a real database.
+        title: "Store policy pages",
+        status: "in_progress",
+        done: [
+          "Policy templates: Terms, Refund, Shipping, Contact, Privacy",
+          "Pre-fill from business details",
+          "Editor for each policy page",
+          "Footer and checkout links",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

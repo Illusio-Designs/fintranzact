@@ -140,6 +140,17 @@ test.describe("J12 online store", () => {
     await store.goto(storeHref!);
     await expect(store.getByRole("heading", { level: 1, name: owner.businessName })).toBeVisible({ timeout: 20_000 });
     await expect(store.getByText("Konkan mangoes and dry fruit, delivered")).toBeVisible();
+    // The footer links the five policy pages, each at its own URL under the store.
+    const footerPolicies = store.getByRole("navigation", { name: "Store policies" });
+    for (const [label, kind] of [
+      ["Terms & Conditions", "terms"],
+      ["Refund & Cancellation", "refund"],
+      ["Shipping & Delivery", "shipping"],
+      ["Contact Us", "contact"],
+      ["Privacy Policy", "privacy"],
+    ] as const) {
+      await expect(footerPolicies.getByRole("link", { name: label })).toHaveAttribute("href", `/${slug}/policies/${kind}`);
+    }
     await expect(store.getByRole("heading", { level: 3, name: mango.name })).toBeVisible();
     await expect(store.getByRole("heading", { level: 3, name: cashew.name })).toBeVisible();
     await expect(store.getByRole("heading", { level: 3, name: hidden.name })).toHaveCount(0);
@@ -171,6 +182,10 @@ test.describe("J12 online store", () => {
     await store.getByRole("button", { name: "Continue to Checkout" }).click();
 
     await expect(store.getByRole("heading", { name: "Checkout" })).toBeVisible();
+    // Policy links sit by the Place Order button.
+    await expect(
+      store.getByRole("navigation", { name: "Store policies" }).getByRole("link", { name: "Refund & Cancellation" }),
+    ).toBeVisible();
     await expect(store.getByLabel("Full Name")).toHaveValue("Meera Kulkarni");
     await store.getByLabel("Delivery Address").fill("Flat 12, Shanti Kunj, Dadar West");
     await store.getByLabel("City").fill("Mumbai");

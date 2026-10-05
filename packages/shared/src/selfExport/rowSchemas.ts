@@ -137,6 +137,9 @@ export const businessRowSchema = z.object({
   carrierCredentials: z.null(),
   nextStoreOrderNumber: z.number().int(),
   storeOrderPrefix: z.string(),
+  // Added with the store policy pages; older exports lack them.
+  storeReturnWindowDays: z.number().int().optional(),
+  storePolicies: z.unknown().nullable().optional(),
   createdAt: isoDatetime,
   updatedAt: isoDatetime,
 });
