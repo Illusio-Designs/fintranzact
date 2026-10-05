@@ -129,7 +129,7 @@ with the message `E-invoicing is available on the Growth plan and above.` (`...o
 
 - **API keys, the CLI and the MCP server** all go through tRPC, so the same gate applies to them.
 - **REST routes** (`REST_ENTITLEMENT_POLICY`): none creates feature data except the signed-token backup import (`POST /api/selfImport/:tenantId`, a whole-business restore: deliberately not feature-gated, a restore must be able to bring back what the business had), the public store order (`onlineStore`, enforced), and the shipping webhook (carrier updates only). The data export route re-checks `dataExport`.
-- **Jobs**: the recurring scheduler checks `recurringInvoices`; the background IRN submission checks `eInvoicing`. There is no scheduled e-invoice retry job (retries are the `retryFailed` / `bulkRetry` mutations).
+- **Jobs**: the recurring scheduler checks `recurringInvoices`; the payment reminder job (`lib/payment-reminders.ts`, hourly, `PAYMENT_REMINDERS=off` disables it) is a basic feature on every plan, so it checks no plan flag, but it lists only `active` tenants and skips a read-only organisation (`tickTenant`: no reminder is sent and no history row is written, unlike the TDS reminder digest, which still goes to read-only organisations); the background IRN submission checks `eInvoicing`. There is no scheduled e-invoice retry job (retries are the `retryFailed` / `bulkRetry` mutations).
 
 ### Clients
 
@@ -153,7 +153,7 @@ Where the line links is decided by `lib/pdf-branding.ts`: an organisation referr
 - New gated feature (a plan flag): add the key to `PlanLimits`, `PLAN_FLAG_KEYS`, `planSettingsSchema` and the defaults in `plans.ts`, then its entry in `FEATURE_GATES` (name, kind, `routers` for a router whose every mutation is gated, `procedures`, `conditional` for partial uses, `elsewhere` for REST routes and jobs). Add the router to `FEATURE_GATE_CHECKED_ROUTERS` and list deliberate gaps in `FEATURE_GATE_EXEMPT` with a reason. Regenerate `feature-gate.md` (`pnpm --filter @fintranzact/api test feature-gate-registry -- -u`), add a nav `feature:` key, a `FeatureNotice` and `useFeature(flag).lockedProps` on the page (web) and the mobile equivalent, and give REST routes and jobs a `requireFeature` / `hasFeature` check.
 - New mutation in an already gated router: nothing to do, it is gated by the router. Mutation in a checked router that must stay open: `FEATURE_GATE_EXEMPT` with a reason (the registry test fails until you decide).
 - New plan limit: add the field to `PlanLimits` and the defaults, enforce with an `enforce*` function in `lib/plan-limits.ts` that throws `limitError`, and call it from the creating procedure. Always count server-side.
-- New scheduler or background job: skip read-only/suspended tenants (see `recurring-invoice-scheduler.ts` and `tds-reminder-scheduler.ts`, which call `getEntitlements` and skip).
+- New scheduler or background job: skip read-only/suspended tenants (see `recurring-invoice-scheduler.ts` and `payment-reminders.ts`, which call `getEntitlements` and skip; `tds-reminder-scheduler.ts` skips suspended tenants only, on purpose).
 
 ## Not built yet
 

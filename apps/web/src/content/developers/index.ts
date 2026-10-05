@@ -30,6 +30,7 @@ import { documentsEndpoints } from "./documents";
 import { ordersEndpoints } from "./orders";
 import { posEndpoints } from "./pos";
 import { shareEndpoints } from "./share";
+import { reminderEndpoints } from "./reminder";
 import { tdsEndpoints } from "./tds";
 import { periodEndpoints } from "./period";
 import { systemEndpoints } from "./system";
@@ -68,6 +69,7 @@ export const allSections: EndpointSection[] = [
       storeEndpoints,
       posEndpoints,
       shareEndpoints,
+      reminderEndpoints,
     ],
   },
   {
@@ -172,6 +174,7 @@ export {
   ordersEndpoints,
   posEndpoints,
   shareEndpoints,
+  reminderEndpoints,
   tdsEndpoints,
   periodEndpoints,
   warehouseEndpoints,

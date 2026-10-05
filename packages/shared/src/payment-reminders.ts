@@ -121,8 +121,8 @@ export function resolveReminderSettings(stored: unknown): PaymentReminderSetting
   const merged = {
     ...d,
     ...s,
-    channels: { ...d.channels, ...(s.channels ?? {}) },
-    templates: { ...d.templates, ...(s.templates ?? {}) },
+    channels: { ...d.channels, ...s.channels },
+    templates: { ...d.templates, ...s.templates },
   };
   const parsed = paymentReminderSettingsSchema.safeParse(merged);
   return parsed.success ? parsed.data : d;

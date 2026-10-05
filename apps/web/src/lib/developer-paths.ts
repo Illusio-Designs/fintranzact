@@ -38,6 +38,7 @@ export const DEVELOPER_GROUP_SLUGS = [
   "store",
   "pos",
   "share-links",
+  "reminders",
   // Documents & orders
   "documents",
   "orders",

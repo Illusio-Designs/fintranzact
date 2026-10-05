@@ -181,6 +181,11 @@ exceptions:
       - store.getPolicies
       - store.updatePolicy
       - store.resetPolicy
+      # --- Payment reminders ---
+      # Reminder wording, schedule and channels are set up once on the web (Settings -> Payment reminders).
+      # Mobile has the invoice reminder history, Send reminder now and the do-not-remind switch on the party.
+      - reminder.getSettings
+      - reminder.updateSettings
 
       # --- Data Import ---
       # Bulk CSV import is a desktop/power-user workflow.
@@ -477,6 +482,12 @@ exceptions:
       - store.getPolicies
       - store.updatePolicy
       - store.resetPolicy
+      # --- Payment reminders ---
+      # Reminders are sent by the scheduled job and from the invoice screen; settings are a web form.
+      - reminder.getSettings
+      - reminder.updateSettings
+      - reminder.getForInvoice
+      - reminder.sendNow
       # --- GST return status ---
       # Web panel only; the filing steps themselves are not in the CLI / MCP.
       - gstReturns.filingStatus
@@ -807,6 +818,12 @@ exceptions:
       - store.getPolicies
       - store.updatePolicy
       - store.resetPolicy
+      # --- Payment reminders ---
+      # Reminders are sent by the scheduled job and from the invoice screen; settings are a web form.
+      - reminder.getSettings
+      - reminder.updateSettings
+      - reminder.getForInvoice
+      - reminder.sendNow
       # --- GST return status ---
       # Web panel only; the filing steps themselves are not in the CLI / MCP.
       - gstReturns.filingStatus

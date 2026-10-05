@@ -43,6 +43,7 @@ export default function EditPartyScreen() {
   const [billingAddress, setBillingAddress] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
+  const [doNotRemind, setDoNotRemind] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [initialized, setInitialized] = useState(false);
 
@@ -57,6 +58,7 @@ export default function EditPartyScreen() {
       setBillingAddress(party.billingAddress ?? "");
       setCity(party.city ?? "");
       setState(party.state ?? "");
+      setDoNotRemind(party.doNotRemind ?? false);
       setInitialized(true);
     }
   }, [party, initialized]);
@@ -166,6 +168,7 @@ export default function EditPartyScreen() {
         billingAddress: billingAddress.trim() || undefined,
         city: city.trim() || undefined,
         state: state.trim() || undefined,
+        doNotRemind,
       },
     });
   };
@@ -470,6 +473,25 @@ export default function EditPartyScreen() {
             </View>
           </View>
 
+          {/* Payment reminders */}
+          {type === "customer" && (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Payment Reminders</Text>
+              <View style={styles.card}>
+                <TouchableOpacity
+                  style={[styles.fieldGroup, styles.toggleRow]}
+                  onPress={() => setDoNotRemind((v) => !v)}
+                  accessibilityRole="checkbox"
+                  accessibilityLabel="Do not remind"
+                  accessibilityState={{ checked: doNotRemind }}
+                >
+                  <Ionicons name={doNotRemind ? "checkbox" : "square-outline"} size={20} color={doNotRemind ? colors.brand : colors.textMuted} />
+                  <Text style={styles.toggleText}>Do not remind this customer</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -478,6 +500,8 @@ export default function EditPartyScreen() {
 }
 
 const useStyles = makeStyles((colors) => ({
+  toggleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  toggleText: { fontSize: 15, color: colors.textPrimary },
   container: {
     flex: 1,
     backgroundColor: colors.bg,

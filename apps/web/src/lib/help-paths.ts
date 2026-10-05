@@ -44,6 +44,7 @@ export const HELP_NAV: HelpNavSection[] = [
       { label: "Credit & Debit Notes", slug: "documents/credit-and-debit-notes" },
       { label: "Sales & Purchase Returns", slug: "documents/returns" },
       { label: "Share Links", slug: "documents/share-links" },
+      { label: "Payment Reminders", slug: "documents/payment-reminders" },
     ],
   },
   {

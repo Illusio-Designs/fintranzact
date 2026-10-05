@@ -1,0 +1,104 @@
+---
+title: Payment Reminders
+description: "Remind customers about unpaid invoices automatically: a few days before the due date, on it, then weekly. Email, SMS and a ready-to-send WhatsApp link, per-business settings, message wording, history on each invoice, and the Do not remind switch."
+sidebar:
+  order: 7
+---
+
+Payment reminders nudge a customer when an invoice is still unpaid. Fintranzact can send them for you on a schedule, and you can also send one by hand from any invoice. Everything a customer is sent is written in your business name, and every reminder is recorded on the invoice.
+
+**Nothing is sent until you switch reminders on.** New businesses start with reminders off.
+
+Reminders are included on every plan.
+
+## Switch them on and choose the schedule
+
+Owners and admins set this up in **Settings → Payment reminders** on the web and desktop app.
+
+| Setting | What it does | Standard |
+|---|---|---|
+| **Send payment reminders automatically** | The master switch for the scheduled reminders | Off |
+| **Days before the due date** | The first reminder goes out this many days before the due date. Use 0 for no reminder before the due date | 3 |
+| **Remind on the due date** | A reminder on the due date itself | On |
+| **Repeat every (days) after the due date** | While the invoice stays unpaid, another reminder every N days. Use 0 for no repeats | 7 |
+| **Most reminders per invoice** | A limit on automatic reminders for one invoice, counted for each channel | 4 |
+
+With the standard settings an invoice due on the 10th is reminded on the 7th, the 10th, the 17th and the 24th, and then left alone.
+
+A few rules apply however you set it up:
+
+- Reminders go out only between **9:00 am and 7:00 pm India time**. A reminder that comes due overnight goes out the next morning.
+- If Fintranzact was switched off for a while, only the most recent reminder that has come due is sent, not a pile of missed ones.
+- An invoice is not reminded about a date earlier than the day it was created. An invoice raised today with a due date tomorrow does not get a "3 days before" reminder at once.
+- Only issued sales invoices with a due date and something still owed are reminded. Drafts, cancelled invoices, quotations, credit notes and purchase bills are never reminded.
+- The amount in the message is the **balance due**: the total less payments and credit notes. A part-paid invoice is reminded for what is left.
+
+## When reminders stop
+
+- The moment the invoice is **paid** (or fully covered by payments and credit notes) there are no more reminders.
+- A cancelled or deleted invoice is not reminded.
+- A customer you have marked **Do not remind** is never sent a reminder, automatic or by hand.
+- A customer with no email address is skipped for email, and with no mobile number for SMS and WhatsApp. The other channels still work.
+- Organisations that are read-only (for example after a trial ends) or suspended get no automatic reminders until they are active again.
+
+### Do not remind
+
+Open a customer, choose **Edit**, open **Credit Terms** and tick **Do not remind**. On the mobile app, the same switch is on the customer's edit screen under **Payment Reminders**. The customer card then shows **Do not remind**, and the invoice reminder panel says so.
+
+## Channels
+
+| Channel | How it works |
+|---|---|
+| **Email** | Sent automatically. It comes from your business name, and when you have a business email set, the customer's reply goes to it. Every email ends with a line telling the customer to reply to you if they want the reminders to stop |
+| **SMS** | Sent automatically when SMS has been set up for your Fintranzact installation (see below) |
+| **WhatsApp link** | **Not sent automatically.** Each invoice has a **Send on WhatsApp** button that opens WhatsApp with the customer's number and the message already typed. You press send. This stays a link until the WhatsApp Business API is connected |
+
+### About SMS
+
+SMS in India is regulated: a business must register its sender name and each message template with the telecom regulator's DLT system before an SMS provider will deliver it. That registration, and an account with an SMS provider, belong to whoever runs your Fintranzact installation. Fintranzact does not do this for you.
+
+When it is in place, Fintranzact sends reminder SMS through the provider. Because the provider delivers the DLT-approved template, the words the customer receives are that template; the SMS wording you write in Settings is used for the preview and the history. If SMS is not set up, the SMS option in Settings is greyed out and says so, and **Send SMS reminder** on an invoice is not offered.
+
+Administrators of a self-hosted installation set these server settings: `SMS_PROVIDER=msg91`, `MSG91_AUTH_KEY`, `MSG91_TEMPLATE_ID` (the approved MSG91 flow template) and optionally `MSG91_TEMPLATE_VARS` (a comma-separated list of the variable names in that template; the standard ones are `customerName`, `invoiceNumber`, `amount`, `dueDate`, `businessName`). `PAYMENT_REMINDERS=off` switches the whole scheduled job off.
+
+## Message wording
+
+In **Settings → Payment reminders → Message wording** you can edit the email subject, the email, the SMS and the WhatsApp message. Each one has a live **Preview** filled with sample values, and **Use the standard wording** puts the original back.
+
+Put a placeholder in double braces and it is filled in for each invoice:
+
+| Placeholder | Becomes |
+|---|---|
+| `{{customerName}}` | The customer's name |
+| `{{invoiceNumber}}` | The invoice number |
+| `{{amount}}` | The balance due, for example ₹7,500.00 |
+| `{{dueDate}}` | The due date, for example 10-10-2026 |
+| `{{dueText}}` | "is due on 10-10-2026", "is due today" or "was due on 10-10-2026 (4 days overdue)", so one message reads right before and after the due date |
+| `{{businessName}}` | Your business name |
+| `{{paymentLink}}` | A payment link for the invoice, when the invoice has one. When it does not, the placeholder is empty, and a line such as `Pay online: {{paymentLink}}` is left out altogether |
+
+Customer names and other values are always inserted as plain text; nothing a customer's name contains can change how the email looks.
+
+## Send a reminder now
+
+Open an invoice and look for **Payment reminders**:
+
+- **Send email reminder** and **Send SMS reminder** send straight away, using the same wording as the automatic ones. To avoid pestering a customer, each channel can be used **once every 24 hours per invoice**; the button explains when it is available again. A failed attempt does not use up the allowance.
+- **Send on WhatsApp** opens WhatsApp with the message ready.
+
+Sending by hand works even if automatic reminders are off. It needs permission to edit invoices, so owners, admins, sales managers and sellers can use it, and it is not available to accountants with read-only access.
+
+## Reminder history on the invoice
+
+The **Payment reminders** panel on an invoice lists every reminder: **when** it went, the **channel**, **what** it was (before the due date, on the due date, overdue follow-up, or sent by hand), **who** (Automatic, or the team member's name), and the **result** (Sent, Failed with the reason, or Link opened). The customer's address is shown shortened, for example `pr***@example.in`, and the full address is never kept in the history or the server logs.
+
+Anyone who can see invoices can see the history. Open it on the web, desktop or the mobile app.
+
+A reminder that **fails** is recorded as failed and is not retried by the schedule. Fix the cause (for example a missing email address) and use **Send reminder now**.
+
+## Good to know
+
+- Reminders are per business: one business's settings, customers and history never mix with another's.
+- Changing the settings affects reminders from then on. It does not resend anything already sent.
+- Each reminder slot is sent once for each invoice and channel, even if the service restarts.
+- There is no public unsubscribe page. The email tells the customer to reply to you, and you tick **Do not remind** on the customer.

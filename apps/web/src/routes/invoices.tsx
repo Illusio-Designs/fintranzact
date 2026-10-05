@@ -33,6 +33,7 @@ import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
 import { RecordPaymentPanel } from "@/components/RecordPaymentPanel";
 import { ShareLinkSection } from "@/components/ShareLinkSection";
+import { InvoiceRemindersSection } from "@/components/InvoiceRemindersSection";
 import { Icon } from "@/components/ui/Icon";
 import { Download04Icon, File01Icon, FlashIcon } from "@hugeicons/core-free-icons";
 
@@ -870,6 +871,10 @@ function InvoiceDetailPanel({
               documentLabel={`Invoice ${invoice.invoiceNumber}`}
               partyPhone={invoice.party?.phone}
             />
+          )}
+
+          {invoice.type === "sale" && (invoice.documentType ?? "invoice") === "invoice" && invoice.status !== "draft" && (
+            <InvoiceRemindersSection invoiceId={invoice.id} />
           )}
 
           {/* Notes & Terms */}
