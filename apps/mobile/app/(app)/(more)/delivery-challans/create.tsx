@@ -24,6 +24,16 @@ import { useColors } from "../../../../src/contexts/ThemeContext";
 import { haptic } from "../../../../src/lib/haptics";
 import { DatePickerField } from "../../../../src/components/ui";
 import { LineItemNotesField } from "../../../../src/components/LineItemNotesField";
+import { BatchLineFields } from "../../../../src/components/BatchFields";
+import { useFeature } from "../../../../src/hooks/useFeature";
+import {
+  baseQuantity,
+  lineBatchPayload,
+  outwardLinesError,
+  toDateOnly,
+  type BatchOutValue,
+  type BatchRow,
+} from "../../../../src/lib/batches";
 
 interface LineItem {
   itemId?: string;
@@ -34,6 +44,11 @@ interface LineItem {
   unitPrice: string;
   taxPercent: string;
   discountPercent: string;
+  /** Batch tracking of the selected item; the picker shows only for items that track batches. */
+  trackBatches?: boolean;
+  trackExpiry?: boolean;
+  /** The batch dispatched from (empty = earliest expiry first). */
+  batchOut?: BatchOutValue;
 }
 
 function newLineItem(): LineItem {
@@ -79,7 +94,7 @@ function PartyPickerModal({ visible, onSelect, onClose }: {
 }
 
 function ItemPickerModal({ visible, onSelect, onClose }: {
-  visible: boolean; onSelect: (i: { id: string; name: string; salePrice?: string | null; taxPercent: string }) => void; onClose: () => void;
+  visible: boolean; onSelect: (i: { id: string; name: string; salePrice?: string | null; taxPercent: string; unit?: string | null; trackBatches?: boolean | null; trackExpiry?: boolean | null }) => void; onClose: () => void;
 }) {
   const ms = useMs();
   const colors = useColors();
@@ -117,10 +132,12 @@ function ItemPickerModal({ visible, onSelect, onClose }: {
   );
 }
 
-function LineItemRow({ item, index, onChange, onRemove, onPickItem }: {
+function LineItemRow({ item, index, onChange, onRemove, onPickItem, documentDate, unit, onBatchOut }: {
   item: LineItem; index: number;
   onChange: (i: number, f: keyof LineItem, v: string) => void;
   onRemove: (i: number) => void; onPickItem: (i: number) => void;
+  documentDate: string; unit?: string | null;
+  onBatchOut: (i: number, patch: BatchOutValue) => void;
 }) {
   const s = useS();
   const colors = useColors();
@@ -141,6 +158,19 @@ function LineItemRow({ item, index, onChange, onRemove, onPickItem }: {
       </View>
       {item.itemName ? (
         <LineItemNotesField value={item.notes} onChange={(v) => onChange(index, "notes", v)} />
+      ) : null}
+      {item.trackBatches && item.itemId ? (
+        <BatchLineFields
+          direction="out"
+          itemId={item.itemId}
+          trackExpiry={!!item.trackExpiry}
+          date={documentDate}
+          needed={baseQuantity(item)}
+          unit={unit}
+          batchOut={item.batchOut}
+          onBatchIn={() => {}}
+          onBatchOut={(patch) => onBatchOut(index, patch)}
+        />
       ) : null}
       <View style={s.lineItemFields}>
         {(["quantity", "unitPrice", "taxPercent", "discountPercent"] as const).map((field, fi) => (
@@ -173,6 +203,9 @@ export default function DeliveryChallanCreateScreen() {
   const [activeLineIndex, setActiveLineIndex] = useState(0);
 
   const utils = trpc.useUtils();
+  // Batch fields are sent only when the plan has them (allowed while billing status loads).
+  const batches = useFeature("batchesExpiry");
+  const [itemUnits, setItemUnits] = useState<Record<string, string | null | undefined>>({});
 
   const createMutation = trpc.deliveryChallan.create.useMutation({
     onSuccess: () => {
@@ -201,14 +234,32 @@ export default function DeliveryChallanCreateScreen() {
 
   const handlePickItemForLine = useCallback((index: number) => { setActiveLineIndex(index); setShowItemPicker(true); }, []);
 
-  const handleItemSelected = useCallback((item: { id: string; name: string; salePrice?: string | null; taxPercent: string }) => {
-    setLineItems((prev) => { const next = [...prev]; next[activeLineIndex] = { ...next[activeLineIndex], itemId: item.id, itemName: item.name, unitPrice: item.salePrice ?? "0", taxPercent: item.taxPercent }; return next; });
+  const handleItemSelected = useCallback((item: { id: string; name: string; salePrice?: string | null; taxPercent: string; unit?: string | null; trackBatches?: boolean | null; trackExpiry?: boolean | null }) => {
+    setItemUnits((u) => ({ ...u, [item.id]: item.unit }));
+    setLineItems((prev) => {
+      const next = [...prev];
+      // A different item starts without a batch.
+      next[activeLineIndex] = { ...next[activeLineIndex], itemId: item.id, itemName: item.name, unitPrice: item.salePrice ?? "0", taxPercent: item.taxPercent, trackBatches: !!item.trackBatches, trackExpiry: !!item.trackBatches && !!item.trackExpiry, batchOut: undefined };
+      return next;
+    });
   }, [activeLineIndex]);
 
-  const handleCreate = useCallback(() => {
+  const handleBatchOut = useCallback((index: number, patch: BatchOutValue) => {
+    setLineItems((prev) => prev.map((li, i) => (i === index ? { ...li, batchOut: { ...li.batchOut, ...patch } } : li)));
+  }, []);
+
+  const handleCreate = useCallback(async () => {
     if (!selectedParty) { Alert.alert("Validation", "Please select a customer."); return; }
     const validItems = lineItems.filter((li) => li.itemName.trim().length > 0 && parseFloat(li.quantity) > 0);
     if (validItems.length === 0) { Alert.alert("Validation", "Add at least one item."); return; }
+    // A picked batch must hold the quantity and not be expired (unless allowed).
+    if (batches.allowed) {
+      const batchError = await outwardLinesError(validItems, toDateOnly(invoiceDate), async (input) => {
+        const res = await utils.batch.list.fetch(input, { staleTime: 15_000 });
+        return res.data as BatchRow[];
+      });
+      if (batchError) { Alert.alert("Batch", batchError); return; }
+    }
     createMutation.mutate({
       partyId: selectedParty.id, type: "sale", documentType: "delivery_challan",
       invoiceDate: invoiceDate.toISOString(), notes: notes.trim() || undefined,
@@ -223,9 +274,10 @@ export default function DeliveryChallanCreateScreen() {
         unitPrice: li.unitPrice || "0",
         taxPercent: li.taxPercent || "0",
         discountPercent: li.discountPercent || "0",
+        ...lineBatchPayload(li, "out", batches.allowed),
       })),
     });
-  }, [selectedParty, lineItems, invoiceDate, notes, createMutation]);
+  }, [selectedParty, lineItems, invoiceDate, notes, createMutation, batches.allowed, utils]);
 
   return (
     <SafeAreaView style={s.container} edges={["top"]}>
@@ -266,7 +318,7 @@ export default function DeliveryChallanCreateScreen() {
           </View>
 
           {lineItems.map((li, idx) => (
-            <LineItemRow key={idx} item={li} index={idx} onChange={handleLineChange} onRemove={handleRemoveLine} onPickItem={handlePickItemForLine} />
+            <LineItemRow key={idx} item={li} index={idx} onChange={handleLineChange} onRemove={handleRemoveLine} onPickItem={handlePickItemForLine} documentDate={toDateOnly(invoiceDate)} unit={li.itemId ? itemUnits[li.itemId] : undefined} onBatchOut={handleBatchOut} />
           ))}
 
           <TouchableOpacity style={s.addItemBtn} onPress={() => setLineItems((p) => [...p, newLineItem()])} activeOpacity={0.7}>
