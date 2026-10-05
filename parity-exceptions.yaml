@@ -469,6 +469,16 @@ exceptions:
       - share.get
       - share.create
       - share.revoke
+      # Online payments (a business connects its own Razorpay account and invoices get a
+      # payment link). Keys are managed on web only by design (secrets are pasted once on
+      # web and never returned); the invoice payment link rides with the share link, which
+      # is web-only for now (see share.* above).
+      - onlinePayments.getSettings
+      - onlinePayments.connect
+      - onlinePayments.testConnection
+      - onlinePayments.disconnect
+      - onlinePayments.invoiceLink
+      - onlinePayments.createInvoiceLink
 
   cli:
     not-applicable:
@@ -799,6 +809,16 @@ exceptions:
       - share.get
       - share.create
       - share.revoke
+      # Online payments (a business connects its own Razorpay account and invoices get a
+      # payment link). Keys are managed on web only by design (secrets are pasted once on
+      # web and never returned); the invoice payment link rides with the share link, which
+      # is web-only for now (see share.* above).
+      - onlinePayments.getSettings
+      - onlinePayments.connect
+      - onlinePayments.testConnection
+      - onlinePayments.disconnect
+      - onlinePayments.invoiceLink
+      - onlinePayments.createInvoiceLink
 
   mcp:
     not-applicable:
@@ -1158,3 +1178,13 @@ exceptions:
       - share.get
       - share.create
       - share.revoke
+      # Online payments (a business connects its own Razorpay account and invoices get a
+      # payment link). Keys are managed on web only by design (secrets are pasted once on
+      # web and never returned); the invoice payment link rides with the share link, which
+      # is web-only for now (see share.* above).
+      - onlinePayments.getSettings
+      - onlinePayments.connect
+      - onlinePayments.testConnection
+      - onlinePayments.disconnect
+      - onlinePayments.invoiceLink
+      - onlinePayments.createInvoiceLink

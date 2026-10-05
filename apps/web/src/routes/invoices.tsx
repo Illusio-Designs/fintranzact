@@ -33,6 +33,7 @@ import { useDeleteConfirmation } from "@/hooks/useDeleteConfirmation";
 import { KbdShortcut } from "@/components/ui/KbdShortcut";
 import { RecordPaymentPanel } from "@/components/RecordPaymentPanel";
 import { ShareLinkSection } from "@/components/ShareLinkSection";
+import { PaymentLinkSection } from "@/components/PaymentLinkSection";
 import { Icon } from "@/components/ui/Icon";
 import { Download04Icon, File01Icon, FlashIcon } from "@hugeicons/core-free-icons";
 
@@ -867,6 +868,14 @@ function InvoiceDetailPanel({
           {invoice.type === "sale" && (
             <ShareLinkSection
               documentId={invoice.id}
+              documentLabel={`Invoice ${invoice.invoiceNumber}`}
+              partyPhone={invoice.party?.phone}
+            />
+          )}
+
+          {invoice.type === "sale" && invoice.status !== "draft" && (
+            <PaymentLinkSection
+              invoiceId={invoice.id}
               documentLabel={`Invoice ${invoice.invoiceNumber}`}
               partyPhone={invoice.party?.phone}
             />

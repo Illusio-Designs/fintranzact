@@ -11,6 +11,7 @@ import { apiUrl } from "@/lib/api-url";
 import { formatCurrency, formatDate, getDocumentTypeLabel } from "@/lib/utils";
 import { Icon } from "@/components/ui/Icon";
 import { Logo } from "@/components/ui/Logo";
+import { PayNowButton } from "@/components/PayNowButton";
 
 export const Route = createFileRoute("/i/$token")({
   component: SharedDocumentPage,
@@ -62,6 +63,8 @@ interface SharedDocument {
   }>;
   payment: { upiId: string; payUrl: string | null; qrDataUrl: string } | null;
   bank: { accountName: string | null; accountNumber: string; ifsc: string | null; bankName: string | null } | null;
+  /** Pay now (Razorpay, the business's own account): offered only when the server says so. */
+  onlinePayment?: { available: boolean };
   poweredBy: boolean;
   /** Sign-up link for "Made with Fintranzact" (the referring partner's code), or null for the plain site. */
   poweredByUrl?: string | null;
@@ -130,6 +133,8 @@ function SharedDocumentView({ token, data }: { token: string; data: SharedDocume
   const balance = parseFloat(doc.balance);
   const payable = PAYABLE.has(doc.documentType) && doc.status !== "cancelled";
   const due = payable && balance > 0.004;
+  // Razorpay sends the customer back here after paying, with this in the query.
+  const returnedPaid = new URLSearchParams(window.location.search).get("razorpay_payment_link_status") === "paid";
   const pdfUrl = (format: "a4" | "a5") => apiUrl(`/api/share/${encodeURIComponent(token)}/pdf?format=${format}`);
 
   const totals: Array<[string, string | null]> = [
@@ -183,7 +188,14 @@ function SharedDocumentView({ token, data }: { token: string; data: SharedDocume
             </div>
           </div>
 
+          {returnedPaid && (
+            <p role="status" className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" data-testid="paid-notice">
+              Thank you. Your payment was received. This page updates within a minute or two.
+            </p>
+          )}
+
           <div className="mt-5 flex flex-wrap gap-2">
+            {due && data.onlinePayment?.available && <PayNowButton token={token} />}
             {due && payment?.payUrl && (
               <a href={payment.payUrl} className="btn-primary px-4 py-2 sm:hidden">
                 Pay with UPI
