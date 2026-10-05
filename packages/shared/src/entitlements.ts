@@ -238,6 +238,26 @@ export const ADDON_FEATURES: Record<AddonId, { unlocks: string; implemented: boo
   store_pro: { unlocks: "Store custom domain, themes and page builder, online payments at checkout", implemented: false },
 };
 
+/**
+ * Single source of truth for "can this add-on be bought?". An add-on is
+ * available only once its feature is built (ADDON_FEATURES[id].implemented).
+ * Every surface (pricing page, billing tab, subscribeAddon, billing.config)
+ * goes through these helpers, so flipping `implemented` to true re-enables the
+ * add-on everywhere. Add-ons an organisation already holds stay listed as
+ * active (with "Coming soon") whether or not they are available.
+ */
+export function isAddonAvailable(id: string): boolean {
+  return (ADDON_IDS as readonly string[]).includes(id) && ADDON_FEATURES[id as AddonId].implemented === true;
+}
+
+/** The add-ons that can be bought today, in catalogue order. */
+export function availableAddonIds(): AddonId[] {
+  return ADDON_IDS.filter((id) => isAddonAvailable(id));
+}
+
+/** Shown wherever a purchase of an add-on that does not exist yet is refused or replaced. */
+export const ADDON_COMING_SOON_MESSAGE = "This add-on is coming soon and cannot be purchased yet.";
+
 export interface Access {
   state: AccessState;
   /** True when creating and editing is refused (reads, search, PDFs, exports stay open). */

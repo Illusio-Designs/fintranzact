@@ -6,6 +6,8 @@ import { controlDb, getTenantDb, billingPayments, billingSubscriptions, invoices
 import {
   ADDONS,
   ADDON_IDS,
+  ADDON_COMING_SOON_MESSAGE,
+  isAddonAvailable,
   BILLING_UPGRADE_PATH,
   BILLING_CYCLES,
   planIdSchema,
@@ -73,6 +75,8 @@ export const billingRouter = router({
     demoPayments: demoPaymentsEnabled(),
     provider: razorpayConfigured() ? ("razorpay" as const) : ("demo" as const),
     razorpayKeyId: razorpayConfigured() ? razorpayKeyId() : null,
+    /** Which add-ons can be bought today (ADDON_FEATURES[id].implemented); additive. */
+    addonAvailability: Object.fromEntries(ADDON_IDS.map((id) => [id, isAddonAvailable(id)])) as Record<(typeof ADDON_IDS)[number], boolean>,
   })),
 
   /**
@@ -136,6 +140,10 @@ export const billingRouter = router({
     .input(z.object({ addon: z.enum(ADDON_IDS), cycle: z.enum(BILLING_CYCLES) }))
     .mutation(async ({ input, ctx }) => {
       const tenantId = await requirePlanManagerTenant(ctx);
+      // The feature behind an add-on must exist before it can be sold.
+      if (!isAddonAvailable(input.addon)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: ADDON_COMING_SOON_MESSAGE });
+      }
       if (!razorpayConfigured() && !demoPaymentsEnabled()) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Online payments are not available yet. Contact us to upgrade." });
       }
@@ -281,6 +289,8 @@ export const billingRouter = router({
       graceUntil: state.graceUntil,
       addons: ADDONS.map((a) => ({
         ...a,
+        /** False until the feature is built: clients hide purchase controls (held add-ons still show). */
+        available: isAddonAvailable(a.id),
         monthly: cycleAmount(a.monthlyPriceInr, "monthly"),
         yearly: cycleAmount(a.monthlyPriceInr, "yearly"),
       })),
