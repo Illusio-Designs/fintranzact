@@ -1899,6 +1899,10 @@ export interface RoadmapProgress {
   title: string;
   status: RoadmapStatus;
   done: string[];
+  /** Checklist lines whose wording changed: old text -> new text (applied before the ticks, so a renamed line can be ticked). */
+  rename?: Record<string, string>;
+  /** Wording fixes in the item's description: [old text, new text] pairs, replaced once each. */
+  describe?: [string, string][];
 }
 
 /**
@@ -2258,6 +2262,29 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
         title: "Connect e-invoice, e-way bill and GST returns through Sandbox.co.in",
         status: "in_progress",
         done: ["GSTR-1 save and file with EVC OTP", "GSTR-3B prepare and file"],
+      },
+    ],
+  },
+  {
+    key: "2026-10-05-p1-approvals-wording",
+    updates: [
+      {
+        // Approvals left the Business plan until an approval workflow exists. Boards
+        // seeded earlier still carry the old wording, so rename that line (the P1
+        // batch above ticks the new wording on boards that get it fresh) and tick it.
+        title: "P1. Plans & pricing: paid plans only",
+        status: "in_progress",
+        rename: {
+          "Business limits and features (unlimited, manufacturing, approvals, audit history, priority support)":
+            "Business limits and features (unlimited, manufacturing, audit history, priority support)",
+        },
+        describe: [
+          [
+            "- Everything in Growth, plus manufacturing / BOM, approvals, full audit history, priority support, onboarding help",
+            "- Everything in Growth, plus manufacturing / BOM, full audit history, priority support, onboarding help\n- Approvals are left out for now (owner decision, 3 Oct 2026): no approval workflow exists yet. They return with the \"Approval workflows\" item",
+          ],
+        ],
+        done: ["Business limits and features (unlimited, manufacturing, audit history, priority support)"],
       },
     ],
   },
