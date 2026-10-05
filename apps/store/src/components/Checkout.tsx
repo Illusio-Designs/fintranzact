@@ -3,6 +3,7 @@ import type { CartItem, StoreConfig, OrderResult } from "../types";
 import { cartItemKey } from "../types";
 import { placeOrder } from "../api";
 import { cartTotals } from "../pricing";
+import { PolicyLinks } from "./PolicyLinks";
 
 interface CheckoutProps {
   cart: CartItem[];
@@ -470,6 +471,18 @@ export function Checkout({
                 </span>
               )}
             </button>
+
+            {/* Policy links: shown right where the customer commits to the order. */}
+            <div className="pt-1 space-y-2 text-center">
+              <p className="text-xs" style={{ color: "var(--store-muted)" }}>
+                By placing this order you agree to the store&apos;s policies.
+              </p>
+              <PolicyLinks
+                slug={slug}
+                newTab
+                className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5"
+              />
+            </div>
           </form>
         </div>
       </div>

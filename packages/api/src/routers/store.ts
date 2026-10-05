@@ -1,7 +1,14 @@
 import { eq, and, ilike, sql, desc, gte, lte, inArray, or, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { businesses, items, itemVariants, storeOrders, invoices, invoiceItems } from "@fintranzact/db";
-import { paginationSchema } from "@fintranzact/shared";
+import {
+  paginationSchema,
+  STORE_POLICY_KINDS,
+  STORE_POLICY_MAX_LENGTH,
+  STORE_RETURN_WINDOW_MAX_DAYS,
+  sanitizePolicyInput,
+} from "@fintranzact/shared";
+import { buildEditorPolicies } from "../lib/store-policies.js";
 import { router, viewerProcedure, memberProcedure, adminProcedure } from "../trpc.js";
 import { TRPCError } from "@trpc/server";
 import { requireCan } from "../lib/permissions.js";
@@ -26,7 +33,27 @@ const updateStoreSettingsSchema = z.object({
   storeWhatsappNumber: z.string().max(15).optional().nullable(),
   storeAllowNegativeStock: z.boolean().optional(),
   storeOrderPrefix: z.string().min(1).max(10).optional(),
+  storeReturnWindowDays: z.number().int().min(1).max(STORE_RETURN_WINDOW_MAX_DAYS).optional(),
 });
+
+const policyKindSchema = z.enum(STORE_POLICY_KINDS);
+
+const policyBusinessColumns = {
+  name: businesses.name,
+  gstRegistrationType: businesses.gstRegistrationType,
+  gstin: businesses.gstin,
+  phone: businesses.phone,
+  email: businesses.email,
+  address: businesses.address,
+  addressLine1: businesses.addressLine1,
+  addressLine2: businesses.addressLine2,
+  city: businesses.city,
+  state: businesses.state,
+  pincode: businesses.pincode,
+  storeReturnWindowDays: businesses.storeReturnWindowDays,
+  storePolicies: businesses.storePolicies,
+  storeSlug: businesses.storeSlug,
+};
 
 const storeOrderStatuses = ["pending", "confirmed", "preparing", "ready", "delivered", "cancelled"] as const;
 
@@ -62,6 +89,7 @@ export const storeRouter = router({
       storeWhatsappNumber: businesses.storeWhatsappNumber,
       storeAllowNegativeStock: businesses.storeAllowNegativeStock,
       storeOrderPrefix: businesses.storeOrderPrefix,
+      storeReturnWindowDays: businesses.storeReturnWindowDays,
       nextStoreOrderNumber: businesses.nextStoreOrderNumber,
       currency: businesses.currency,
     }).from(businesses)
@@ -115,9 +143,60 @@ export const storeRouter = router({
           storeWhatsappNumber: businesses.storeWhatsappNumber,
           storeAllowNegativeStock: businesses.storeAllowNegativeStock,
           storeOrderPrefix: businesses.storeOrderPrefix,
+          storeReturnWindowDays: businesses.storeReturnWindowDays,
         });
 
       return updated;
+    }),
+
+  // ── Policy pages (Terms, Refund, Shipping, Contact, Privacy) ──
+
+  /** Every policy page for the editor: default template, saved text, and the business details the templates fill from. */
+  getPolicies: viewerProcedure.query(async ({ ctx }) => {
+    requireCan(ctx.ability, "read", "Store");
+    const [biz] = await ctx.db.select(policyBusinessColumns).from(businesses)
+      .where(eq(businesses.id, ctx.businessId))
+      .limit(1);
+    if (!biz) throw new TRPCError({ code: "NOT_FOUND", message: "Business not found" });
+    return { storeSlug: biz.storeSlug, ...buildEditorPolicies(biz) };
+  }),
+
+  /** Save the owner's text for one page. Placeholders such as {{businessName}} stay live. */
+  updatePolicy: adminProcedure
+    .input(z.object({ kind: policyKindSchema, content: z.string().max(STORE_POLICY_MAX_LENGTH * 2) }))
+    .mutation(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "manage", "Store");
+      await enforceOnlineStore(ctx.tenantId);
+      const content = sanitizePolicyInput(input.content);
+      if (!content) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "A policy page cannot be empty. Use reset to go back to the template.",
+        });
+      }
+      const entry = { content, updatedAt: new Date().toISOString() };
+      await ctx.db.update(businesses)
+        .set({
+          storePolicies: sql`jsonb_set(coalesce(${businesses.storePolicies}, '{}'::jsonb), ARRAY[${input.kind}]::text[], ${JSON.stringify(entry)}::jsonb)`,
+          updatedAt: new Date(),
+        })
+        .where(eq(businesses.id, ctx.businessId));
+      return { kind: input.kind, ...entry };
+    }),
+
+  /** Drop the owner's text for one page so it follows the default template again. */
+  resetPolicy: adminProcedure
+    .input(z.object({ kind: policyKindSchema }))
+    .mutation(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "manage", "Store");
+      await enforceOnlineStore(ctx.tenantId);
+      await ctx.db.update(businesses)
+        .set({
+          storePolicies: sql`nullif(coalesce(${businesses.storePolicies}, '{}'::jsonb) - ${input.kind}::text, '{}'::jsonb)`,
+          updatedAt: new Date(),
+        })
+        .where(eq(businesses.id, ctx.businessId));
+      return { kind: input.kind };
     }),
 
   // ── Item Visibility ──────────────────────────────────────────

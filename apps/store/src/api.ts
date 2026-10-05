@@ -1,4 +1,4 @@
-import type { StoreConfig, OrderResult } from "./types";
+import type { StoreConfig, OrderResult, StorePolicies } from "./types";
 
 const API_URL = import.meta.env.API_URL || "";
 
@@ -12,6 +12,14 @@ export async function fetchCatalog(slug: string): Promise<StoreConfig> {
   // ever did, the (now removed) global CSRF gate would trip and the
   // storefront would break on checkout.
   const res = await fetch(`${STORE_PREFIX}/${slug}/catalog.json`, {
+    credentials: "omit",
+  });
+  if (!res.ok) throw new Error("Store not found");
+  return res.json();
+}
+
+export async function fetchPolicies(slug: string): Promise<StorePolicies> {
+  const res = await fetch(`${STORE_PREFIX}/${slug}/policies.json`, {
     credentials: "omit",
   });
   if (!res.ok) throw new Error("Store not found");

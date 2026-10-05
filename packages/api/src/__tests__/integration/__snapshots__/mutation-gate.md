@@ -5,7 +5,7 @@ ungated-exempt = public/protected base AND allowlisted (auth, billing, platform 
 inline-guarded = public/protected base, but the router calls assertWritable itself (INLINE_WRITE_GUARDED);
 ungated = public/protected base with no check at all: must be empty of business-data writes.
 
-mutations: 277 (gated 215, exempt 7, ungated-exempt 52, inline-guarded 3, ungated 0)
+mutations: 279 (gated 217, exempt 7, ungated-exempt 52, inline-guarded 3, ungated 0)
 
 | procedure | base | status |
 |---|---|---|
@@ -248,8 +248,10 @@ mutations: 277 (gated 215, exempt 7, ungated-exempt 52, inline-guarded 3, ungate
 | store.bulkToggleItems | authorized | gated |
 | store.cancelOrder | authorized | gated |
 | store.confirmOrder | authorized | gated |
+| store.resetPolicy | authorized | gated |
 | store.updateItemStoreSettings | authorized | gated |
 | store.updateOrderStatus | authorized | gated |
+| store.updatePolicy | authorized | gated |
 | store.updateSettings | authorized | gated |
 | store.updateVariantStoreSettings | authorized | gated |
 | target.create | authorized | gated |

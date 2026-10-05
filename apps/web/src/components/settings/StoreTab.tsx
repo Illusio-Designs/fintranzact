@@ -7,6 +7,7 @@ import { SlideOver } from "@/components/ui/SlideOver";
 import { Icon } from "@/components/ui/Icon";
 import { Cancel01Icon, Loading03Icon, SquareLock02Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { PhoneInput } from "./PhoneInput";
+import { StorePoliciesCard } from "./StorePoliciesCard";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -73,6 +74,7 @@ function StoreSettingsCard() {
   const [whatsapp, setWhatsapp] = useState<string | null>(null);
   const [minOrder, setMinOrder] = useState<string | null>(null);
   const [deliveryNote, setDeliveryNote] = useState<string | null>(null);
+  const [returnWindow, setReturnWindow] = useState<string | null>(null);
   const [allowNegativeStock, setAllowNegativeStock] = useState<boolean | null>(null);
 
   // Use server state as source of truth until the user edits
@@ -82,6 +84,10 @@ function StoreSettingsCard() {
   const effectiveWhatsapp = whatsapp ?? settings?.storeWhatsappNumber ?? "";
   const effectiveMinOrder = minOrder ?? settings?.storeMinOrderAmount ?? "";
   const effectiveDeliveryNote = deliveryNote ?? settings?.storeDeliveryNote ?? "";
+  const effectiveReturnWindow = returnWindow ?? String(settings?.storeReturnWindowDays ?? 7);
+  const returnWindowNumber = Number(effectiveReturnWindow);
+  const returnWindowValid =
+    Number.isInteger(returnWindowNumber) && returnWindowNumber >= 1 && returnWindowNumber <= 365;
   const effectiveAllowNegativeStock = allowNegativeStock ?? settings?.storeAllowNegativeStock ?? false;
 
   // Slug is locked once saved — cannot be changed
@@ -115,6 +121,7 @@ function StoreSettingsCard() {
     whatsapp !== null ||
     minOrder !== null ||
     deliveryNote !== null ||
+    returnWindow !== null ||
     allowNegativeStock !== null;
 
   const updateMutation = trpc.store.updateSettings.useMutation({
@@ -128,6 +135,8 @@ function StoreSettingsCard() {
       setWhatsapp(null);
       setMinOrder(null);
       setDeliveryNote(null);
+      setReturnWindow(null);
+      utils.store.getPolicies.invalidate();
       setAllowNegativeStock(null);
     },
     onError: (err) => toast.error("Failed to save settings", err.message),
@@ -141,6 +150,7 @@ function StoreSettingsCard() {
       storeWhatsappNumber: effectiveWhatsapp || undefined,
       storeMinOrderAmount: effectiveMinOrder || undefined,
       storeDeliveryNote: effectiveDeliveryNote || undefined,
+      storeReturnWindowDays: returnWindowValid ? returnWindowNumber : undefined,
       storeAllowNegativeStock: effectiveAllowNegativeStock,
     });
   }
@@ -282,6 +292,25 @@ function StoreSettingsCard() {
         />
       </div>
 
+      {/* Return window — fills the Refund & Cancellation policy page */}
+      <div className="mb-4">
+        <label className="label" htmlFor="store-return-window">Return Window (days)</label>
+        <input
+          id="store-return-window"
+          className="input"
+          value={effectiveReturnWindow}
+          onChange={(e) => setReturnWindow(e.target.value.replace(/[^0-9]/g, ""))}
+          inputMode="numeric"
+          maxLength={3}
+          aria-invalid={!returnWindowValid}
+        />
+        <p className={cn("text-2xs mt-1", returnWindowValid ? "text-text-tertiary" : "text-red-600 dark:text-red-400")}>
+          {returnWindowValid
+            ? "Days a customer has to ask for a return. Used in your Refund & Cancellation page."
+            : "Enter a number of days from 1 to 365."}
+        </p>
+      </div>
+
       {/* Allow orders with negative stock */}
       <div className="flex items-center justify-between mb-5 pt-3 border-t border-border-light">
         <div>
@@ -298,7 +327,7 @@ function StoreSettingsCard() {
       <button
         className="btn-primary mt-2"
         onClick={handleSave}
-        disabled={!isDirty || updateMutation.isPending || slugStatus === "taken"}
+        disabled={!isDirty || updateMutation.isPending || slugStatus === "taken" || !returnWindowValid}
       >
         {updateMutation.isPending ? "Saving…" : isDirty ? "Save Settings" : "No changes"}
       </button>
@@ -607,6 +636,7 @@ export function StoreTab() {
       <StoreSettingsCard />
       <StoreItemsCard />
       {storeIsLive && <StorePreviewCard slug={settings.storeSlug!} />}
+      <StorePoliciesCard storeBaseUrl={settings?.storeSlug ? buildStoreUrl(settings.storeSlug) : null} />
     </div>
   );
 }

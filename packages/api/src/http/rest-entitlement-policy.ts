@@ -78,6 +78,8 @@ export const REST_ENTITLEMENT_POLICY: Readonly<Record<string, RestEntitlementPol
   "GET /api/share/:token/logo": "public-neutral",
   "GET /store/:slug/logo": "public-neutral",
   "GET /store/:slug/catalog.json": "public-neutral",
+  "GET /store/:slug/policies.json": "public-neutral",
+  "GET /store/:slug/policies/:kind": "public-neutral",
   "POST /store/:slug/identify": "public-neutral",
   "POST /store/:slug/order": "public-neutral",
 

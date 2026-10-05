@@ -176,6 +176,11 @@ exceptions:
       - store.bulkToggleItems
       - store.updateItemStoreSettings
       - store.updateVariantStoreSettings
+      # Store policy pages (Terms, Refund, Shipping, Contact, Privacy): a long-text
+      # editor with preview, set up once per store on the web.
+      - store.getPolicies
+      - store.updatePolicy
+      - store.resetPolicy
 
       # --- Data Import ---
       # Bulk CSV import is a desktop/power-user workflow.
@@ -467,6 +472,11 @@ exceptions:
 
   cli:
     not-applicable:
+      # --- Store policy pages ---
+      # Long-text editor with preview, set up once per store in Settings → Online Store.
+      - store.getPolicies
+      - store.updatePolicy
+      - store.resetPolicy
       # --- GST return status ---
       # Web panel only; the filing steps themselves are not in the CLI / MCP.
       - gstReturns.filingStatus
@@ -792,6 +802,11 @@ exceptions:
 
   mcp:
     not-applicable:
+      # --- Store policy pages ---
+      # Long-text editor with preview, set up once per store in Settings → Online Store.
+      - store.getPolicies
+      - store.updatePolicy
+      - store.resetPolicy
       # --- GST return status ---
       # Web panel only; the filing steps themselves are not in the CLI / MCP.
       - gstReturns.filingStatus

@@ -10,6 +10,8 @@ import { PhoneVerify } from "./components/PhoneVerify";
 import { OrderConfirmation } from "./components/OrderConfirmation";
 import { cartTotals } from "./pricing";
 import { Footer } from "./components/Footer";
+import { PolicyPage } from "./components/PolicyPage";
+import { isPolicyKind } from "./components/PolicyLinks";
 
 // Cart persistence key
 const CART_KEY = "fintranzact-store-cart";
@@ -63,7 +65,19 @@ function lightenHex(hex: string, amount: number): string {
 
 type View = "browse" | "cart" | "phone-verify" | "checkout" | "confirmed";
 
+/**
+ * /<slug>/policies/<kind> is a policy page; everything else is the store.
+ * The path never changes within a page load (policy links are plain anchors).
+ */
 export function App() {
+  const parts = window.location.pathname.split("/").filter(Boolean);
+  if (parts[0] && parts[1] === "policies" && isPolicyKind(parts[2])) {
+    return <PolicyPage slug={parts[0]} kind={parts[2]} />;
+  }
+  return <StoreApp />;
+}
+
+function StoreApp() {
   // Extract slug from URL: /<slug> (store runs on its own subdomain)
   const [slug] = useState<string>(() => {
     const parts = window.location.pathname.split("/").filter(Boolean);
@@ -378,7 +392,7 @@ export function App() {
           )}
 
           {/* Footer */}
-          <Footer config={catalog} />
+          <Footer config={catalog} slug={slug} />
 
           {/* Bottom padding on mobile so floating cart bar does not cover content */}
           {cart.length > 0 && <div className="h-20 lg:h-0" />}

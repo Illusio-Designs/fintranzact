@@ -22,6 +22,8 @@ Every route outside tRPC and what a read-only or suspended organisation may do. 
 | GET /pay/upi | public-static | server.ts |
 | GET /store/:slug/catalog.json | public-neutral | server.ts |
 | GET /store/:slug/logo | public-neutral | server.ts |
+| GET /store/:slug/policies.json | public-neutral | server.ts |
+| GET /store/:slug/policies/:kind | public-neutral | server.ts |
 | GET /up | public-static | server.ts |
 | POST /api/items/labels | exempt-download | server.ts |
 | POST /api/selfImport/:tenantId | signed-token | http/importStream.ts |
