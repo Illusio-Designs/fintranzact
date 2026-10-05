@@ -48,6 +48,9 @@ import { registerExportRoute } from "./http/exportStream.js";
 import { registerImportRoute } from "./http/importStream.js";
 import { registerRazorpayWebhook } from "./http/razorpayWebhook.js";
 import { registerBillingInvoiceRoute } from "./http/billingInvoice.js";
+import { registerBusinessRazorpayWebhook } from "./http/businessRazorpayWebhook.js";
+import { createSharePaymentLink, shareOnlinePaymentAvailable } from "./lib/razorpay/share.js";
+import { createFixedWindowLimiter } from "./lib/fixed-window-limiter.js";
 import { listPublicPlansJson } from "./lib/public-plans.js";
 import { apiSecureHeaders } from "./lib/security-headers.js";
 
@@ -829,10 +832,29 @@ app.get("/api/share/:token", async (c) => {
     bank: d.bankAccountNumber
       ? { accountName: d.bankAccountName ?? null, accountNumber: d.bankAccountNumber, ifsc: d.bankIfsc ?? null, bankName: d.bankName ?? null }
       : null,
+    // "Pay now" is offered when the business connected its own Razorpay and a balance can be paid online.
+    onlinePayment: { available: await shareOnlinePaymentAvailable(shared.db, link) },
     poweredBy: !d.isPaidPlan,
     // Where the "Made with Fintranzact" link goes (sign-up with the referring partner's code, else the site).
     poweredByUrl: d.isPaidPlan ? null : d.brandingUrl ?? null,
   }, 200, SHARE_HEADERS);
+});
+
+// "Pay now": the server makes (or reuses) a Razorpay payment link for the
+// invoice's current balance on the BUSINESS's own Razorpay account. Public,
+// no body is read (the amount comes from the database), tighter rate limit
+// than the page itself, same neutral 404 as an unknown link.
+const payLinkLimiter = createFixedWindowLimiter({ limit: 10, windowMs: 60_000 });
+app.post("/api/share/:token/pay", async (c) => {
+  if (!rateLimitDisabled && !payLinkLimiter.hit(getClientIp(c))) {
+    return c.json({ error: "Too many requests. Try again later." }, 429, SHARE_HEADERS);
+  }
+  const token = c.req.param("token") ?? "";
+  const link = await resolveShareToken(token);
+  if (!link) return c.json({ error: "This link is not valid any more" }, 404, SHARE_HEADERS);
+  const result = await createSharePaymentLink(await getTenantDb(link.tenantId), link, token);
+  if (!result.ok) return c.json({ error: result.error }, result.status, SHARE_HEADERS);
+  return c.json({ url: result.url }, 200, SHARE_HEADERS);
 });
 
 app.get("/api/share/:token/pdf", async (c) => {
@@ -2319,6 +2341,8 @@ registerImportRoute(app);
 // Razorpay subscription webhooks, and the GST invoice PDFs Finvera issues.
 registerRazorpayWebhook(app);
 registerBillingInvoiceRoute(app);
+// A business's own Razorpay account: payment-link webhooks routed by a per-business token.
+registerBusinessRazorpayWebhook(app, { clientIp: getClientIp, rateLimitDisabled });
 
 // ── tRPC handler ───────────────────────────────────────────────
 app.use("/api/trpc/*", async (c) => {

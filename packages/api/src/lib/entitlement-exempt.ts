@@ -86,6 +86,10 @@ export const READ_ONLY_EXEMPT: ReadonlySet<string> = new Set([
   // external service or have side effects on a third party, not our data).
   "party.lookupGstin",
   "eInvoice.testConnection",
+  "onlinePayments.testConnection",
+  // Removing the business's own Razorpay keys is revoking credentials: never refused.
+  // (Connecting keys and making payment links are writes: gated in read-only mode.)
+  "onlinePayments.disconnect",
 
   // Not tenant-scoped: platform admin, partner and public contact forms.
   "platform.setPlan",

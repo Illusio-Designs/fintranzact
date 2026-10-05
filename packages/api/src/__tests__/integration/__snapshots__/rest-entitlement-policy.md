@@ -27,7 +27,9 @@ Every route outside tRPC and what a read-only or suspended organisation may do. 
 | GET /up | public-static | server.ts |
 | POST /api/items/labels | exempt-download | server.ts |
 | POST /api/selfImport/:tenantId | signed-token | http/importStream.ts |
+| POST /api/share/:token/pay | public-neutral | server.ts |
 | POST /store/:slug/identify | public-neutral | server.ts |
 | POST /store/:slug/order | public-neutral | server.ts |
 | POST /webhooks/razorpay | exempt-webhook | http/razorpayWebhook.ts |
+| POST /webhooks/razorpay/business/:token | exempt-webhook | http/businessRazorpayWebhook.ts |
 | POST /webhooks/shipping/:businessId | exempt-webhook | server.ts |

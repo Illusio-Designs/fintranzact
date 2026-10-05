@@ -1182,6 +1182,71 @@ export const paymentGatewayConfigsRelations = relations(paymentGatewayConfigs, (
   settlementAccount: one(bankAccounts, { fields: [paymentGatewayConfigs.settlementAccountId], references: [bankAccounts.id] }),
 }));
 
+// ── Online payments (the business's own Razorpay account) ─────
+// Each business pastes ITS OWN Razorpay API keys; customer money goes straight
+// to that account. Key id, key secret and webhook secret are encrypted at rest
+// (field encryption, ENCRYPTION_KEY) and never returned to a client. The
+// webhook URL carries "<tenantId>.<random token>": the token is stored hashed
+// (lookup) and encrypted (so the owner can see the URL again).
+
+export const razorpayConnections = pgTable("razorpay_connections", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  keyIdEncrypted: text("key_id_encrypted").notNull(),
+  keySecretEncrypted: text("key_secret_encrypted").notNull(),
+  webhookSecretEncrypted: text("webhook_secret_encrypted"),
+  /** Masked key id for display, e.g. "rzp_live_••••AbCd". Safe to return. */
+  keyIdMasked: text("key_id_masked").notNull(),
+  /** "test" or "live", from the key id prefix. */
+  mode: text("mode").notNull(),
+  webhookTokenHash: text("webhook_token_hash").notNull(),
+  webhookTokenEncrypted: text("webhook_token_encrypted").notNull(),
+  lastTestedAt: timestamp("last_tested_at", { withTimezone: true }),
+  lastTestOk: boolean("last_test_ok"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("razorpay_conn_business_idx").on(t.businessId),
+  uniqueIndex("razorpay_conn_token_idx").on(t.webhookTokenHash),
+]);
+
+// A Razorpay payment link created for an invoice's balance due. At most one
+// active (created / partially_paid) link per invoice.
+export const invoicePaymentLinks = pgTable("invoice_payment_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  invoiceId: uuid("invoice_id").notNull().references(() => invoices.id, { onDelete: "cascade" }),
+  razorpayLinkId: text("razorpay_link_id").notNull(),
+  shortUrl: text("short_url").notNull(),
+  amountPaise: integer("amount_paise").notNull(),
+  /** created | partially_paid | paid | cancelled | expired */
+  status: text("status").default("created").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("inv_pay_link_rzp_idx").on(t.businessId, t.razorpayLinkId),
+  index("inv_pay_link_invoice_idx").on(t.invoiceId),
+  uniqueIndex("inv_pay_link_active_idx").on(t.invoiceId).where(sql`status IN ('created', 'partially_paid')`),
+]);
+
+// One row per Razorpay payment recorded against an invoice: the dedupe key
+// (a redelivered webhook never records twice) and the gateway's own figures.
+export const razorpayPayments = pgTable("razorpay_payments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  razorpayPaymentId: text("razorpay_payment_id").notNull(),
+  paymentId: uuid("payment_id").references(() => payments.id, { onDelete: "set null" }),
+  invoiceId: uuid("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
+  razorpayLinkId: text("razorpay_link_id"),
+  amountPaise: integer("amount_paise").notNull(),
+  feePaise: integer("fee_paise"),
+  taxPaise: integer("tax_paise"),
+  method: text("method"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("rzp_payments_unique_idx").on(t.businessId, t.razorpayPaymentId),
+]);
+
 // ── Stock Adjustments ─────────────────────────────────────────
 
 export const stockAdjustments = pgTable("stock_adjustments", {

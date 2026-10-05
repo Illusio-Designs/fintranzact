@@ -85,6 +85,8 @@ describe("mutation gate split", () => {
     expect(open.sort()).toEqual([
       "business.exportData",
       "eInvoice.testConnection",
+      "onlinePayments.disconnect",
+      "onlinePayments.testConnection",
       "party.lookupGstin",
       "share.revoke",
       "tenant.removeMember",

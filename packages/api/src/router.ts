@@ -54,6 +54,7 @@ import { posRouter } from "./routers/pos.js";
 import { warehouseRouter } from "./routers/warehouse.js";
 import { barcodeRouter } from "./routers/barcode.js";
 import { shareRouter } from "./routers/share.js";
+import { onlinePaymentsRouter } from "./routers/onlinePayments.js";
 import { stockRouter } from "./routers/stock.js";
 import { batchRouter } from "./routers/batch.js";
 import { inventoryReportsRouter } from "./routers/inventory-reports.js";
@@ -124,6 +125,7 @@ export const appRouter = router({
   pricing: pricingRouter,
   barcode: barcodeRouter,
   share: shareRouter,
+  onlinePayments: onlinePaymentsRouter,
   contact: contactRouter,
 });
 

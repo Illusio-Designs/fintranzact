@@ -76,6 +76,9 @@ export const REST_ENTITLEMENT_POLICY: Readonly<Record<string, RestEntitlementPol
   "GET /api/share/:token": "public-neutral",
   "GET /api/share/:token/pdf": "public-neutral",
   "GET /api/share/:token/logo": "public-neutral",
+  // Pay now: makes a Razorpay payment link on the business's own account. A read-only or
+  // suspended organisation makes no new links and answers the same neutral 404.
+  "POST /api/share/:token/pay": "public-neutral",
   "GET /store/:slug/logo": "public-neutral",
   "GET /store/:slug/catalog.json": "public-neutral",
   "GET /store/:slug/policies.json": "public-neutral",
@@ -90,6 +93,9 @@ export const REST_ENTITLEMENT_POLICY: Readonly<Record<string, RestEntitlementPol
   "GET /api/export/:tenantId": "signed-token",
   "POST /api/selfImport/:tenantId": "signed-token",
   "POST /webhooks/razorpay": "exempt-webhook",
+  // A business's OWN Razorpay account (payment links), verified with that business's webhook
+  // secret. Recorded even in read-only mode (the customer has already paid); suspended: 401.
+  "POST /webhooks/razorpay/business/:token": "exempt-webhook",
   "GET /api/billing/invoices/:paymentId/pdf": "exempt-download",
 
   // tRPC mount
