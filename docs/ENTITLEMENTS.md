@@ -145,11 +145,21 @@ The plan's `pdfBranding` limit decides (`pdfBrandingHidden` in `lib/plan-limits.
 
 Where the line links is decided by `lib/pdf-branding.ts`: an organisation referred by an **approved** partner (`tenants.partner_id`) links to `<APP_URL>/register?ref=<their referral code>`, the same parameter the partner portal's link uses; everyone else links to the plain `APP_URL`. A partner who is pending or rejected, or has no code, gives the plain link. The URL carries the referral code only (no organisation, user, document or tracking data), and no partner name or contact is printed. With no `APP_URL` and no request origin the line is plain text. The link is passed into the PDF data as `brandingUrl` next to `isPaidPlan` (true = line hidden).
 
+## Add-on availability
+
+An add-on is sold only when its feature is built. The single source of truth is `ADDON_FEATURES[id].implemented` in `packages/shared/src/entitlements.ts`, read through `isAddonAvailable(id)` and `availableAddonIds()`. Everything else follows from it, with no other change when a flag flips to `true`:
+
+- `billing.config` returns `addonAvailability` (a boolean per add-on id) and `billing.overview` returns `available` on every entry of `addons` (additive fields).
+- `billing.subscribeAddon` refuses an unavailable add-on with `BAD_REQUEST` and `ADDON_COMING_SOON_MESSAGE` ("This add-on is coming soon and cannot be purchased yet."). The check runs before any checkout, so no subscription row or invoice is created.
+- The pricing page renders the Add-ons section and FAQ entry only for available add-ons (nothing when none are). The Billing tab hides subscribe controls for unavailable add-ons.
+- An organisation that already holds an unavailable add-on (admin grant or an earlier subscription) still sees it on the Billing tab, active, with a "Coming soon" note and no purchase controls. Entitlement flags (`addons` in `billing.status`), webhooks, renewals, cancellation and the platform admin add-on on/off keep working; only new purchases are refused.
+- The Full Access Trial still reports add-on caps; the add-ons themselves arrive in the trial when they exist.
+
 ## How to add things
 
 - New tRPC mutation: nothing to do; it is gated. Run `pnpm --filter @fintranzact/api test entitlement-exempt` (with `-u` for snapshot files) and review `mutation-gate.md`. Allowlist only if it must work read-only.
 - New REST route: add it to `REST_ENTITLEMENT_POLICY`. If it writes, call `refuseIfReadOnly(c, tenantId)` right after authenticating and before any work, and add an integration case to `integration/rest-entitlement.test.ts`. Tenant-scoped reads should use `authorizePdfRequest` so suspended tenants are refused.
-- New add-on feature: add the id to `ADDON_IDS` and `ADDON_FEATURES` (shared), call `requireAddon(tenantId, id)` at the router entry, and mark `implemented: true`.
+- New add-on feature: add the id to `ADDON_IDS` and `ADDON_FEATURES` (shared), call `requireAddon(tenantId, id)` at the router entry, and mark `implemented: true`. Flipping `ADDON_FEATURES[id].implemented` is the only switch that puts the add-on on sale again (see "Add-on availability" below).
 - New gated feature (a plan flag): add the key to `PlanLimits`, `PLAN_FLAG_KEYS`, `planSettingsSchema` and the defaults in `plans.ts`, then its entry in `FEATURE_GATES` (name, kind, `routers` for a router whose every mutation is gated, `procedures`, `conditional` for partial uses, `elsewhere` for REST routes and jobs). Add the router to `FEATURE_GATE_CHECKED_ROUTERS` and list deliberate gaps in `FEATURE_GATE_EXEMPT` with a reason. Regenerate `feature-gate.md` (`pnpm --filter @fintranzact/api test feature-gate-registry -- -u`), add a nav `feature:` key, a `FeatureNotice` and `useFeature(flag).lockedProps` on the page (web) and the mobile equivalent, and give REST routes and jobs a `requireFeature` / `hasFeature` check.
 - New mutation in an already gated router: nothing to do, it is gated by the router. Mutation in a checked router that must stay open: `FEATURE_GATE_EXEMPT` with a reason (the registry test fails until you decide).
 - New plan limit: add the field to `PlanLimits` and the defaults, enforce with an `enforce*` function in `lib/plan-limits.ts` that throws `limitError`, and call it from the creating procedure. Always count server-side.
@@ -160,7 +170,7 @@ Where the line links is decided by `lib/pdf-branding.ts`: an organisation referr
 - Enforcement of the trial caps (AI questions, payroll employees): exposed in `trial.caps`, consumed by nothing until those features exist.
 - WhatsApp trial reminders (email and in-app only for now).
 - Approvals (the `approvals` plan flag): no approval workflow exists in the code; the flag gates nothing (see Plan features).
-- AI assistant, payroll and Store Pro features: the add-ons can be bought and are enforced as flags (`ADDON_FEATURES[...].implemented` is false), but the features behind them do not exist.
+- AI assistant, payroll and Store Pro features: the features do not exist, so the add-ons are not on sale (`ADDON_FEATURES[...].implemented` is false; see "Add-on availability"). Admin grants and the flags for already-held add-ons keep working.
 
 ## Tests
 

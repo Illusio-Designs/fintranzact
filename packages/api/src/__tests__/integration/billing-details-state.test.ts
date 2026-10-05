@@ -8,6 +8,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { desc, eq } from "drizzle-orm";
 import { billingPayments, tenants } from "@fintranzact/db";
+import { ADDON_FEATURES } from "@fintranzact/shared";
 import { getControlDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
 import { createUser, createTenant, addMember, type TestUser, type TestTenant } from "../helpers/fixtures.js";
 import { createTestCaller } from "../helpers/create-test-caller.js";
@@ -91,7 +92,12 @@ describe("the state on a payment is frozen at payment time", () => {
     expect(again[0]!.billingState).toBe("24");
 
     // The next charge snapshots the new state.
-    await as(owner).billing.subscribeAddon({ addon: "payroll", cycle: "monthly" });
+    ADDON_FEATURES.payroll.implemented = true;
+    try {
+      await as(owner).billing.subscribeAddon({ addon: "payroll", cycle: "monthly" });
+    } finally {
+      ADDON_FEATURES.payroll.implemented = false;
+    }
     const addon = await lastPayment();
     expect(addon).toMatchObject({ billingState: "27" });
     expect(addon!.id).not.toBe(first!.id);

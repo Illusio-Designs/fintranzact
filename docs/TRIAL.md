@@ -7,7 +7,7 @@ Roadmap item **P2. Full Access Trial**. Every new organisation starts a trial in
 | | |
 |---|---|
 | Length | 14 days (`trial.days`), 30 days for a sign-up with an approved partner code (`trial.partnerDays`) |
-| Access | Business plan limits and features, plus the add-ons AI Assistant, Payroll and Store Pro, with caps |
+| Access | Business plan limits and features, plus the add-ons AI Assistant, Payroll and Store Pro, with caps (add-ons are not on sale until `ADDON_FEATURES[id].implemented`; see ENTITLEMENTS.md) |
 | Caps | AI 50 questions, Payroll 10 employees (`trial.caps`); Store Pro has no cap and includes domain connect |
 | Card | Not needed |
 | At the end | Read-only until any plan is bought: view, search, download and export still work, no new documents or edits. Nothing is deleted. Buying a plan unlocks at once |

@@ -6,7 +6,7 @@ import {
 } from "@/components/marketing/MarketingLayout";
 import { useMemo, useState } from "react";
 import { formatPlanLimit, usePlans, type PlanOption } from "@/lib/plans";
-import { ADDONS, PLAN_GST_RATE_PERCENT, TRIAL_DAYS, YEARLY_SAVING_MONTHS, yearlyPrice, type BillingCycle } from "@fintranzact/shared";
+import { ADDONS, isAddonAvailable, PLAN_GST_RATE_PERCENT, TRIAL_DAYS, YEARLY_SAVING_MONTHS, yearlyPrice, type BillingCycle } from "@fintranzact/shared";
 import { cn } from "@/lib/utils";
 import { EYEBROW, FaqAccordion, HEADING, PricingCards } from "@/components/marketing/sections";
 
@@ -29,6 +29,12 @@ export const Route = createFileRoute("/pricing")({
 /** The call to action the pricing page and its closing band use. */
 const TRIAL_CTA = `Start your ${TRIAL_DAYS}-day Full Access Trial — no card needed`;
 
+/** The add-on FAQ entry only appears while at least one add-on can be bought. */
+const ADDON_FAQ: { q: string; a: string } = {
+  q: "What are add-ons?",
+  a: "Optional extras you buy on top of a plan and pay for separately. Each is billed monthly (or yearly with two months free), with GST added. Where two are tiers of one add-on, choosing one replaces the other. Cancel an add-on any time; it stays until the end of the period you paid for.",
+};
+
 const FAQS: Array<{ q: string; a: string }> = [
   {
     q: "Is there a free plan?",
@@ -49,10 +55,6 @@ const FAQS: Array<{ q: string; a: string }> = [
   {
     q: "How does cancelling work?",
     a: "Cancel any time from Settings → Billing. Your plan keeps running until the end of the period you have paid for, then the account becomes read-only and your data is kept. Moving to a cheaper plan takes effect at the end of the period; moving to a dearer one applies straight away, with credit for the unused time.",
-  },
-  {
-    q: "What are add-ons?",
-    a: "Optional extras you buy on top of a plan and pay for separately: AI Assistant or AI Plus, Payroll and Store Pro. Each is billed monthly (or yearly with two months free), with GST added. AI Assistant and AI Plus are two tiers of one add-on, so choosing one replaces the other. Cancel an add-on any time; it stays until the end of the period you paid for.",
   },
   {
     q: "Can I switch plans later?",
@@ -155,16 +157,19 @@ function CellValue({ value }: { value: Cell }) {
 
 /** The paid add-ons, from the same catalogue the billing page sells (ex-GST, monthly; yearly is ten months). */
 function AddonsSection({ cycle }: { cycle: BillingCycle }) {
+  // Only add-ons whose feature exists are sold (ADDON_FEATURES[id].implemented); none available, nothing shown.
+  const available = ADDONS.filter((a) => isAddonAvailable(a.id));
+  if (available.length === 0) return null;
   return (
     <section>
       <div className="mx-auto max-w-6xl px-4 py-24 md:px-6">
         <p className={cn(EYEBROW, "text-center")}>Add-ons</p>
         <h2 className={cn(HEADING, "mt-3 text-center text-3xl md:text-[40px]")}>Extras you can add to any plan</h2>
         <p className="mx-auto mt-3 max-w-2xl text-center text-[15px] leading-relaxed text-text-tertiary">
-          Billed separately from your plan. AI Assistant and AI Plus are two tiers of one add-on: choosing one replaces the other.
+          Billed separately from your plan. Where two are tiers of one add-on, choosing one replaces the other.
         </p>
         <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {ADDONS.map((addon) => {
+          {available.map((addon) => {
             const yearly = cycle === "yearly";
             const price = yearly ? yearlyPrice(addon.monthlyPriceInr) : addon.monthlyPriceInr;
             return (
@@ -201,6 +206,12 @@ function PricingPage() {
   const { plans } = usePlans();
   const compare = useMemo(() => buildComparison(plans), [plans]);
   const [cycle, setCycle] = useState<BillingCycle>("monthly");
+  const faqs = useMemo(() => {
+    const anyAddon = ADDONS.some((a) => isAddonAvailable(a.id));
+    if (!anyAddon) return FAQS;
+    const at = FAQS.findIndex((f) => f.q === "Can I switch plans later?");
+    return [...FAQS.slice(0, at), ADDON_FAQ, ...FAQS.slice(at)];
+  }, []);
   return (
     <MarketingLayout
       title="Pricing"
@@ -309,7 +320,7 @@ function PricingPage() {
             </p>
           </div>
           <div className="lg:col-span-2">
-            <FaqAccordion items={FAQS} idPrefix="pricing-faq" />
+            <FaqAccordion items={faqs} idPrefix="pricing-faq" />
           </div>
         </div>
       </section>
