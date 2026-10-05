@@ -55,11 +55,9 @@ exceptions:
       - inventoryReports.ageing
       - inventoryReports.reorderStatus
       - inventoryReports.deadStock
-      # Batch / expiry tracking: the batch picker on document lines, the item's batch
-      # list and the batch-wise / expiring / expired stock reports are web screens for
-      # now. Mobile bills still work for batch-tracked items: the server takes stock
-      # earliest-expiry-first when a line names no batch.
-      - batch.list
+      # Batch / expiry tracking: mobile has the batch fields on purchase invoice, sales
+      # invoice and delivery challan lines (batch.list). The batch-wise / expiring /
+      # expired stock report is a web screen for now.
       - inventoryReports.batchStock
       # Purchase/sales orders, GRNs, pending tracking and short-close are web screens for now.
       - purchaseOrder.create

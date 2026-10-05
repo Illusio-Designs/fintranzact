@@ -27,6 +27,18 @@ import { haptic } from "../../../src/lib/haptics";
 import { useContacts, type PhoneContact } from "../../../src/hooks/useContacts";
 import { DatePickerField } from "../../../src/components/ui";
 import { LineItemNotesField } from "../../../src/components/LineItemNotesField";
+import { BatchLineFields } from "../../../src/components/BatchFields";
+import { useFeature } from "../../../src/hooks/useFeature";
+import {
+  baseQuantity,
+  inwardLinesError,
+  lineBatchPayload,
+  outwardLinesError,
+  toDateOnly,
+  type BatchInValue,
+  type BatchOutValue,
+  type BatchRow,
+} from "../../../src/lib/batches";
 
 type InvoiceType = "sale" | "purchase";
 
@@ -54,6 +66,13 @@ interface LineItem {
   unitPrice: string;
   taxPercent: string;
   discountPercent: string;
+  /** Batch tracking of the selected item; batch fields show only when it tracks batches. */
+  trackBatches?: boolean;
+  trackExpiry?: boolean;
+  /** Purchase: the batch the goods arrive in. */
+  batchIn?: BatchInValue;
+  /** Sale: the batch taken from (empty = earliest expiry first). */
+  batchOut?: BatchOutValue;
 }
 
 function newLineItem(): LineItem {
@@ -743,6 +762,8 @@ interface ItemPickerProps {
     taxPercent: string;
     itemMode?: string | null;
     unitVariants?: UnitVariant[] | null;
+    trackBatches?: boolean | null;
+    trackExpiry?: boolean | null;
   }) => void;
   onClose: () => void;
 }
@@ -1043,6 +1064,8 @@ function ItemPickerModal({ visible, invoiceType, onSelect, onClose }: ItemPicker
                         taxPercent: item.taxPercent,
                         itemMode: item.itemMode,
                         unitVariants: (item.unitVariants as UnitVariant[] | null) ?? null,
+                        trackBatches: item.trackBatches,
+                        trackExpiry: item.trackExpiry,
                       });
                       onClose();
                     }}
@@ -1289,10 +1312,14 @@ interface LineItemRowProps {
   // G-08
   onSelectVariant: (index: number, variant: { id: string; attributeValues: Record<string, string>; salePrice: string | null; purchasePrice: string | null }) => void;
   onSelectUnit: (index: number, unitKey: string) => void;
-  allItems: Array<{ id: string; name: string; salePrice?: string | null; purchasePrice?: string | null; taxPercent: string; itemMode?: string | null; unitVariants?: UnitVariant[] | null }>;
+  /** Document date, YYYY-MM-DD (batch expiry is judged as of it). */
+  documentDate: string;
+  onBatchIn: (index: number, patch: BatchInValue) => void;
+  onBatchOut: (index: number, patch: BatchOutValue) => void;
+  allItems: Array<{ id: string; name: string; salePrice?: string | null; purchasePrice?: string | null; taxPercent: string; unit?: string | null; itemMode?: string | null; unitVariants?: UnitVariant[] | null }>;
 }
 
-function LineItemRow({ item, index, invoiceType, onChange, onRemove, onPickItem, onSelectVariant, onSelectUnit, allItems }: LineItemRowProps) {
+function LineItemRow({ item, index, invoiceType, onChange, onRemove, onPickItem, onSelectVariant, onSelectUnit, documentDate, onBatchIn, onBatchOut, allItems }: LineItemRowProps) {
   const styles = useStyles();
   const colors = useColors();
   const qtyRef = useRef<TextInput>(null);
@@ -1345,6 +1372,23 @@ function LineItemRow({ item, index, invoiceType, onChange, onRemove, onPickItem,
       {/* Bug B: free-text per-line notes. Default collapsed as "+ Add notes". */}
       {item.itemName ? (
         <LineItemNotesField value={item.notes} onChange={(v) => onChange(index, "notes", v)} />
+      ) : null}
+
+      {/* Batch fields: purchase names the batch, sale picks one (FEFO). Batch-tracked items only. */}
+      {item.trackBatches && item.itemId ? (
+        <BatchLineFields
+          direction={invoiceType === "purchase" ? "in" : "out"}
+          itemId={item.itemId}
+          variantId={item.variantId}
+          trackExpiry={!!item.trackExpiry}
+          date={documentDate}
+          needed={baseQuantity(item)}
+          unit={selectedItemRecord?.unit}
+          batchIn={item.batchIn}
+          batchOut={item.batchOut}
+          onBatchIn={(patch) => onBatchIn(index, patch)}
+          onBatchOut={(patch) => onBatchOut(index, patch)}
+        />
       ) : null}
 
       {/* G-08: Variant sub-selector */}
@@ -1639,6 +1683,8 @@ export default function InvoiceCreateScreen() {
   );
 
   const utils = trpc.useUtils();
+  // Batch fields are sent only when the plan has them (allowed while billing status loads).
+  const batches = useFeature("batchesExpiry");
 
   const createMutation = trpc.invoice.create.useMutation({
     onSuccess: (data) => {
@@ -1690,6 +1736,14 @@ export default function InvoiceCreateScreen() {
     []
   );
 
+  const handleBatchIn = useCallback((index: number, patch: BatchInValue) => {
+    setLineItems((prev) => prev.map((li, i) => (i === index ? { ...li, batchIn: { ...li.batchIn, ...patch } } : li)));
+  }, []);
+
+  const handleBatchOut = useCallback((index: number, patch: BatchOutValue) => {
+    setLineItems((prev) => prev.map((li, i) => (i === index ? { ...li, batchOut: { ...li.batchOut, ...patch } } : li)));
+  }, []);
+
   const handleRemoveLine = useCallback((index: number) => {
     setLineItems((prev) => {
       if (prev.length === 1) return [newLineItem()];
@@ -1711,6 +1765,8 @@ export default function InvoiceCreateScreen() {
       taxPercent: string;
       itemMode?: string | null;
       unitVariants?: UnitVariant[] | null;
+      trackBatches?: boolean | null;
+      trackExpiry?: boolean | null;
     }) => {
       const price =
         invoiceType === "purchase"
@@ -1729,6 +1785,11 @@ export default function InvoiceCreateScreen() {
           variantId: undefined,
           selectedUnit: undefined,
           conversionFactor: undefined,
+          // A different item starts without a batch.
+          trackBatches: !!item.trackBatches,
+          trackExpiry: !!item.trackBatches && !!item.trackExpiry,
+          batchIn: undefined,
+          batchOut: undefined,
         };
         return next;
       });
@@ -1756,6 +1817,9 @@ export default function InvoiceCreateScreen() {
           variantId: variant.id,
           itemName: parentItem ? `${parentItem.name} - ${label}` : label,
           unitPrice: variantPrice ?? "0",
+          // Batches belong to a variant: start over.
+          batchIn: undefined,
+          batchOut: undefined,
         };
         return next;
       });
@@ -1819,7 +1883,7 @@ export default function InvoiceCreateScreen() {
     [partiesData, invoiceDate]
   );
 
-  const doCreate = useCallback(() => {
+  const doCreate = useCallback(async () => {
     if (!selectedParty) {
       Alert.alert("Validation", "Please select a party.");
       return;
@@ -1837,6 +1901,22 @@ export default function InvoiceCreateScreen() {
     for (const li of validItems) {
       if (parseFloat(li.unitPrice) < 0) {
         Alert.alert("Validation", "Item prices cannot be negative.");
+        return;
+      }
+    }
+
+    // Batch checks (tracked items, plan permitting) before anything is sent.
+    if (batches.allowed) {
+      const day = toDateOnly(invoiceDate);
+      const batchError =
+        invoiceType === "purchase"
+          ? inwardLinesError(validItems)
+          : await outwardLinesError(validItems, day, async (input) => {
+              const res = await utils.batch.list.fetch(input, { staleTime: 15_000 });
+              return res.data as BatchRow[];
+            });
+      if (batchError) {
+        Alert.alert("Batch", batchError);
         return;
       }
     }
@@ -1867,9 +1947,10 @@ export default function InvoiceCreateScreen() {
         variantId: li.variantId || undefined,
         selectedUnit: li.selectedUnit || undefined,
         conversionFactor: li.conversionFactor || undefined,
+        ...lineBatchPayload(li, invoiceType === "purchase" ? "in" : "out", batches.allowed),
       })),
     });
-  }, [selectedParty, lineItems, invoiceType, invoiceDate, dueDate, notes, createMutation]);
+  }, [selectedParty, lineItems, invoiceType, invoiceDate, dueDate, notes, createMutation, batches.allowed, utils]);
 
   const handleCreate = useCallback(() => {
     const total = parseFloat(totals.total);
@@ -1999,6 +2080,9 @@ export default function InvoiceCreateScreen() {
               onPickItem={handlePickItemForLine}
               onSelectVariant={handleSelectVariant}
               onSelectUnit={handleSelectUnit}
+              documentDate={toDateOnly(invoiceDate)}
+              onBatchIn={handleBatchIn}
+              onBatchOut={handleBatchOut}
               allItems={allItems}
             />
           ))}
