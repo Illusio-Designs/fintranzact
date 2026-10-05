@@ -29,6 +29,7 @@ import { controlDb, getTenantDb, invoices, invoiceItems, items, itemVariants, pa
 import { calcLineItem, calcInvoiceTotals, money, parseCopies, isIntraStateSupply, formatIstDate, INVOICE_TEMPLATES, splitIntraStateTax, type InvoiceTemplate, type ThermalWidth } from "@fintranzact/shared";
 import { verifyTurnstile } from "./lib/turnstile.js";
 import { startRecurringScheduler, stopRecurringScheduler } from "./lib/recurring-invoice-scheduler.js";
+import { startPaymentReminderScheduler, stopPaymentReminderScheduler } from "./lib/payment-reminders.js";
 import { startTdsReminderScheduler, stopTdsReminderScheduler } from "./lib/tds-reminder-scheduler.js";
 import { startHsnRefreshScheduler, stopHsnRefreshScheduler } from "./lib/hsn-refresh.js";
 import { startTrialReminderScheduler, stopTrialReminderScheduler } from "./lib/trial-reminders.js";
@@ -2562,6 +2563,7 @@ const server = serve({ fetch: app.fetch, port }, (info) => {
   startTdsReminderScheduler();
   startHsnRefreshScheduler();
   startTrialReminderScheduler();
+  startPaymentReminderScheduler();
   // Create the platform admin from PLATFORM_ADMIN_EMAIL / _PASSWORD if set.
   seedPlatformAdmin().catch((err) => logger.error({ err }, "Could not create the platform admin account"));
 });
@@ -2573,6 +2575,7 @@ function shutdown(signal: string) {
   stopTdsReminderScheduler();
   stopHsnRefreshScheduler();
   stopTrialReminderScheduler();
+  stopPaymentReminderScheduler();
   server.close(() => {
     logger.info("HTTP server closed");
     process.exit(0);

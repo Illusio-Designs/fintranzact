@@ -177,6 +177,9 @@ export const businesses = pgTable("businesses", {
   // untouched pages keep following the default template and business details.
   storeReturnWindowDays: integer("store_return_window_days").default(7).notNull(),
   storePolicies: jsonb("store_policies").$type<Partial<Record<"terms" | "refund" | "shipping" | "contact" | "privacy", { content: string; updatedAt: string }>>>(),
+  // Payment reminder settings (see @fintranzact/shared payment-reminders.ts).
+  // Null = the defaults, which have reminders switched off.
+  paymentReminderSettings: jsonb("payment_reminder_settings").$type<Record<string, unknown>>(),
   // Point-of-Sale mode. When enabled: a /pos fullscreen register route is
   // reachable and the "Switch to POS" entry button appears on invoice
   // create. Off by default; toggle lives on Settings → POS.
@@ -362,6 +365,8 @@ export const parties = pgTable("parties", {
   gstinStatus: text("gstin_status"), // active | cancelled | suspended | inactive (from the last lookup)
   gstinVerifiedAt: timestamp("gstin_verified_at", { withTimezone: true }),
   // MSME (Udyam) — drives the 45-day payment rule for micro/small suppliers.
+  // Customer asked not to be reminded: no automatic or manual payment reminders.
+  doNotRemind: boolean("do_not_remind").default(false).notNull(),
   isMsme: boolean("is_msme").default(false).notNull(),
   udyamNumber: text("udyam_number"),
   msmeCategory: text("msme_category"), // micro | small | medium
@@ -1035,6 +1040,35 @@ export const taxDeductions = pgTable("tax_deductions", {
   index("tax_deductions_payment_idx").on(t.paymentId),
   index("tax_deductions_expense_idx").on(t.expenseId),
   index("tax_deductions_challan_idx").on(t.challanId),
+]);
+
+// History of payment reminders sent (or prepared) for an invoice. One row per
+// (invoice, channel, slot_key): the scheduler claims a slot by inserting its
+// row BEFORE sending, so a restart or a second instance never sends it twice.
+//   channel  - email | sms | whatsapp
+//   kind     - before_due | on_due | after_due | manual
+//   slot_key - "before", "due", "after_<n>" for the schedule; "manual:<uuid>" for a hand-sent one
+//   trigger  - auto (scheduler) | manual (a person pressed Send)
+//   status   - sending | sent | failed | link_opened (WhatsApp link handed over)
+//   recipient - masked address, never the full email or number
+export const paymentReminders = pgTable("payment_reminders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  invoiceId: uuid("invoice_id").notNull().references(() => invoices.id, { onDelete: "cascade" }),
+  channel: text("channel").notNull(),
+  kind: text("kind").notNull(),
+  slotKey: text("slot_key").notNull(),
+  trigger: text("trigger").notNull(),
+  status: text("status").notNull(),
+  recipient: text("recipient"),
+  error: text("error"),
+  // No FK to users (control schema); null for the scheduler.
+  sentByUserId: uuid("sent_by_user_id"),
+  sentByName: text("sent_by_name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("payment_reminders_slot_idx").on(t.invoiceId, t.channel, t.slotKey),
+  index("payment_reminders_invoice_idx").on(t.businessId, t.invoiceId, t.createdAt),
 ]);
 
 // Which TDS/TCS due-date reminder emails have gone out, so the scheduler sends

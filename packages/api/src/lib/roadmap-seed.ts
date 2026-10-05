@@ -2457,6 +2457,35 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-05-payment-reminders",
+    updates: [
+      {
+        // Reminders half built: per-business settings (off by default) in
+        // Settings -> Payment reminders, an hourly job (before due, on due,
+        // every N days, capped, 09:00-19:00 IST, idempotent per invoice +
+        // channel + slot), stop on payment / do-not-remind, a wa.me link,
+        // manual Send now with a 24h limit, and the history on the invoice
+        // (web and mobile). Covered by unit tests and integration tests
+        // against a real Postgres. Left unticked on purpose: "SMS reminders".
+        // The MSG91 adapter and its request building are tested with a mocked
+        // fetch only; no SMS was ever sent, and it needs the owner's MSG91
+        // account and DLT-registered sender and template. Email goes through
+        // the existing sender; no real email was sent either (the tests inject
+        // the sender). The Razorpay payment-link lines belong to the other half.
+        title: "Payment reminders, Razorpay payment links and UPI QR on invoices",
+        status: "in_progress",
+        done: [
+          "Reminder settings per business (schedule, channels, templates)",
+          "Scheduler: before due, on due, weekly after due",
+          "Email reminders",
+          "WhatsApp click-to-send link",
+          "Stop reminders on payment / do-not-remind flag",
+          "Reminder history on the invoice",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

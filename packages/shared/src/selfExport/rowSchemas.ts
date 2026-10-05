@@ -140,6 +140,8 @@ export const businessRowSchema = z.object({
   // Added with the store policy pages; older exports lack them.
   storeReturnWindowDays: z.number().int().optional(),
   storePolicies: z.unknown().nullable().optional(),
+  // Added with payment reminders; older exports lack it.
+  paymentReminderSettings: z.unknown().nullable().optional(),
   createdAt: isoDatetime,
   updatedAt: isoDatetime,
 });
@@ -196,6 +198,8 @@ export const partyRowSchema = z.object({
   // Optional so backups made before these were exported still import.
   constitution: z.string().nullable().optional(),
   tdsSection: z.string().nullable().optional(),
+  // Added with payment reminders; older backups lack it.
+  doNotRemind: z.boolean().optional(),
   source: z.string().nullable(),
   createdAt: isoDatetime,
   updatedAt: isoDatetime,

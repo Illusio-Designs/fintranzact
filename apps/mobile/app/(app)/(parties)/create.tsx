@@ -109,6 +109,7 @@ export default function CreatePartyScreen() {
   const [gstinStatus, setGstinStatus] = useState<GstinStatus | null>(null);
   const [gstinVerifiedAt, setGstinVerifiedAt] = useState<string | null>(null);
   const [isMsme, setIsMsme] = useState(false);
+  const [doNotRemind, setDoNotRemind] = useState(false);
   const [udyamNumber, setUdyamNumber] = useState("");
   const [msmeCategory, setMsmeCategory] = useState<MsmeCategory | "">("");
   const [tdsSection, setTdsSection] = useState("");
@@ -286,6 +287,7 @@ export default function CreatePartyScreen() {
       gstinStatus: gstinStatus ?? undefined,
       gstinVerifiedAt: gstinVerifiedAt ?? undefined,
       isMsme,
+      doNotRemind,
       udyamNumber: isMsme ? udyamNumber || undefined : undefined,
       msmeCategory: isMsme ? msmeCategory || undefined : undefined,
       tdsSection: tdsSection || undefined,
@@ -602,6 +604,25 @@ export default function CreatePartyScreen() {
                 {warnings.map((w) => (
                   <Text key={w} style={styles.warningText}>• {w}</Text>
                 ))}
+              </View>
+            </View>
+          )}
+
+          {/* Payment reminders */}
+          {type === "customer" && (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Payment Reminders</Text>
+              <View style={styles.card}>
+                <TouchableOpacity
+                  style={[styles.fieldGroup, styles.toggleRow]}
+                  onPress={() => setDoNotRemind((v) => !v)}
+                  accessibilityRole="checkbox"
+                  accessibilityLabel="Do not remind"
+                  accessibilityState={{ checked: doNotRemind }}
+                >
+                  <Ionicons name={doNotRemind ? "checkbox" : "square-outline"} size={20} color={doNotRemind ? colors.brand : colors.textMuted} />
+                  <Text style={styles.toggleText}>Do not remind this customer</Text>
+                </TouchableOpacity>
               </View>
             </View>
           )}

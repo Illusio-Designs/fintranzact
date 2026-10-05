@@ -26,6 +26,7 @@ import { makeStyles } from "../../../src/lib/makeStyles";
 import { useColors } from "../../../src/contexts/ThemeContext";
 import { haptic } from "../../../src/lib/haptics";
 import { StatusBadge, QueryError, Skeleton } from "../../../src/components/ui";
+import { InvoiceReminders } from "../../../src/components/InvoiceReminders";
 
 type StatusKey = "draft" | "unfulfilled" | "sent" | "paid" | "partial" | "overdue" | "cancelled" | "adjusted";
 
@@ -812,6 +813,11 @@ export default function InvoiceDetailScreen() {
 
         {/* Shipment tracking — sale invoices only, hidden for adjusted */}
         {invoice.type === "sale" && !isAdjusted && <ShipmentSection invoiceId={invoice.id} invoiceStatus={invoice.status} />}
+
+        {/* Payment reminders: history, send now, WhatsApp link. Sale invoices that have been issued. */}
+        {invoice.type === "sale" && (invoice.documentType ?? "invoice") === "invoice" && invoice.status !== "draft" && (
+          <InvoiceReminders invoiceId={invoice.id} />
+        )}
 
         {/* Actions */}
         <Text style={styles.sectionTitle}>Actions</Text>

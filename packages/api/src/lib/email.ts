@@ -2,7 +2,7 @@
 // Dev: prints the email-change link to console (no setup needed)
 // Prod: sends via Resend API (no npm dep — raw fetch)
 
-import { isCaRole, CA_ROLE_DESCRIPTIONS, CA_ROLE_LABELS, type CaRole } from "@fintranzact/shared";
+import { isCaRole, CA_ROLE_DESCRIPTIONS, CA_ROLE_LABELS, maskEmail, type CaRole } from "@fintranzact/shared";
 
 function escapeHtml(str: string): string {
   return str
@@ -31,6 +31,37 @@ interface EmailService {
   sendEnquiry(enquiry: EnquiryEmail): Promise<void>;
   /** A plain notice (reminders): subject and text only, no links or tokens. */
   sendNotice(to: string, subject: string, text: string): Promise<void>;
+  /** A payment reminder from a business to its customer. */
+  sendReminder(mail: ReminderEmail): Promise<void>;
+}
+
+export interface ReminderEmail {
+  to: string;
+  /** The business name, shown as the sender's display name. */
+  fromName: string;
+  /** The business's own email, so a reply reaches the business. */
+  replyTo?: string | null;
+  subject: string;
+  text: string;
+  html: string;
+}
+
+/** A display name that is safe inside a From header. */
+export function safeDisplayName(name: string): string {
+  const cleaned = name.replace(/[\r\n"<>,;:\\]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+  return cleaned || "Fintranzact";
+}
+
+/**
+ * Subject, plain text and HTML of a payment reminder (pure). The message is
+ * the business's own text, escaped; the footer tells the customer to reply to
+ * the business to stop the reminders (there is no unsubscribe page).
+ */
+export function buildReminderEmail(p: { subject: string; text: string; businessName: string }): BuiltEmail {
+  const footerText = `You are receiving this because ${p.businessName} sent you an invoice. To stop these reminders, reply to this email and tell ${p.businessName}.`;
+  const body = escapeHtml(p.text).replace(/\n/g, "<br />");
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>${escapeHtml(p.subject)}</title></head><body style="margin:0;padding:24px;background-color:#f3f4f6;"><table role="presentation" width="100%" style="max-width:560px;margin:0 auto;background-color:#ffffff;border:1px solid #e5e7eb;border-radius:12px;"><tr><td style="padding:24px;${MAIL_FONT}font-size:15px;line-height:23px;color:#374151;">${body}</td></tr><tr><td style="padding:0 24px 20px 24px;${MAIL_FONT}font-size:12px;line-height:18px;color:#9ca3af;border-top:1px solid #f3f4f6;"><p style="margin:14px 0 0 0;">${escapeHtml(footerText)}</p></td></tr></table></body></html>`;
+  return { subject: p.subject, text: `${p.text}\n\n--\n${footerText}`, html };
 }
 
 export interface PartnerApprovedEmail {
@@ -346,6 +377,11 @@ export function buildInvitationEmail(p: InvitationEmailParams): BuiltEmail {
 }
 
 class ConsoleEmailService implements EmailService {
+  async sendReminder(mail: ReminderEmail): Promise<void> {
+    // Dev / self-hosted without a mail provider: log that it happened, never the address or the message.
+    console.log(`[reminder] email to ${maskEmail(mail.to)} from ${JSON.stringify(mail.fromName)} subject=${JSON.stringify(mail.subject)}`);
+  }
+
   async sendNotice(to: string, subject: string, text: string): Promise<void> {
     // Reminders are best-effort: without a mail provider they are only logged.
     console.log(`[notice] to=${to} subject=${JSON.stringify(subject)}\n${text}`);
@@ -405,6 +441,26 @@ class ConsoleEmailService implements EmailService {
 }
 
 class ResendEmailService implements EmailService {
+  async sendReminder(mail: ReminderEmail): Promise<void> {
+    const address = /<([^>]+)>/.exec(this.fromAddress)?.[1] ?? this.fromAddress;
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: `${safeDisplayName(mail.fromName)} <${address}>`,
+        to: mail.to,
+        ...(mail.replyTo ? { reply_to: mail.replyTo } : {}),
+        subject: mail.subject,
+        text: mail.text,
+        html: mail.html,
+      }),
+    });
+    if (!res.ok) {
+      console.error("[email] Resend reminder failed:", res.status);
+      throw new Error("Failed to send email");
+    }
+  }
+
   async sendNotice(to: string, subject: string, text: string): Promise<void> {
     const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><title>${escapeHtml(subject)}</title></head><body style="margin:0;padding:24px;background-color:#f3f4f6;"><table role="presentation" width="100%" style="max-width:560px;margin:0 auto;background-color:#ffffff;border:1px solid #e5e7eb;border-radius:12px;"><tr><td style="padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;font-size:14px;line-height:22px;color:#374151;">${escapeHtml(text).replace(/\n/g, "<br />")}</td></tr></table></body></html>`;
     const res = await fetch("https://api.resend.com/emails", {

@@ -165,6 +165,7 @@ resp = httpx.get(
         { name: "gstinStatus", type: "enum", required: false, description: "GSTIN status from the portal (e.g. from `party.lookupGstin`)", enumValues: ["active", "cancelled", "suspended", "inactive"] },
         { name: "gstinVerifiedAt", type: "string (ISO datetime)", required: false, description: "When the GSTIN was last verified (`verifiedAt` from `party.lookupGstin`)" },
         { name: "isMsme", type: "boolean", required: false, description: "Supplier is a registered MSME (drives `reports.msmePayables`)" },
+        { name: "doNotRemind", type: "boolean", required: false, description: "Customer asked not to be sent payment reminders; no automatic or manual reminders go out (see `reminder.sendNow`)" },
         { name: "udyamNumber", type: "string", required: false, description: "Udyam registration number, e.g. `UDYAM-MH-26-0012345` (or empty string)" },
         { name: "msmeCategory", type: "enum", required: false, description: "MSME category", enumValues: ["micro", "small", "medium"] },
         { name: "tdsSection", type: "string (enum)", required: false, description: "Default TDS section code for payments to this party (one of the codes in `tdsSections` from `@fintranzact/shared`)" },

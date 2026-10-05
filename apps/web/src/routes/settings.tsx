@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SettingsNav } from "@/components/settings/SettingsNav";
 import { BusinessTab, BusinessForm } from "@/components/settings/BusinessTab";
 import { DocumentsTab } from "@/components/settings/DocumentsTab";
+import { PaymentRemindersTab } from "@/components/settings/PaymentRemindersTab";
 import { TeamTab } from "@/components/settings/TeamTab";
 import { SalesTargetsTab } from "@/components/settings/SalesTargetsTab";
 import { PeriodLocksTab } from "@/components/settings/PeriodLocksTab";
@@ -266,6 +267,7 @@ function SettingsPage() {
         <div className="flex-1 min-w-0">
           {shownTab === "business" && <BusinessTab biz={biz} />}
           {shownTab === "documents" && <DocumentsTab biz={biz} />}
+          {shownTab === "reminders" && <PaymentRemindersTab biz={biz} />}
           {shownTab === "shipping" && biz && <ShippingTab biz={biz} />}
           {shownTab === "team" && <TeamTab />}
           {shownTab === "targets" && <SalesTargetsTab />}

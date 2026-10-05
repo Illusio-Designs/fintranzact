@@ -69,7 +69,7 @@ export default defineConfig({
       timeout: 60_000,
       stdout: "pipe",
       stderr: "pipe",
-      env: { DISABLE_RATE_LIMIT: "1", TRIAL_CLAIMS: "off", TRIAL_REMINDERS: "off" },
+      env: { DISABLE_RATE_LIMIT: "1", TRIAL_CLAIMS: "off", TRIAL_REMINDERS: "off", PAYMENT_REMINDERS: "off" },
     },
     {
       command: "pnpm --filter @fintranzact/web dev",

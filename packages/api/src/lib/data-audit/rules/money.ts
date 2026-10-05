@@ -662,6 +662,12 @@ export const moneyTables: TableCoverage[] = [
     ],
   },
   {
+    table: "payment_reminders",
+    rules: [],
+    noExtraRequirements:
+      "Reminder history: one row per invoice, channel and slot (unique index), business_id and invoice_id are cascading FKs; it holds no money, only a masked recipient, and nothing reads it but the reminder job and the invoice's reminder list.",
+  },
+  {
     table: "tds_reminder_log",
     rules: [],
     noExtraRequirements:

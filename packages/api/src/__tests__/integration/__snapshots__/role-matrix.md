@@ -396,6 +396,10 @@
 | recurringInvoice.runNow | mutation | authorized | create:RecurringInvoice | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
 | recurringInvoice.suggestions | query | authorized | read:RecurringInvoice | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | recurringInvoice.update | mutation | authorized | update:RecurringInvoice | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
+| reminder.getForInvoice | query | authorized | read:Invoice | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| reminder.getSettings | query | authorized | read:Business | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| reminder.sendNow | mutation | authorized | update:Invoice | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ |
+| reminder.updateSettings | mutation | authorized | update:Business | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | reports.balanceSheet | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | reports.cashFlowForecast | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | reports.cashFlowStatement | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
