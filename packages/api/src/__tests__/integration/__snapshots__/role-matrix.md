@@ -458,11 +458,14 @@
 | store.checkSlug | query | authorized | read:Store | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | store.confirmOrder | mutation | authorized | update:Store | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
 | store.getOrder | query | authorized | read:Store | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| store.getPolicies | query | authorized | read:Store | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | store.getSettings | query | authorized | read:Store | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | store.listOrders | query | authorized | read:Store | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | store.listStoreItems | query | authorized | read:Store | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| store.resetPolicy | mutation | authorized | manage:Store | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | store.updateItemStoreSettings | mutation | authorized | update:Store | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
 | store.updateOrderStatus | mutation | authorized | update:Store | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
+| store.updatePolicy | mutation | authorized | manage:Store | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | store.updateSettings | mutation | authorized | manage:Store | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | store.updateVariantStoreSettings | mutation | authorized | update:Store | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
 | system.maintenanceStatus | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |

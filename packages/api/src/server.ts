@@ -42,6 +42,8 @@ import { lineBatchDetails } from "./lib/batch-display.js";
 import { validateEnv } from "./lib/env.js";
 import { createCsrfMiddleware } from "./lib/csrf-middleware.js";
 import { assertAllowedStoreOrigin } from "./lib/store-origin.js";
+import { isStorePolicyKind } from "@fintranzact/shared";
+import { buildPublicPolicyPages, renderPolicyPageHtml } from "./lib/store-policies.js";
 import { registerExportRoute } from "./http/exportStream.js";
 import { registerImportRoute } from "./http/importStream.js";
 import { registerRazorpayWebhook } from "./http/razorpayWebhook.js";
@@ -1616,6 +1618,78 @@ app.get("/store/:slug/catalog.json", async (c) => {
     200,
     { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
   );
+});
+
+// ── Store policy pages (public, no auth) ─────────────────────────
+// Terms, Refund, Shipping, Contact and Privacy pages the store owner edits in
+// Settings. Same rules as the rest of /store/*: unknown slug, store off or a
+// plan without the store all answer the same neutral 404, and reads are
+// rate limited per IP. Only the published policy text and the business details
+// the templates fill in are returned.
+
+const POLICY_COLUMNS = {
+  name: businesses.name,
+  gstRegistrationType: businesses.gstRegistrationType,
+  gstin: businesses.gstin,
+  phone: businesses.phone,
+  email: businesses.email,
+  address: businesses.address,
+  addressLine1: businesses.addressLine1,
+  addressLine2: businesses.addressLine2,
+  city: businesses.city,
+  state: businesses.state,
+  pincode: businesses.pincode,
+  storeReturnWindowDays: businesses.storeReturnWindowDays,
+  storePolicies: businesses.storePolicies,
+};
+
+async function loadPolicyBusiness(c: Context, slug: string) {
+  if (!checkStoreIpRateLimit(getClientIp(c), "/store/policies")) {
+    return { error: c.json({ error: "Too many requests" }, 429) };
+  }
+  const resolved = await resolveStoreSlug(slug);
+  if (!resolved) return { error: c.json({ error: "Store not found" }, 404) };
+  const db = await getStoreDb(resolved.tenantId);
+  const [biz] = await db.select(POLICY_COLUMNS).from(businesses)
+    .where(and(eq(businesses.id, resolved.businessId), eq(businesses.storeEnabled, true)))
+    .limit(1);
+  if (!biz) return { error: c.json({ error: "Store not found" }, 404) };
+  return { biz };
+}
+
+// GET /store/:slug/policies.json — all five pages as safe block trees (used by the storefront app)
+app.get("/store/:slug/policies.json", async (c) => {
+  const slug = c.req.param("slug");
+  const loaded = await loadPolicyBusiness(c, slug);
+  if ("error" in loaded) return loaded.error;
+  return c.json(
+    { business: { name: loaded.biz.name }, policies: buildPublicPolicyPages(slug, loaded.biz) },
+    200,
+    { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
+  );
+});
+
+// GET /store/:slug/policies/:kind — the same page as server-rendered HTML,
+// readable without JavaScript (payment-gateway reviewers and crawlers).
+app.get("/store/:slug/policies/:kind", async (c) => {
+  const slug = c.req.param("slug");
+  const kind = c.req.param("kind");
+  if (!isStorePolicyKind(kind)) return c.json({ error: "Page not found" }, 404);
+  const loaded = await loadPolicyBusiness(c, slug);
+  if ("error" in loaded) return loaded.error;
+  const html = renderPolicyPageHtml({
+    slug,
+    businessName: loaded.biz.name,
+    pages: buildPublicPolicyPages(slug, loaded.biz),
+    kind,
+    basePath: `/store/${slug}/policies`,
+  });
+  return c.html(html, 200, {
+    "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer-when-downgrade",
+  });
 });
 
 // POST /store/:slug/identify — phone-first customer identification (public, no auth)

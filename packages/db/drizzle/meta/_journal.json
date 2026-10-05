@@ -414,6 +414,13 @@
       "when": 1791035731383,
       "tag": "0058_p2_full_access_trial",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1791194265419,
+      "tag": "0059_store_policies",
+      "breakpoints": true
     }
   ]
 }
