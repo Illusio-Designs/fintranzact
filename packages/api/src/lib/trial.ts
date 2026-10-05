@@ -20,13 +20,14 @@
 
 import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
-import { controlDb, tenants } from "@fintranzact/db";
+import { controlDb, tenants, users } from "@fintranzact/db";
 import {
   TRIAL_ADMIN_MAX_DAYS,
   trialDaysForSource,
   trialWindow,
   type TrialSource,
 } from "@fintranzact/shared";
+import { logger } from "./logger.js";
 import { invalidateEntitlements } from "./entitlements-cache.js";
 import { recordBillingEvent } from "./billing/service.js";
 import { getEntitlements } from "./entitlements.js";
@@ -37,6 +38,17 @@ import { resetTrialReminders } from "./trial-reminders.js";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type DbLike = Pick<typeof controlDb, "select" | "insert" | "update">;
+
+/** The mobile number a user gave at sign-up (normalised digits), or null (older accounts, API sign-ups). Never throws. */
+export async function userPhone(db: DbLike, userId: string): Promise<string | null> {
+  try {
+    const [row] = await db.select({ phone: users.phone }).from(users).where(eq(users.id, userId)).limit(1);
+    return row?.phone ?? null;
+  } catch (err) {
+    logger.error({ err: err instanceof Error ? err.message : String(err) }, "[trial] phone lookup failed");
+    return null;
+  }
+}
 
 export interface NewOrgTrial {
   trialStartedAt: Date;

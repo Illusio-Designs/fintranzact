@@ -85,7 +85,7 @@ This document maps every workflow in the Fintranzact application — verified ag
 ### Happy path
 
 1. User lands on `/login` (web) or the login screen (mobile).
-2. Registers with username, email and password (`auth.register`, optional referral code). Sign-in afterwards is by email + password only (see WF-02).
+2. Registers with username, email, mobile number and password (`auth.register`, optional referral code). Sign-in afterwards is by email + password only (see WF-02).
 3. `auth.me` returns `needsProfile: true` only when `user.name` is null (for example an account that has no display name yet).
 4. Web redirects to `/auth/complete-profile` (detected in root layout: `!session.user.name`).
 5. User enters display name. `auth.completeProfile` is called → name saved → session cache invalidated.
@@ -135,7 +135,7 @@ This document maps every workflow in the Fintranzact application — verified ag
 
 ### Happy path — password registration (web + mobile)
 
-1. User fills username, email, password, confirmPassword (and optionally a referral code).
+1. User fills username, email, mobile number (required in the forms, optional in the API), password, confirmPassword (and optionally a referral code).
 2. Client calls `auth.register`. Duplicate check → hash password → insert user → assign tenant → create session.
 3. Mobile navigates to `/(app)/(home)` via `router.replace`. Web root layout detects session and redirects.
 

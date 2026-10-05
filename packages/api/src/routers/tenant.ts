@@ -15,7 +15,7 @@ import { planIdSchema, TWO_FACTOR_POLICIES, DEFAULT_TWO_FACTOR_GRACE_DAYS, ACCES
 import { emailService } from "../lib/email.js";
 import { getCatalogPlan } from "../lib/plan-catalog.js";
 import { newOrganisationPlanFields } from "../lib/signup-plan.js";
-import { decideNewOrgTrial, finishNewOrgTrial } from "../lib/trial.js";
+import { decideNewOrgTrial, finishNewOrgTrial, userPhone } from "../lib/trial.js";
 import { requirePlanManagerTenant } from "../lib/plan-manager.js";
 import { effectiveOwnerPlan, enforceTeamMemberLimit, countCaSlots, enforceOrgCreationLimit, assertOwnedOrgsWritable, getLimits } from "../lib/plan-limits.js";
 import { checkInviteRules, checkRoleChangeRules, countsTowardTeamLimit, normalizeInviteEmail } from "../lib/invite-rules.js";
@@ -224,7 +224,7 @@ export const tenantRouter = router({
       try {
         tenantId = await controlDb.transaction(async (tx) => {
           // Full Access Trial, unless one was already used for this email (lib/trial.ts).
-          const trial = await decideNewOrgTrial(tx, { email: ctx.user.email });
+          const trial = await decideNewOrgTrial(tx, { email: ctx.user.email, phone: await userPhone(tx, ctx.user.id) });
           const [tenant] = await tx.insert(tenants).values({
             name: tenantName,
             slug,
@@ -265,7 +265,7 @@ export const tenantRouter = router({
       const slug = generateSlug(tenantName);
 
       const tenant = await controlDb.transaction(async (tx) => {
-        const trial = await decideNewOrgTrial(tx, { email: ctx.user.email });
+        const trial = await decideNewOrgTrial(tx, { email: ctx.user.email, phone: await userPhone(tx, ctx.user.id) });
         const [row] = await tx.insert(tenants).values({
           name: tenantName,
           slug,

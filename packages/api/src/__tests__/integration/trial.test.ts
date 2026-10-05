@@ -55,7 +55,7 @@ async function tenantOf(email: string) {
   return row!;
 }
 
-async function register(email: string, extra: { referralCode?: string; plan?: string } = {}) {
+async function register(email: string, extra: { referralCode?: string; plan?: string; phone?: string } = {}) {
   await publicCaller().auth.register({
     name: "Test Owner",
     email,
@@ -230,6 +230,119 @@ describe("one trial per business: email", () => {
       expect(again.trialSource).toBe("signup");
     } finally {
       delete process.env.TRIAL_CLAIMS;
+    }
+  });
+});
+
+describe("one trial per business: phone", () => {
+  it("is stored on the user as 10 digits, and only a salted hash goes into the claims", async () => {
+    const t = await register("phone.one@mehtatraders.in", { phone: "+91 98765 43210" });
+    expect(t.trialSource).toBe("signup");
+    const [u] = await getControlDb().select({ phone: users.phone }).from(users).where(eq(users.id, t.userId));
+    expect(u!.phone).toBe("9876543210");
+    const rows = await getControlDb().select().from(trialClaims).where(eq(trialClaims.kind, "phone"));
+    const mine = rows.find((r) => r.valueHash === hashClaimValue("phone", "+919876543210"));
+    expect(mine).toBeTruthy();
+    expect(mine!.tenantId).toBe(t.id);
+    expect(mine!.valueHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(JSON.stringify(rows)).not.toContain("9876543210");
+  });
+
+  it("a second sign-up with another email but the same number (typed differently) gets no trial, without naming anybody", async () => {
+    const first = await register("phone.first@mehtatraders.in", { phone: "9811122233" });
+    expect(first.trialSource).toBe("signup");
+    const second = await register("phone.second@shahtraders.in", { phone: "09811122233" });
+    expect(second.id).not.toBe(first.id);
+    expect(second.trialSource).toBe("none");
+    expect(second.trialEndsAt!.getTime()).toBeLessThanOrEqual(Date.now());
+    expect(await getEntitlements(second.id)).toMatchObject({ state: "trial_expired", readOnly: true });
+    const status = await asUser({ id: second.userId, email: "phone.second@shahtraders.in" }, second.id).billing.status();
+    expect(status.trialMessage).toBe(TRIAL_ALREADY_USED_MESSAGE);
+    expect(JSON.stringify(status)).not.toContain(first.id);
+    expect(JSON.stringify(status)).not.toContain("phone.first");
+    // The first organisation is untouched, and the second user still has an account and a stored number.
+    expect(await getEntitlements(first.id)).toMatchObject({ state: "trialing" });
+    const [u] = await getControlDb().select({ phone: users.phone }).from(users).where(eq(users.id, second.userId));
+    expect(u!.phone).toBe("9811122233");
+    // A denied sign-up records no claim of its own.
+    const claims = await getControlDb().select().from(trialClaims).where(eq(trialClaims.tenantId, second.id));
+    expect(claims).toHaveLength(0);
+  });
+
+  it("different numbers are different businesses", async () => {
+    const a = await register("phone.diff.a@mehtatraders.in", { phone: "9822200001" });
+    const b = await register("phone.diff.b@mehtatraders.in", { phone: "9822200002" });
+    expect(a.trialSource).toBe("signup");
+    expect(b.trialSource).toBe("signup");
+  });
+
+  it("no phone (API, CLI, MCP clients) still works and only email and GSTIN apply", async () => {
+    const t = await register("phone.none@mehtatraders.in");
+    expect(t.trialSource).toBe("signup");
+    const [u] = await getControlDb().select({ phone: users.phone }).from(users).where(eq(users.id, t.userId));
+    expect(u!.phone).toBeNull();
+    const rows = await getControlDb().select().from(trialClaims).where(eq(trialClaims.tenantId, t.id));
+    expect(rows.map((r) => r.kind)).toEqual(["email"]);
+    // An empty string counts as no phone too.
+    const t2 = await register("phone.empty@mehtatraders.in", { phone: "" });
+    expect(t2.trialSource).toBe("signup");
+  });
+
+  it("a number that is not an Indian mobile is refused before anything is created", async () => {
+    await expect(register("phone.bad@mehtatraders.in", { phone: "12345" })).rejects.toThrow();
+    await expect(register("phone.bad@mehtatraders.in", { phone: "5876543210" })).rejects.toThrow();
+    const rows = await getControlDb().select({ id: users.id }).from(users).where(eq(users.email, "phone.bad@mehtatraders.in"));
+    expect(rows).toHaveLength(0);
+  });
+
+  it("the same number blocks a trial whichever email is used, even a brand-new mailbox, in the same transaction as sign-up", async () => {
+    const results = await Promise.all([
+      register("phone.race.a@mehtatraders.in", { phone: "9833300001" }),
+      register("phone.race.b@mehtatraders.in", { phone: "9833300001" }),
+    ]);
+    expect(results.filter((r) => r.trialSource === "signup")).toHaveLength(1);
+    expect(results.filter((r) => r.trialSource === "none")).toHaveLength(1);
+  });
+
+  it("TRIAL_CLAIMS=off skips the phone check too", async () => {
+    process.env.TRIAL_CLAIMS = "off";
+    try {
+      await register("phone.off.a@mehtatraders.in", { phone: "9844400001" });
+      const again = await register("phone.off.b@mehtatraders.in", { phone: "9844400001" });
+      expect(again.trialSource).toBe("signup");
+    } finally {
+      delete process.env.TRIAL_CLAIMS;
+    }
+  });
+
+  it("an admin custom trial still works for a sign-up that was denied on the phone", async () => {
+    await register("phone.admin.a@mehtatraders.in", { phone: "9855500001" });
+    const dup = await register("phone.admin.b@mehtatraders.in", { phone: "9855500001" });
+    expect(dup.trialSource).toBe("none");
+    const row = await adminCaller().platform.grantTrial({ tenantId: dup.id, days: 14, reason: "Verified separate business" });
+    expect(row.trialSource).toBe("admin");
+    expect(await getEntitlements(dup.id)).toMatchObject({ state: "trialing", readOnly: false });
+  });
+
+  it("creating another organisation uses the number saved on the user", async () => {
+    const savedMulti = process.env.MULTI_TENANT;
+    delete process.env.MULTI_TENANT;
+    try {
+      const a = await createUser({ email: "phone.create.a@mehtatraders.in", phone: "9866600001" });
+      const b = await createUser({ email: "phone.create.b@shahtraders.in", phone: "9866600001" });
+      await asUser(a, NO_BUSINESS).tenant.create();
+      await asUser(b, NO_BUSINESS).tenant.create();
+      const orgs = async (userId: string) =>
+        getControlDb()
+          .select({ source: tenants.trialSource })
+          .from(tenants)
+          .innerJoin(tenantMembers, eq(tenantMembers.tenantId, tenants.id))
+          .where(eq(tenantMembers.userId, userId));
+      expect((await orgs(a.id))[0]!.source).toBe("signup");
+      expect((await orgs(b.id))[0]!.source).toBe("none");
+    } finally {
+      if (savedMulti === undefined) delete process.env.MULTI_TENANT;
+      else process.env.MULTI_TENANT = savedMulti;
     }
   });
 });

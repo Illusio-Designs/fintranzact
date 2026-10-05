@@ -26,6 +26,7 @@ import {
   uid,
 } from "../../helpers/journey";
 import { businessesCreatedBy, membershipsOf, userByEmail } from "../../helpers/db";
+import { e2ePhone } from "../../helpers/auth";
 
 const PASSWORD = "Journey@1234";
 const DASHBOARD_HEADING = /Good (morning|afternoon|evening)/;
@@ -159,6 +160,7 @@ test.describe("J1 sign-up & onboarding", () => {
     await expectNoHorizontalScroll(page, "register");
     await page.getByLabel("Username").fill(username);
     await page.getByLabel("Email address").fill(email);
+    await page.getByLabel("Mobile number").fill(e2ePhone());
     await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
     await expect(page.getByText("Password strength: Strong")).toBeVisible();
     await page.getByLabel("Retype password").fill(PASSWORD);
@@ -255,6 +257,7 @@ test.describe("J1 sign-up with no plan chosen (dark theme)", () => {
     await expectNoHorizontalScroll(page, "register");
     await page.getByLabel("Username").fill(username);
     await page.getByLabel("Email address").fill(email);
+    await page.getByLabel("Mobile number").fill(e2ePhone());
     await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
     await page.getByLabel("Retype password").fill(PASSWORD);
     await page.locator("form").getByRole("button", { name: "Start free trial" }).click();

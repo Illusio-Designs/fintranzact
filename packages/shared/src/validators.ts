@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { INVOICE_TEMPLATES } from "./invoice-templates.js";
+import { isValidIndianMobile, PHONE_INVALID_MESSAGE } from "./phone.js";
 import {
   GSTIN_REGEX,
   PAN_REGEX,
@@ -46,8 +47,21 @@ export const registerSchema = z.object({
   referralCode: z.string().trim().max(50).optional().or(z.literal("")),
   /** The plan chosen at sign-up (starter, growth or business); Growth when left out. Removed plan ids are refused by the API. */
   plan: z.string().trim().max(40).optional(),
+  /**
+   * Mobile number (Indian: 10 digits starting 6-9, optional +91 / 0). Optional here so
+   * API, CLI and MCP clients keep working; the web and mobile sign-up forms require it.
+   * Kept for the one-trial-per-business check and account recovery.
+   */
+  phone: z.string().trim().max(30).optional().or(z.literal("")),
   turnstileToken: z.string().optional(),
 }).superRefine((data, ctx) => {
+  if (data.phone && !isValidIndianMobile(data.phone)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["phone"],
+      message: PHONE_INVALID_MESSAGE,
+    });
+  }
   const username = (data.username ?? data.name)?.trim();
   if (!username) {
     ctx.addIssue({

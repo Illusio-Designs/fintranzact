@@ -38,12 +38,22 @@ export async function openLoginForm(page: Page) {
   await expect(page.getByPlaceholder("Enter password")).toBeVisible();
 }
 
+/**
+ * A valid Indian mobile number for the sign-up form (required there). Random so
+ * runs do not collide; the e2e server runs with TRIAL_CLAIMS=off, so reusing a
+ * number would not block a trial anyway.
+ */
+export function e2ePhone(): string {
+  return `9${String(Math.floor(Math.random() * 1e9)).padStart(9, "0")}`;
+}
+
 export async function fillRegisterForm(
   page: Page,
-  user: { username: string; email: string; password: string; confirmPassword?: string },
+  user: { username: string; email: string; password: string; confirmPassword?: string; phone?: string },
 ) {
   await page.getByPlaceholder("Enter username").fill(user.username);
   await page.getByPlaceholder("you@yourcompany.com").fill(user.email);
+  await page.getByLabel("Mobile number").fill(user.phone ?? e2ePhone());
   await page.getByPlaceholder("Min 8 characters").fill(user.password);
   await page.getByPlaceholder("Retype password").fill(user.confirmPassword ?? user.password);
   await page.locator("form").getByRole("button", { name: "Start free trial" }).click();
@@ -52,7 +62,7 @@ export async function fillRegisterForm(
 /** Registers a new user through the UI and waits until the app leaves the auth pages. */
 export async function registerViaUI(
   page: Page,
-  user: { username: string; email: string; password: string },
+  user: { username: string; email: string; password: string; phone?: string },
 ) {
   await openRegisterForm(page);
   await fillRegisterForm(page, user);
