@@ -269,6 +269,29 @@ export const moneyTables: TableCoverage[] = [
     ],
   },
   {
+    table: "razorpay_connections",
+    rules: [],
+    noExtraRequirements:
+      "One row per business holding its own encrypted Razorpay keys and webhook token: unique per business and per token by index, secrets are NOT NULL or encrypted by the writer, nothing else to cross-check.",
+  },
+  {
+    table: "invoice_payment_links",
+    rules: [],
+    noExtraRequirements:
+      "A Razorpay payment link per invoice: the database allows only one active (created or partially paid) link per invoice and one row per Razorpay link id, and the invoice and business are foreign keys.",
+  },
+  {
+    table: "razorpay_payments",
+    rules: [
+      rule("razorpay_payments", "matches-recorded-payment", "warning",
+        "A Razorpay payment recorded against an invoice still matches the payment it created: same amount, and the Razorpay payment id as the reference. (A payment edited or deleted afterwards no longer matches; the Razorpay row is kept so a redelivered webhook never records it again.)",
+        ["Razorpay webhook (payment_link.paid / partially_paid / payment.captured)"],
+        `SELECT r.business_id, r.id::text, r.razorpay_payment_id || ': Razorpay ' || r.amount_paise || ' paise, payment ' || p.amount || ' ref ' || COALESCE(p.reference_number, '-')
+         FROM razorpay_payments r JOIN payments p ON p.id = r.payment_id
+         WHERE p.deleted_at IS NULL AND (p.amount::numeric * 100 <> r.amount_paise OR p.reference_number IS DISTINCT FROM r.razorpay_payment_id)`),
+    ],
+  },
+  {
     table: "bank_statement_templates",
     rules: [
       rule("bank_statement_templates", "audit-trail", "error",
