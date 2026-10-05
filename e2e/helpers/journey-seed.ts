@@ -67,6 +67,7 @@ export async function seedOwner(context: BrowserContext, label: string): Promise
     email,
     password,
     confirmPassword: password,
+    phone: `9${String(Math.floor(Math.random() * 1e9)).padStart(9, "0")}`,
     // No free plan: sign up on Business, so the organisation has no limits for the journeys.
     plan: "business",
   });

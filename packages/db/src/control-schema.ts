@@ -102,6 +102,8 @@ export const users = pgTable("users", {
   name: text("name"),
   referralCode: text("referral_code"),
   passwordHash: text("password_hash"),
+  /** Mobile number given at sign-up, as normalised digits (e.g. "919876543210"). Used for the one-trial-per-business check and account recovery; null for older accounts. */
+  phone: text("phone"),
   emailVerified: boolean("email_verified").default(false).notNull(),
   /** True once the user has confirmed an authenticator app (see user_two_factor). */
   twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),

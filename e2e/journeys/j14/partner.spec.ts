@@ -28,6 +28,7 @@ import {
   uid,
 } from "../../helpers/journey";
 import { dialog, listRow } from "../../helpers/journey-ui";
+import { e2ePhone } from "../../helpers/auth";
 import { adminSection, hasPlatformAdmin, NO_ADMIN_REASON, signInAsPlatformAdmin } from "../../helpers/admin";
 import { membershipsOf, userByEmail } from "../../helpers/db";
 import { partnerByEmail, tenantsReferredBy } from "../../helpers/settings-db";
@@ -89,6 +90,7 @@ test.describe("J14 partner", () => {
     await page.goto("/register");
     await page.getByLabel("Username").fill("Nikhil Shah");
     await page.getByLabel("Email address").fill(email);
+    await page.getByLabel("Mobile number").fill(e2ePhone());
     await page.getByLabel("Password", { exact: true }).fill("Partner@12345");
     await page.getByLabel("Retype password").fill("Partner@12345");
     await page.locator("form").getByRole("button", { name: "Start free trial" }).click();
@@ -137,6 +139,7 @@ test.describe("J14 partner", () => {
     await expect(signup.getByLabel(/^Referral code/)).toHaveValue(code);
     await signup.getByPlaceholder("Enter username").fill(ownerName);
     await signup.getByPlaceholder("you@yourcompany.com").fill(ownerEmail);
+    await signup.getByLabel("Mobile number").fill(e2ePhone());
     await signup.getByPlaceholder("Min 8 characters").fill("Referred@12345");
     await signup.getByPlaceholder("Retype password").fill("Referred@12345");
     await expectNoHorizontalScroll(signup, "register with referral");

@@ -8,7 +8,7 @@ import { isPlatformAdmin } from "../lib/platform-admin.js";
 import { controlDb, users, sessions, tenants, tenantMembers, emailChangeTokens, invitations, accessTokens, provisionTenantDatabase, cleanupTenantDatabase, type TenantDbConfig } from "@fintranzact/db";
 import { normalizeReferralCode } from "@fintranzact/shared";
 import { partnerForReferralCode } from "../lib/partner-program.js";
-import { loginSchema, registerSchema, completeProfileSchema } from "@fintranzact/shared";
+import { loginSchema, registerSchema, completeProfileSchema, normaliseIndianMobile } from "@fintranzact/shared";
 import { router, publicProcedure, protectedProcedure } from "../trpc.js";
 import { emailService } from "../lib/email.js";
 import { invalidateSessionCache, getSessionIdFromRequest, revokeAllUserSessions } from "../context.js";
@@ -216,6 +216,7 @@ async function createTenantForUser(
   referralCode: string | null = null,
   requestedPlan: string | null = null,
   ownerEmail: string | null = null,
+  ownerPhone: string | null = null,
 ): Promise<string> {
   const run = async (tx: ControlTx) => {
     const tenantName = `${displayName.trim() || "My Organization"}'s Organization`;
@@ -223,9 +224,9 @@ async function createTenantForUser(
 
     const partnerId = await partnerForReferralCode(tx, referralCode);
     // Full Access Trial: 14 days (30 for a partner referral), or none when one
-    // was already used for this email (lib/trial.ts). The claim is written
+    // was already used for this email or phone (lib/trial.ts). The claim is written
     // below, in this same transaction.
-    const trial = await decideNewOrgTrial(tx, { email: ownerEmail, partner: !!partnerId });
+    const trial = await decideNewOrgTrial(tx, { email: ownerEmail, phone: ownerPhone, partner: !!partnerId });
     const [tenant] = await tx.insert(tenants).values({
       name: tenantName,
       slug,
@@ -347,9 +348,10 @@ async function writeNewTenantRows(
   referralCode: string | null = null,
   requestedPlan: string | null = null,
   ownerEmail: string | null = null,
+  ownerPhone: string | null = null,
 ): Promise<string> {
   const partnerId = await partnerForReferralCode(tx, referralCode);
-  const trial = await decideNewOrgTrial(tx, { email: ownerEmail, partner: !!partnerId });
+  const trial = await decideNewOrgTrial(tx, { email: ownerEmail, phone: ownerPhone, partner: !!partnerId });
   const [tenant] = await tx.insert(tenants).values({
     name: provisioned.tenantName,
     slug: provisioned.slug,
@@ -439,6 +441,9 @@ export const authRouter = router({
       throw new TRPCError({ code: "CONFLICT", message: "Email already registered" });
     }
 
+    // The mobile number, as 10 normalised digits (null when the client sent none).
+    const phone = normaliseIndianMobile(input.phone);
+
     const username = (input.username ?? input.name ?? input.email.split("@")[0]).trim();
     const displayName = username || input.email.split("@")[0];
 
@@ -488,6 +493,7 @@ export const authRouter = router({
             name: displayName,
             referralCode: input.referralCode?.trim() || null,
             passwordHash,
+            phone,
           }).returning({ id: users.id, email: users.email, name: users.name });
 
           // Re-check invitation inside the tx (actual state, not the peek)
@@ -515,10 +521,10 @@ export const authRouter = router({
                 message: "Sign-up state changed — please try again.",
               });
             }
-            await writeNewTenantRows(tx, user.id, provisioned, input.referralCode?.trim() || null, input.plan ?? null, email);
+            await writeNewTenantRows(tx, user.id, provisioned, input.referralCode?.trim() || null, input.plan ?? null, email, phone);
             markUsed();
           } else {
-            await createTenantForUser(user.id, displayName, tx, input.referralCode?.trim() || null, input.plan ?? null, email);
+            await createTenantForUser(user.id, displayName, tx, input.referralCode?.trim() || null, input.plan ?? null, email, phone);
           }
 
           const sessionId = nanoid(64);
