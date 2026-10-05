@@ -21,6 +21,7 @@ export default defineConfig({
       // so the slug is at the root: /<slug>/catalog.json (not /store/<slug>/...)
       // But the API endpoints still use /store/ prefix on the backend
       "^/[^/]+/catalog\\.json": { target: API_TARGET, changeOrigin: true, rewrite: (path) => `/store${path}` },
+      "^/[^/]+/policies\\.json": { target: API_TARGET, changeOrigin: true, rewrite: (path) => `/store${path}` },
       "^/[^/]+/order$": { target: API_TARGET, changeOrigin: true, rewrite: (path) => `/store${path}` },
       "^/[^/]+/identify$": { target: API_TARGET, changeOrigin: true, rewrite: (path) => `/store${path}` },
     },

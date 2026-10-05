@@ -111,6 +111,7 @@ settings = resp.json()["result"]["data"]["json"]`,
         { name: "storeWhatsappNumber", type: "string", required: false, description: "WhatsApp number for order notifications (max 15 chars, include country code)" },
         { name: "storeAllowNegativeStock", type: "boolean", required: false, description: "Allow orders for items with zero or negative stock" },
         { name: "storeOrderPrefix", type: "string", required: false, description: "Prefix for order numbers (1-10 chars)" },
+        { name: "storeReturnWindowDays", type: "number", required: false, description: "Days a customer has to ask for a return (1-365, default 7). Filled into the store's Refund & Cancellation page." },
       ],
       output: {
         description: "Updated store settings (only store-specific fields returned).",

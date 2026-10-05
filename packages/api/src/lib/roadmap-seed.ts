@@ -2340,6 +2340,31 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-05-store-policies",
+    updates: [
+      {
+        // Built: five default templates with placeholders filled from the
+        // business (unit tests), the Policies editor in Settings → Online Store
+        // (component tests), a return window setting, and footer plus checkout
+        // links in the storefront (rendered and checked). Left unticked on
+        // purpose: "Public URLs per page for Razorpay review". The public
+        // routes (/store/:slug/policies.json and the server-rendered
+        // /store/:slug/policies/:kind), the storefront page and the copy-links
+        // box are written and covered by an integration test that was not run
+        // (no Postgres here), and nothing was opened in a browser or sent to
+        // Razorpay. Tick it once those pass against a real database.
+        title: "Store policy pages",
+        status: "in_progress",
+        done: [
+          "Policy templates: Terms, Refund, Shipping, Contact, Privacy",
+          "Pre-fill from business details",
+          "Editor for each policy page",
+          "Footer and checkout links",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

@@ -70,3 +70,26 @@ export interface OrderResult {
   totalAmount: string;
   message?: string;
 }
+
+/** A safe block tree for policy text. The API sends these; the storefront never receives HTML. */
+export type PolicyInline =
+  | { type: "text"; text: string }
+  | { type: "strong"; text: string }
+  | { type: "link"; text: string; href: string };
+
+export type PolicyBlock =
+  | { type: "heading"; level: 2 | 3; inline: PolicyInline[] }
+  | { type: "paragraph"; inline: PolicyInline[] }
+  | { type: "list"; ordered: boolean; items: PolicyInline[][] };
+
+export interface StorePolicies {
+  business: { name: string };
+  policies: Array<{
+    kind: "terms" | "refund" | "shipping" | "contact" | "privacy";
+    title: string;
+    shortTitle: string;
+    path: string;
+    blocks: PolicyBlock[];
+    updatedAt: string | null;
+  }>;
+}
