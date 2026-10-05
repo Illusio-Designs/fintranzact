@@ -117,15 +117,20 @@ async function applyProgress(tx: Tx, at: string): Promise<void> {
     let changed = 0;
     for (const update of batch.updates) {
       const rows = await tx
-        .select({ id: roadmapItems.id, status: roadmapItems.status, checklist: roadmapItems.checklist })
+        .select({ id: roadmapItems.id, status: roadmapItems.status, checklist: roadmapItems.checklist, description: roadmapItems.description })
         .from(roadmapItems)
         .where(eq(roadmapItems.title, update.title));
       for (const row of rows) {
         const ticks = new Set(update.done);
-        const checklist = (row.checklist ?? []).map((c) => (ticks.has(c.text) ? { ...c, done: true } : c));
+        const rename = update.rename ?? {};
+        const checklist = (row.checklist ?? [])
+          .map((c) => (rename[c.text] ? { ...c, text: rename[c.text]! } : c))
+          .map((c) => (ticks.has(c.text) ? { ...c, done: true } : c));
+        let description = row.description;
+        for (const [from, to] of update.describe ?? []) description = description.replace(from, to);
         // An admin who already moved the item has the last word on its status.
         const status = row.status === "idea" || row.status === "planned" ? update.status : row.status;
-        await tx.update(roadmapItems).set({ status, checklist, updatedAt: new Date() }).where(eq(roadmapItems.id, row.id));
+        await tx.update(roadmapItems).set({ status, checklist, description, updatedAt: new Date() }).where(eq(roadmapItems.id, row.id));
         changed++;
       }
     }

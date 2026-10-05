@@ -146,6 +146,36 @@ describe("starting roadmap", () => {
     expect((await adminCaller().platform.roadmapList()).data).toEqual([]);
   });
 
+  it("renames a reworded checklist line and ticks it on a board seeded with the old wording", async () => {
+    await forgetSeed();
+    await adminCaller().platform.roadmapList();
+    const OLD = "Business limits and features (unlimited, manufacturing, approvals, audit history, priority support)";
+    const NEW = "Business limits and features (unlimited, manufacturing, audit history, priority support)";
+    const title = "P1. Plans & pricing: paid plans only";
+    const db = getControlDb();
+    // An older board: the line still says approvals and the wording batch has not run.
+    const [row] = await db.select().from(roadmapItems).where(eq(roadmapItems.title, title));
+    await db
+      .update(roadmapItems)
+      .set({
+        checklist: row!.checklist.map((c) => (c.text === NEW ? { text: OLD, done: false } : c)),
+        description: row!.description.replace(
+          "- Everything in Growth, plus manufacturing / BOM, full audit history, priority support, onboarding help\n- Approvals are left out for now (owner decision, 3 Oct 2026): no approval workflow exists yet. They return with the \"Approval workflows\" item",
+          "- Everything in Growth, plus manufacturing / BOM, approvals, full audit history, priority support, onboarding help",
+        ),
+      })
+      .where(eq(roadmapItems.id, row!.id));
+    await db.delete(systemConfig).where(eq(systemConfig.key, roadmapProgressKey("2026-10-05-p1-approvals-wording")));
+    resetRoadmapSeedCache();
+
+    await ensureRoadmapSeeded();
+    const [after] = await db.select().from(roadmapItems).where(eq(roadmapItems.title, title));
+    expect(after!.checklist.find((c) => c.text === OLD)).toBeUndefined();
+    expect(after!.checklist.find((c) => c.text === NEW)).toMatchObject({ done: true });
+    expect(after!.description).not.toContain("manufacturing / BOM, approvals");
+    expect(after!.description).toContain("Approvals are left out for now");
+  });
+
   it("adds a later batch once to a board seeded before it existed", async () => {
     await forgetSeed();
     await adminCaller().platform.roadmapList();
