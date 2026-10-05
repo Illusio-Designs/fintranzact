@@ -24,6 +24,20 @@ describe("claim hashing", () => {
     expect(hashClaims([{ kind: "email", value: "nope" }, { kind: "gstin", value: "X" }, { kind: "phone", value: null }])).toEqual([]);
   });
 
+  it("a sign-up phone hashes the same however it was typed, and never contains the number", () => {
+    const forms = ["9876543210", "+91 98765 43210", "09876543210", "91-98765-43210", "(+91) 98765-43210"];
+    const hashes = forms.map((f) => hashClaims([{ kind: "phone", value: f }])[0]!.hash);
+    expect(new Set(hashes).size).toBe(1);
+    expect(hashes[0]).toMatch(/^[0-9a-f]{64}$/);
+    expect(hashes[0]).toBe(hashClaimValue("phone", "+919876543210"));
+    expect(hashes[0]).not.toContain("9876543210");
+    // a different number, or the same digits as another kind, is a different hash
+    expect(hashClaims([{ kind: "phone", value: "9876543211" }])[0]!.hash).not.toBe(hashes[0]);
+    expect(hashClaimValue("email", "+919876543210")).not.toBe(hashes[0]);
+    // the salt matters
+    expect(hashClaimValue("phone", "+919876543210", "other-salt")).not.toBe(hashes[0]);
+  });
+
   it("TRIAL_CLAIMS=off disables the check", () => {
     expect(trialClaimsEnabled({})).toBe(true);
     expect(trialClaimsEnabled({ TRIAL_CLAIMS: "off" } as NodeJS.ProcessEnv)).toBe(false);

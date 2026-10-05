@@ -10,6 +10,7 @@
  */
 
 import { gstinCheckChar } from "./gstin.js";
+import { normaliseIndianMobile } from "./phone.js";
 import { z } from "zod";
 import { TRIAL_DAYS } from "./plans.js";
 
@@ -236,6 +237,9 @@ export function normaliseEmailForClaim(raw: string | null | undefined): string |
 export function normalisePhoneForClaim(raw: string | null | undefined): string | null {
   const trimmed = raw?.trim();
   if (!trimmed) return null;
+  // The sign-up forms collect Indian mobiles: the same number always hashes the same.
+  const indian = normaliseIndianMobile(trimmed);
+  if (indian) return `+91${indian}`;
   const hasPlus = trimmed.startsWith("+");
   const digits = trimmed.replace(/\D/g, "");
   if (!digits) return null;

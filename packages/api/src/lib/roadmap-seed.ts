@@ -2415,6 +2415,21 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-05-trial-phone",
+    updates: [
+      {
+        // Sign-up now collects a mobile number (web and mobile forms require
+        // it; auth.register keeps it optional for API clients), stored on the
+        // user as 10 digits and checked with email and GSTIN through a salted
+        // hash in trial_claims. The add-on caps line stays unticked: the AI
+        // assistant and Payroll do not exist yet.
+        title: "P2. Full Access Trial",
+        status: "in_progress",
+        done: ["One trial per business: phone / email / GSTIN check"],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

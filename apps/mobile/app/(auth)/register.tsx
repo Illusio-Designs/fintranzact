@@ -11,18 +11,21 @@ import {
   ScrollView,
 } from "react-native";
 import { router } from "expo-router";
+import { normaliseIndianMobile, phoneFieldError, PHONE_HELP_TEXT } from "@fintranzact/shared";
 import { trpc } from "../../src/lib/trpc";
 import { useAuthStore } from "../../src/stores/auth";
 
 export default function RegisterScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const login = useAuthStore((s) => s.login);
 
   const emailRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   const confirmPasswordRef = useRef<TextInput>(null);
 
@@ -38,11 +41,22 @@ export default function RegisterScreen() {
 
   function handleRegister() {
     setError("");
-    registerMutation.mutate({ name, email, password, confirmPassword });
+    const phoneProblem = phoneFieldError(phone, { required: true });
+    if (phoneProblem) {
+      setError(phoneProblem);
+      return;
+    }
+    registerMutation.mutate({
+      name,
+      email,
+      phone: normaliseIndianMobile(phone) ?? phone.trim(),
+      password,
+      confirmPassword,
+    });
   }
 
   const isDisabled =
-    registerMutation.isPending || !name || !email || !password || !confirmPassword;
+    registerMutation.isPending || !name || !email || !phone.trim() || !password || !confirmPassword;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -90,9 +104,30 @@ export default function RegisterScreen() {
                 autoCapitalize="none"
                 autoCorrect={false}
                 returnKeyType="next"
+                onSubmitEditing={() => phoneRef.current?.focus()}
+                blurOnSubmit={false}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Mobile number</Text>
+              <TextInput
+                ref={phoneRef}
+                style={styles.input}
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="98765 43210"
+                placeholderTextColor="#8390b0"
+                accessibilityLabel="Mobile number"
+                keyboardType="phone-pad"
+                autoComplete="tel"
+                textContentType="telephoneNumber"
+                autoCorrect={false}
+                returnKeyType="next"
                 onSubmitEditing={() => passwordRef.current?.focus()}
                 blurOnSubmit={false}
               />
+              <Text style={styles.help}>{PHONE_HELP_TEXT}</Text>
             </View>
 
             <View style={styles.inputGroup}>
@@ -171,6 +206,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#ffffff",
   },
+  help: { fontSize: 12, color: "#8390b0", lineHeight: 17 },
   error: { fontSize: 13, color: "#ef4444", textAlign: "center" },
   button: {
     backgroundColor: "#3b5eaa",

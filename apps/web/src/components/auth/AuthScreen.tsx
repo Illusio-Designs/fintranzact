@@ -16,11 +16,12 @@ import { PasswordInput } from "@/components/ui/PasswordInput";
 import { TurnstileModal } from "@/components/ui/TurnstileModal";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/useToast";
-import { isPlanId, TRIAL_DAYS, type PlanId } from "@fintranzact/shared";
+import { isPlanId, normaliseIndianMobile, phoneFieldError, PHONE_HELP_TEXT, TRIAL_DAYS, type PlanId } from "@fintranzact/shared";
 
-type AuthFieldName = "email" | "password" | "username" | "confirm";
+type AuthFieldName = "email" | "phone" | "password" | "username" | "confirm";
 const FIELD_ID: Record<AuthFieldName, string> = {
   email: "auth-email",
+  phone: "auth-phone",
   password: "auth-password",
   username: "auth-username",
   confirm: "auth-password-2",
@@ -182,6 +183,7 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
   const navigate = useNavigate();
   const utils = trpc.useUtils();
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -360,6 +362,8 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
     if (!username.trim()) return setError("Enter a username", "username");
     if (!email.trim()) return setError("Enter your email address", "email");
     if (!EMAIL_RE.test(email.trim())) return setError("Enter a valid email address", "email", "Example: name@business.in");
+    const phoneProblem = phoneFieldError(phone, { required: true });
+    if (phoneProblem) return setError(phoneProblem, "phone", PHONE_HELP_TEXT);
     if (password.length < 8) return setError("Use at least 8 characters for your password", "password");
     if (password !== confirmPassword) return setError("Passwords don't match", "confirm", "Type the same password in both boxes.");
     setInvalid(new Set());
@@ -367,6 +371,7 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
       registerMutation.mutate({
         username: username.trim(),
         email: email.trim(),
+        phone: normaliseIndianMobile(phone) ?? phone.trim(),
         password,
         confirmPassword,
         referralCode: referralCode.trim() || undefined,
@@ -530,6 +535,24 @@ export function AuthScreen({ mode, search }: { mode: AuthMode; search: AuthSearc
                       className="input h-[46px]"
                       placeholder="you@yourcompany.com"
                     />
+                  </Field>
+                  <Field label="Mobile number" htmlFor="auth-phone">
+                    <input
+                      id="auth-phone"
+                      type="tel"
+                      inputMode="tel"
+                      value={phone}
+                      onChange={(e) => { setPhone(e.target.value); markOk("phone"); }}
+                      aria-invalid={invalid.has("phone") || undefined}
+                      aria-describedby="auth-phone-help"
+                      required
+                      autoComplete="tel"
+                      className="input h-[46px]"
+                      placeholder="98765 43210"
+                    />
+                    <p id="auth-phone-help" className="text-xs leading-relaxed text-text-tertiary">
+                      {PHONE_HELP_TEXT}
+                    </p>
                   </Field>
                   <Field label="Password" htmlFor="auth-password">
                     <PasswordInput

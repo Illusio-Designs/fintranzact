@@ -7,7 +7,7 @@ Roadmap item **P2. Full Access Trial**. Every new organisation starts a trial in
 | | |
 |---|---|
 | Length | 14 days (`trial.days`), 30 days for a sign-up with an approved partner code (`trial.partnerDays`) |
-| Access | Business plan limits and features, plus the add-ons AI Assistant, Payroll and Store Pro, with caps |
+| Access | Business plan limits and features, plus the add-ons AI Assistant, Payroll and Store Pro, with caps (add-ons are not on sale until `ADDON_FEATURES[id].implemented`; see ENTITLEMENTS.md) |
 | Caps | AI 50 questions, Payroll 10 employees (`trial.caps`); Store Pro has no cap and includes domain connect |
 | Card | Not needed |
 | At the end | Read-only until any plan is bought: view, search, download and export still work, no new documents or edits. Nothing is deleted. Buying a plan unlocks at once |
@@ -30,11 +30,11 @@ A change applies to organisations that sign up afterwards; running trials keep t
 
 `trial_claims` holds `(kind, value_hash, tenant_id)` with `UNIQUE (kind, value_hash)`. Kinds: `email`, `phone`, `gstin`. The hash is `sha256(salt:kind:normalised value)`; the raw value is never stored or logged. The salt is `TRIAL_CLAIM_SALT`, else `DB_ENCRYPTION_KEY`, else a built-in constant. **Do not change the salt on a running system**: every existing claim would stop matching.
 
-- **Email, at sign-up** (and at `tenant.create`): normalised (lowercase, `+tag` removed, Gmail dots ignored). If the claim exists, the new organisation is created with source `none`: started and ended at the same instant, so it is read-only until a plan is bought, and `billing.status.trialMessage` says "A free trial was already used for this email, phone or GSTIN. Choose a plan to continue." The claim is written in the sign-up transaction; if two sign-ups race, the unique index decides and the loser's trial is turned into `none` inside its own transaction. Sign-up itself never fails because of a claim.
-- **Phone**: normalised to E.164 and supported by the same functions, but sign-up does not collect a phone number, so nothing records or checks one yet. Wire `{ kind: "phone", value }` into `decideNewOrgTrial` when a phone is collected at sign-up.
+- **Email and phone, at sign-up** (and at `tenant.create`): the email is normalised (lowercase, `+tag` removed, Gmail dots ignored). and the phone is the Indian mobile as `+91` plus 10 digits. If either claim exists, the new organisation is created with source `none`: started and ended at the same instant, so it is read-only until a plan is bought, and `billing.status.trialMessage` says "A free trial was already used for this email, phone or GSTIN. Choose a plan to continue." The claim is written in the sign-up transaction; if two sign-ups race, the unique index decides and the loser's trial is turned into `none` inside its own transaction. Sign-up itself never fails because of a claim.
+- **Phone**: the web and mobile sign-up forms require a mobile number (help text: used to keep one free trial per business and for account recovery, never shared). One shared helper, `normaliseIndianMobile` in `packages/shared/src/phone.ts`: 10 digits starting 6-9, with an optional `+91`, `91` or `0` and spaces, dashes or brackets. `auth.register` takes `phone` as an optional string (so API, CLI and MCP clients keep working; an invalid number is a validation error), stores the 10 digits in `users.phone` and passes it to `decideNewOrgTrial` next to the email. The claim is `sha256(salt:phone:+91XXXXXXXXXX)` like the others, so every way of typing the same number gives the same hash. `tenant.create` reads `users.phone` for the owner (older accounts and API sign-ups have none, so only their email is checked). `users.phone` is the only place the number is kept in clear; `trial_claims` never has it. Nothing tells the person who used the number.
 - **GSTIN, when a business first saves one** (`business.create`, `business.update`): `claimGstinForTenant`. Only an organisation with a self-serve trial (source `signup` or `partner`) takes part. Not claimed yet: it claims it. Already claimed by the same organisation: no-op. Claimed by another organisation: if this organisation's trial is still running it ends now (source `none`, billing event `tenant.trial_denied` with no reference to the other organisation). Only a well-formed GSTIN with a valid check digit counts; an organisation can hold at most 3 GSTIN claims and 10 saves an hour are processed (in memory, per server), so the check cannot be used to lock someone else's number. Never throws, never fails the business save.
 - `TRIAL_CLAIMS=off` turns every check off (self-hosted installs, and the e2e server, whose journeys reuse one GSTIN across many organisations).
-- A second organisation for the same owner (`tenant.create`) is claimed by the owner's email, so it starts read-only until a plan is bought. This follows "one trial per business".
+- A second organisation for the same owner (`tenant.create`) is claimed by the owner's email and phone, so it starts read-only until a plan is bought. This follows "one trial per business".
 - **Support**: a platform admin can still give such an organisation a custom trial (it ignores claims). To free a claim, delete the `trial_claims` row (compute the hash with `hashClaimValue` in `lib/trial-claims.ts`).
 
 ## Reminders job
@@ -66,6 +66,8 @@ Extend and custom are refused for grandfathered organisations and for ones that 
 
 ## Migrations
 
+`users.phone` (nullable text, normalised 10 digits) was added later: unified `packages/db/drizzle/0060_users_phone.sql`, control `packages/db/drizzle-control/0022_users_phone.sql` (idempotent). Existing users have NULL.
+
 Unified tree `packages/db/drizzle/0058_p2_full_access_trial.sql` (from `drizzle-kit generate`, snapshot `0058_snapshot.json`); control tree `packages/db/drizzle-control/0021_p2_full_access_trial.sql` (hand-written, idempotent). Adds `tenants.trial_started_at`, `tenants.trial_source`, `trial_claims`, `trial_reminders`. Existing organisations get NULLs: their trial dates are unchanged and the reminder job treats a missing start as `ends_at` minus 14 days.
 
 ## Where to look
@@ -76,6 +78,7 @@ Unified tree `packages/db/drizzle/0058_p2_full_access_trial.sql` (from `drizzle-
 | Access and caps | `packages/shared/src/entitlements.ts` (`deriveAccess`), `packages/api/src/lib/entitlements.ts` |
 | Start, extend, custom, end | `packages/api/src/lib/trial.ts` |
 | Claims | `packages/api/src/lib/trial-claims.ts` |
+| Phone rules | `packages/shared/src/phone.ts` |
 | Settings | `packages/api/src/lib/trial-settings.ts` |
 | Reminders | `packages/api/src/lib/trial-reminders.ts` |
 | Banner | `apps/web/src/components/BillingBanner.tsx`, `apps/mobile/src/lib/billing-banner.ts` (both use `trialBannerFor`) |

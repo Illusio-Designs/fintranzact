@@ -33,6 +33,7 @@ import {
   type ConsoleGuard,
 } from "../../helpers/journey";
 import { seedOwner, Trpc, type SeededOwner } from "../../helpers/journey-seed";
+import { e2ePhone } from "../../helpers/auth";
 import {
   backdateInvoice,
   businessMembers,
@@ -131,6 +132,7 @@ async function acceptInvite(
   await expectNoHorizontalScroll(page, "register (invited)");
   await page.getByLabel("Username").fill(who.name);
   await page.getByLabel("Email address").fill(who.email);
+  await page.getByLabel("Mobile number").fill(e2ePhone());
   await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
   await page.getByLabel("Retype password").fill(PASSWORD);
   await page.locator("form").getByRole("button", { name: "Start free trial" }).click();

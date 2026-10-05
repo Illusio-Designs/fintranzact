@@ -139,6 +139,8 @@ export function BillingTab() {
   // they do not "switch" it. The same goes for any lapsed state without a live plan.
   const onPaidPlan = !!planSub && planSub.status !== "halted";
   const addonOf = (id: string) => data.addonSubscriptions.find((s) => s.addon === id);
+  // Hide add-ons that cannot be bought yet, unless the organisation already holds one.
+  const visibleAddons = data.addons.filter((a) => a.available || !!addonOf(a.id));
 
   return (
     <div className="space-y-6">
@@ -286,12 +288,13 @@ export function BillingTab() {
         ) : null}
       </section>
 
-      {/* ── Add-ons ── */}
+      {/* ── Add-ons: purchasable only once built (a.available); held ones stay listed ── */}
+      {visibleAddons.length > 0 ? (
       <section className="card p-5">
         <h3 className="text-sm font-semibold text-text-primary">Add-ons</h3>
         <p className="mt-1 text-xs text-text-tertiary">Work with any paid plan and are billed with it.</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          {data.addons.map((a) => {
+          {visibleAddons.map((a) => {
             const sub = addonOf(a.id);
             const amount = cycle === "yearly" ? a.yearly : a.monthly;
             return (
@@ -305,6 +308,9 @@ export function BillingTab() {
                     <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", STATUS_STYLES[sub.status] ?? "bg-surface-2 text-text-secondary")}>
                       {sub.statusLabel}
                     </span>
+                  ) : null}
+                  {!a.available ? (
+                    <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-semibold text-text-secondary">Coming soon</span>
                   ) : null}
                 </div>
                 <p className="mt-2 text-sm font-semibold text-text-primary">
@@ -330,7 +336,7 @@ export function BillingTab() {
                       </button>
                     ) : null}
                   </div>
-                ) : (
+                ) : !a.available ? null : (
                   <button
                     type="button"
                     className="btn-secondary text-sm"
@@ -346,6 +352,7 @@ export function BillingTab() {
           })}
         </div>
       </section>
+      ) : null}
 
       {/* ── Usage ── */}
       <section className="card p-5">
@@ -353,8 +360,12 @@ export function BillingTab() {
         <div className="mt-3 grid grid-cols-3 gap-3">
           {[
             { label: "Invoices", value: String(data.usage.invoicesThisMonth) },
-            { label: "AI questions", value: data.usage.aiQuestions === null ? "—" : String(data.usage.aiQuestions) },
-            { label: "Payroll employees", value: data.usage.payrollEmployees === null ? "—" : String(data.usage.payrollEmployees) },
+            ...(visibleAddons.some((a) => a.group === "ai")
+              ? [{ label: "AI questions", value: data.usage.aiQuestions === null ? "—" : String(data.usage.aiQuestions) }]
+              : []),
+            ...(visibleAddons.some((a) => a.group === "payroll")
+              ? [{ label: "Payroll employees", value: data.usage.payrollEmployees === null ? "—" : String(data.usage.payrollEmployees) }]
+              : []),
           ].map((u) => (
             <div key={u.label} className="rounded-xl bg-surface-1 p-3">
               <p className="text-xs text-text-tertiary">{u.label}</p>

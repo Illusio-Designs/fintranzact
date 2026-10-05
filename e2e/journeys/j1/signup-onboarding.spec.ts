@@ -26,6 +26,7 @@ import {
   uid,
 } from "../../helpers/journey";
 import { businessesCreatedBy, membershipsOf, userByEmail } from "../../helpers/db";
+import { e2ePhone } from "../../helpers/auth";
 
 const PASSWORD = "Journey@1234";
 const DASHBOARD_HEADING = /Good (morning|afternoon|evening)/;
@@ -144,10 +145,11 @@ test.describe("J1 sign-up & onboarding", () => {
     await expect(page.getByText(/Forever Free/i)).toHaveCount(0);
     await page.getByRole("button", { name: /Yearly/ }).first().click();
     await expect(page.getByText("2 months free").first()).toBeVisible();
-    // Add-ons with prices, the GST note and the trial call to action.
-    await expect(page.getByRole("heading", { name: "Extras you can add to any plan" })).toBeVisible();
-    for (const addon of ["AI Assistant", "AI Plus", "Payroll", "Store Pro"]) await expect(page.getByRole("heading", { name: addon, exact: true })).toBeVisible();
-    await expect(page.getByText("₹3,990").first()).toBeVisible(); // AI Assistant yearly: ten months of ₹399
+    // Add-ons are hidden until each feature is built (ADDON_FEATURES[id].implemented), so none is sold here.
+    // When an add-on is switched on, assert its heading and yearly price (ten months of its monthly price) instead.
+    await expect(page.getByRole("heading", { name: "Extras you can add to any plan" })).toHaveCount(0);
+    for (const addon of ["AI Assistant", "AI Plus", "Payroll", "Store Pro"]) await expect(page.getByRole("heading", { name: addon, exact: true })).toHaveCount(0);
+    // The GST note and the trial call to action.
     await expect(page.getByText(/before 18% GST/).first()).toBeVisible();
     await expect(page.getByRole("link", { name: `Start your ${TRIAL_DAYS}-day Full Access Trial — no card needed` }).first()).toBeVisible();
     await page.getByRole("link", { name: `Start ${TRIAL_DAYS}-day free trial` }).nth(1).click();
@@ -159,6 +161,7 @@ test.describe("J1 sign-up & onboarding", () => {
     await expectNoHorizontalScroll(page, "register");
     await page.getByLabel("Username").fill(username);
     await page.getByLabel("Email address").fill(email);
+    await page.getByLabel("Mobile number").fill(e2ePhone());
     await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
     await expect(page.getByText("Password strength: Strong")).toBeVisible();
     await page.getByLabel("Retype password").fill(PASSWORD);
@@ -255,6 +258,7 @@ test.describe("J1 sign-up with no plan chosen (dark theme)", () => {
     await expectNoHorizontalScroll(page, "register");
     await page.getByLabel("Username").fill(username);
     await page.getByLabel("Email address").fill(email);
+    await page.getByLabel("Mobile number").fill(e2ePhone());
     await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
     await page.getByLabel("Retype password").fill(PASSWORD);
     await page.locator("form").getByRole("button", { name: "Start free trial" }).click();

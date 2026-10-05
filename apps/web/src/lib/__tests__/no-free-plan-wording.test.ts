@@ -49,10 +49,13 @@ describe("no free-plan wording in customer-facing copy", () => {
     });
   }
 
-  it("the pricing page carries the trial call to action, the add-ons and the GST note", () => {
+  it("the pricing page carries the trial call to action, the availability-gated add-ons and the GST note", () => {
     const src = readFileSync(join(SRC, "routes/pricing.tsx"), "utf8");
     expect(src).toContain("Start your ${TRIAL_DAYS}-day Full Access Trial — no card needed");
+    // Add-ons are sold only once built: the section and FAQ go through the shared availability helper.
     expect(src).toContain("ADDONS");
+    expect(src).toContain("isAddonAvailable");
+    expect(src).not.toMatch(/ADDONS\.map\(/);
     expect(src).toMatch(/before \$\{PLAN_GST_RATE_PERCENT\}% GST/);
   });
 });
