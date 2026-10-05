@@ -326,6 +326,8 @@ const partyFields = {
   gstinStatus: z.enum(gstinStatuses).optional(),
   gstinVerifiedAt: z.string().datetime().optional(),
   isMsme: z.boolean().optional(),
+  // Customer asked not to be sent payment reminders.
+  doNotRemind: z.boolean().optional(),
   udyamNumber: z.string().regex(UDYAM_REGEX, "Invalid Udyam number (e.g. UDYAM-MH-26-0012345)").optional().or(z.literal("")),
   msmeCategory: z.enum(msmeCategories).optional(),
   tdsSection: z.enum(tdsSectionCodes).optional(),

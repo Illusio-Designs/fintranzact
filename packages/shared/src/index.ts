@@ -31,3 +31,4 @@ export * from "./gstin.js";
 export * from "./gstin-fill.js";
 export * from "./gst-filing-wizard.js";
 export * from "./store-policies.js";
+export * from "./payment-reminders.js";
