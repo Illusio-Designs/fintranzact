@@ -77,7 +77,7 @@ export function OnlinePaymentsTab() {
       <section className="card p-5">
         <h3 className="text-sm font-semibold text-text-primary">Online payments (Razorpay)</h3>
         <p className="mt-1 text-xs text-text-tertiary">
-          Let customers pay your invoices online with UPI, cards and net banking. Payments go straight to your own Razorpay account and bank, not through Fintranzact. You need a Razorpay account with Payment Links enabled.
+          Let customers pay your invoices online with UPI, cards and net banking. Payments go straight to your own Razorpay account and bank, not through Fintranzact. The same connection takes payments at your online store checkout (Settings, Online Store). You need a Razorpay account with Payment Links enabled.
         </p>
 
         {data.connected && (
@@ -169,7 +169,7 @@ export function OnlinePaymentsTab() {
 
       {data.connected && data.webhookUrl && (
         <section className="card p-5" data-testid="razorpay-webhook-setup">
-          <h3 className="text-sm font-semibold text-text-primary">Webhook: so paid invoices update by themselves</h3>
+          <h3 className="text-sm font-semibold text-text-primary">Webhook: so paid invoices and store orders update by themselves</h3>
           {!data.hasWebhookSecret && (
             <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-300" role="alert">
               Add the webhook secret above (step 3). Until then, payments are not recorded automatically.

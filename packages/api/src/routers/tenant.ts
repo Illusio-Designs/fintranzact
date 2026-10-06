@@ -17,7 +17,7 @@ import { getCatalogPlan } from "../lib/plan-catalog.js";
 import { newOrganisationPlanFields } from "../lib/signup-plan.js";
 import { decideNewOrgTrial, finishNewOrgTrial, userPhone } from "../lib/trial.js";
 import { requirePlanManagerTenant } from "../lib/plan-manager.js";
-import { effectiveOwnerPlan, enforceTeamMemberLimit, countCaSlots, enforceOrgCreationLimit, assertOwnedOrgsWritable, getLimits } from "../lib/plan-limits.js";
+import { ownedOrgLimit, enforceTeamMemberLimit, countCaSlots, enforceOrgCreationLimit, assertOwnedOrgsWritable } from "../lib/plan-limits.js";
 import { checkInviteRules, checkRoleChangeRules, countsTowardTeamLimit, normalizeInviteEmail } from "../lib/invite-rules.js";
 import { removeTenantMember } from "../lib/member-removal.js";
 import { removalStore } from "../lib/member-removal-store.js";
@@ -290,19 +290,8 @@ export const tenantRouter = router({
 
   // Check if the user can create a new org (plan limit not reached).
   canCreateOrg: protectedProcedure.query(async ({ ctx }) => {
-    const ownedOrgs = await controlDb.select({ plan: tenants.plan })
-      .from(tenantMembers)
-      .innerJoin(tenants, eq(tenants.id, tenantMembers.tenantId))
-      .where(and(
-        eq(tenantMembers.userId, ctx.user.id),
-        eq(tenantMembers.role, "owner"),
-      ));
-
-    const bestPlan = effectiveOwnerPlan(ownedOrgs);
-    if (bestPlan === null) return true;
-
-    const limits = await getLimits(bestPlan);
-    return limits.maxOwnedOrgs === Infinity || ownedOrgs.length < limits.maxOwnedOrgs;
+    const cap = await ownedOrgLimit(ctx.user.id);
+    return !cap || cap.max === Infinity || cap.owned < cap.max;
   }),
 
   // List user's tenant memberships

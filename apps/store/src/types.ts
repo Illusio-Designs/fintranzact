@@ -5,6 +5,10 @@ export interface StoreConfig {
     accentColor?: string;
     minOrderAmount?: string;
     deliveryNote?: string;
+    /** Flat delivery fee in rupees, before GST ("0.00" or absent = no delivery charge). Display only: the server prices the order. */
+    deliveryFee?: string;
+    /** Order subtotal at or above which delivery is free (null/absent = no threshold). */
+    freeDeliveryAbove?: string | null;
     whatsappNumber?: string;
     currency: string;
     phone?: string;
@@ -16,6 +20,8 @@ export interface StoreConfig {
     // no logo uploaded. Carries a `?v=<timestamp>` cache-buster so the
     // browser refreshes automatically when the owner changes the logo.
     logoUrl?: string | null;
+    // Which ways to pay checkout offers (the server decides; absent on an older API = Cash on Delivery only).
+    payments?: { online: boolean; cod: boolean };
   };
   items: StoreItem[];
   categories: string[];
@@ -64,11 +70,45 @@ export function cartItemKey(entry: CartItem): string {
   return entry.item.id;
 }
 
+export type PaymentMethod = "online" | "cod";
+
 export interface OrderResult {
   orderId: string;
   orderNumber: string;
   totalAmount: string;
+  subtotal?: string;
+  /** Delivery charge before GST ("0.00" when none). */
+  deliveryCharge?: string;
+  taxAmount?: string;
   message?: string;
+  paymentMethod?: PaymentMethod;
+  paymentStatus?: string;
+  /** Razorpay's hosted payment page for an online order, when it could be made. */
+  paymentUrl?: string | null;
+  /** Shown politely when the payment page could not be made; the order itself is saved. */
+  paymentError?: string;
+}
+
+/** An order as its shopper may see it (the public order page). */
+export interface PublicOrder {
+  orderId: string;
+  orderNumber: string;
+  status: string;
+  paymentMethod: PaymentMethod;
+  /** unpaid | paid | partially_refunded | refunded */
+  paymentStatus: string;
+  currency: string;
+  subtotal: string;
+  /** Delivery charge before GST ("0.00" when none). */
+  deliveryCharge?: string;
+  /** All GST on the order, including the GST on the delivery charge. */
+  taxAmount: string;
+  totalAmount: string;
+  refundedAmount: string;
+  balance: string | null;
+  canPayOnline: boolean;
+  lines: Array<{ name: string; quantity: string; total: string }>;
+  createdAt: string;
 }
 
 /** A safe block tree for policy text. The API sends these; the storefront never receives HTML. */

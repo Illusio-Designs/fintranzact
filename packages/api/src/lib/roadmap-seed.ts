@@ -2486,6 +2486,82 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-06-store-payments",
+    updates: [
+      {
+        // Built: shoppers pay at store checkout through the business's OWN
+        // Razorpay account (decision: its own API keys, not Razorpay Route;
+        // the platform's RAZORPAY_KEY_ID never touches shopper money). The
+        // connection from invoice payment links is reused and surfaced in
+        // Settings -> Online Store with two switches (Pay online, Cash on
+        // Delivery). Checkout makes a hosted Razorpay payment link on the
+        // order's invoice for the amount worked out from the database; the
+        // business webhook (signature verified, deduped by Razorpay payment
+        // id) records the payment and gateway charge and marks the order and
+        // invoice paid; an unpaid order keeps a Pay again link; paid orders
+        // can be refunded through Razorpay in full or in part with a credit
+        // note, idempotently, owner/admin only; shoppers get order, payment
+        // received, payment failed and refund emails.
+        // Tested: unit tests and integration tests against a real Postgres
+        // with Razorpay's HTTP mocked, web component tests; the storefront
+        // type-checks and builds. Still unverified: real Razorpay was never
+        // called (no test or live keys), no browser run of the storefront or
+        // the e2e journey, no real email sent. Not built: a delivery charge
+        // at checkout (the order has items and GST only), so the status stays
+        // in progress until a live test payment and refund have been made.
+        title: "Online payments at store checkout",
+        status: "in_progress",
+        done: [
+          "Decide: Razorpay Route vs per-merchant keys",
+          "Store payment settings (connect Razorpay, keys encrypted)",
+          "Checkout with UPI, card and netbanking",
+          "Cash on Delivery on/off per store",
+          "Webhook: verify signature, mark order and draft invoice paid",
+          "Record payment with gateway charges",
+          "Retry link for failed payments",
+          "Refunds on cancel (full/partial) with credit note",
+          "Order and payment emails to the shopper",
+        ],
+      },
+    ],
+  },
+  {
+    key: "2026-10-06-small-fixes",
+    updates: [
+      {
+        // Reminders now carry the business's Razorpay payment link for the
+        // current balance due ({{paymentLink}}): the active link is reused
+        // for an unchanged balance, one is made only when a reminder is sent
+        // (previews never create one), and a failure never blocks the
+        // reminder. Tested against a real Postgres with a mocked Razorpay
+        // HTTP layer. The checklist has no separate line for it (the Razorpay
+        // payment link line covers the invoice and share page), so nothing
+        // is ticked here.
+        title: "Payment reminders, Razorpay payment links and UPI QR on invoices",
+        status: "in_progress",
+        done: [],
+      },
+    ],
+  },
+  {
+    key: "2026-10-06-store-delivery",
+    updates: [
+      {
+        // Built: one flat delivery fee per store with an optional free-delivery
+        // threshold and the delivery note. The server prices it from the order
+        // subtotal; it goes on the invoice as an additional charge (the GST
+        // treatment invoice charges already have) and flows through the order
+        // total, the payment link, refunds and the emails. Not built: charges
+        // by pincode or weight, serviceable pincodes, courier integrations and
+        // the shopper tracking link. The GST treatment of the charge is an open
+        // question for a CA (docs/GST-RETURNS-CA-VERIFICATION.md).
+        title: "Delivery charges and shipping integrations",
+        status: "in_progress",
+        done: ["Free-delivery threshold"],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

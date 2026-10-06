@@ -17,7 +17,11 @@
  * so it is an intra-state B2C sale: CGST + SGST):
  *   order 1  mango box 2 × ₹800 @5% + cashew pack 1 × ₹450 @12%
  *            = ₹1,600 + ₹80 + ₹450 + ₹54 = ₹2,184.00 (taxable ₹2,050, GST ₹134)
- *   order 2  cashew pack 2 × ₹450 @12% = ₹900 + ₹108 = ₹1,008.00
+ *   order 2  cashew pack 2 × ₹450 @12% = ₹900 + ₹108 = ₹1,008.00, plus delivery:
+ *            the store charges ₹40 (before GST) and delivers free from a ₹1,000
+ *            subtotal, so order 1 (₹2,050) is free and order 2 (₹900) pays ₹40
+ *            + 12% GST (the highest rate in the order) = ₹44.80 → ₹1,052.80
+ *            (GST ₹112.80, additional charges ₹40.00).
  *   Placing an order takes its stock out (the order raises an "unfulfilled"
  *   invoice); confirming marks that invoice sent; cancelling cancels it and
  *   puts the stock back. Mango 10 → 8; cashew 20 → 19 → 17 → 19.
@@ -99,7 +103,6 @@ test.describe("J12 online store", () => {
     await expect(page.getByText("This URL is available!")).toBeVisible();
     await page.getByLabel("Store Tagline").fill("Konkan mangoes and dry fruit, delivered");
     await page.getByLabel("Minimum Order Amount").fill("500");
-    await page.getByLabel("Delivery Note").fill("Free delivery in Mumbai");
     await expectNoHorizontalScroll(page, "settings / online store");
     await page.getByRole("button", { name: "Save Settings" }).click();
     await expect(toast(page, "Store settings saved")).toBeVisible();
@@ -110,8 +113,38 @@ test.describe("J12 online store", () => {
       store_slug: slug,
       store_tagline: "Konkan mangoes and dry fruit, delivered",
       store_min_order_amount: "500.00",
-      store_delivery_note: "Free delivery in Mumbai",
+      store_delivery_note: null,
+      store_delivery_fee: "0.00",
+      store_free_delivery_above: null,
     });
+
+    // Delivery charge: a flat fee, free from an order subtotal, and the note shoppers see.
+    const delivery = page.getByTestId("store-delivery-card");
+    await delivery.getByLabel(/Delivery fee/).fill("-5");
+    await expect(delivery.getByRole("alert")).toContainText("amount in rupees");
+    await expect(delivery.getByRole("button", { name: "Save delivery settings" })).toBeDisabled();
+    await delivery.getByLabel(/Delivery fee/).fill("40");
+    await delivery.getByLabel(/Free delivery on orders of/).fill("1000");
+    await delivery.getByLabel("Delivery Note").fill("Free delivery in Mumbai");
+    await expect(delivery.getByTestId("store-delivery-preview")).toContainText("Add");
+    await expect(delivery.getByTestId("store-delivery-gst-note")).toContainText("CA");
+    await expectNoHorizontalScroll(page, "settings / store delivery");
+    await delivery.getByRole("button", { name: "Save delivery settings" }).click();
+    await expect(toast(page, "Delivery settings saved")).toBeVisible();
+    expect(await storeSettings(owner.businessId)).toMatchObject({
+      store_delivery_note: "Free delivery in Mumbai",
+      store_delivery_fee: "40.00",
+      store_free_delivery_above: "1000.00",
+    });
+
+    // Payments at checkout: Razorpay is not connected, so Pay online cannot be switched on;
+    // Cash on Delivery is on by default. (Connecting Razorpay needs a real account, so no payment is made here.)
+    const payments = page.getByTestId("store-payments-card");
+    await expect(payments).toContainText("Razorpay is not connected");
+    await expect(payments.getByRole("switch", { name: "Accept online payments at checkout" })).toBeDisabled();
+    await expect(payments.getByRole("switch", { name: "Offer Cash on Delivery" })).toHaveAttribute("aria-checked", "true");
+    await expect(payments.getByRole("link", { name: "Connect Razorpay" })).toBeVisible();
+    await expectNoHorizontalScroll(page, "settings / store payments");
 
     // Items on the store.
     await expect(page.getByText(/^0 of \d+ items on your store$/)).toBeVisible();
@@ -168,6 +201,8 @@ test.describe("J12 online store", () => {
     await expect(cart.getByTestId("cart-tax")).toHaveText(rupees(134));
     await expect(cart.getByTestId("cart-total")).toHaveText(rupees(2184));
     await expect(cart.getByText("Free delivery in Mumbai")).toBeVisible();
+    // The subtotal reaches the free-delivery amount, so there is no delivery charge.
+    await expect(cart.getByTestId("cart-delivery")).toHaveText("Free delivery");
     await expectNoHorizontalScroll(store, "store cart");
     await cart.getByRole("button", { name: "Proceed to Checkout" }).click();
 
@@ -192,6 +227,13 @@ test.describe("J12 online store", () => {
     await store.getByLabel("Pincode").fill("400028");
     await store.getByLabel("Order Notes").fill("Ring the bell twice");
     await expect(store.getByTestId("checkout-total")).toHaveText(rupees(2184));
+    // Totals are laid out before paying: subtotal, GST, delivery, total.
+    await expect(store.getByTestId("checkout-subtotal")).toHaveText(rupees(2050));
+    await expect(store.getByTestId("checkout-tax")).toHaveText(rupees(134));
+    await expect(store.getByTestId("checkout-delivery")).toHaveText("Free delivery");
+    // This store has not switched on online payment, so Cash on Delivery is the one way to pay.
+    await expect(store.getByTestId("payment-choice")).toContainText("Cash on Delivery");
+    await expect(store.getByTestId("payment-choice")).not.toContainText("Pay online");
     await expectNoHorizontalScroll(store, "store checkout");
     await store.getByRole("button", { name: `Place Order · ${rupees(2184)}` }).click();
     await expect(store.getByRole("heading", { name: "Order Placed!" })).toBeVisible();
@@ -206,7 +248,12 @@ test.describe("J12 online store", () => {
     await store.getByRole("button", { name: `Add ${cashew.name}` }).click();
     await store.getByRole("button", { name: `Add one more ${cashew.name}` }).click();
     await store.getByRole("button", { name: "Cart with 2 items" }).click();
-    await expect(cart.getByTestId("cart-total")).toHaveText(rupees(1008));
+    // ₹900 is below the free-delivery amount: ₹40 delivery (+ ₹4.80 GST) is added, and the cart says how much more makes it free.
+    await expect(cart.getByTestId("cart-subtotal")).toHaveText(rupees(900));
+    await expect(cart.getByTestId("cart-delivery")).toHaveText(rupees(40));
+    await expect(cart.getByTestId("cart-delivery-hint")).toHaveText("Add ₹100 more for free delivery");
+    await expect(cart.getByTestId("cart-tax")).toHaveText(rupees(112.8));
+    await expect(cart.getByTestId("cart-total")).toHaveText(rupees(1052.8));
     await cart.getByRole("button", { name: "Proceed to Checkout" }).click();
     await store.getByLabel("Mobile number").fill(phone);
     await store.getByRole("button", { name: "Continue", exact: true }).click();
@@ -214,8 +261,11 @@ test.describe("J12 online store", () => {
     // customer), so the name is asked again.
     await store.getByLabel("Your name").fill("Meera Kulkarni");
     await store.getByRole("button", { name: "Continue to Checkout" }).click();
-    await store.getByRole("button", { name: `Place Order · ${rupees(1008)}` }).click();
+    await expect(store.getByTestId("checkout-delivery")).toHaveText(rupees(40));
+    await store.getByRole("button", { name: `Place Order · ${rupees(1052.8)}` }).click();
     await expect(store.getByRole("heading", { name: "Order Placed!" })).toBeVisible();
+    await expect(store.getByTestId("order-delivery")).toHaveText(rupees(40));
+    await expect(store.getByTestId("order-total")).toHaveText(rupees(1052.8));
     const order2 = (await store.getByTestId("order-number").innerText()).trim();
     expect(order2).not.toBe(order1);
     await shopper.close();
@@ -224,7 +274,7 @@ test.describe("J12 online store", () => {
     let orders = await storeOrdersOf(owner.businessId);
     expect(orders.map((o) => [o.order_number, o.status, o.total_amount, o.invoice_status])).toEqual([
       [order1, "pending", "2184.00", "unfulfilled"],
-      [order2, "pending", "1008.00", "unfulfilled"],
+      [order2, "pending", "1052.80", "unfulfilled"],
     ]);
     expect((await itemStock(mango.id)).total).toBe(8);
     expect((await itemStock(cashew.id)).total).toBe(17);
@@ -233,7 +283,7 @@ test.describe("J12 online store", () => {
     await openPage(page, "Store Orders");
     await expect(listRow(page, order1)).toContainText("Meera Kulkarni");
     await expect(listRow(page, order1)).toContainText(inr(2184));
-    await expect(listRow(page, order2)).toContainText(inr(1008));
+    await expect(listRow(page, order2)).toContainText(inr(1052.8));
     await listRow(page, order1).click();
     const detail1 = dialog(page, `Order ${order1}`);
     await expect(detail1).toContainText(`+91${phone}`.slice(-10));
@@ -244,6 +294,7 @@ test.describe("J12 online store", () => {
     await expect(detail1.getByRole("row").filter({ hasText: mango.name })).toContainText(inr(1680));
     await expect(detail1.getByRole("row").filter({ hasText: cashew.name })).toContainText(inr(504));
     await expect(detail1.getByTestId("store-order-address")).toHaveText("Flat 12, Shanti Kunj, Dadar West, Mumbai 400028");
+    await expect(detail1.getByTestId("store-order-payment")).toContainText("Cash on Delivery");
     await expect(detail1).toContainText("Ring the bell twice");
     await expectNoHorizontalScroll(page, "store order detail");
     await detail1.getByRole("button", { name: "Confirm Order" }).click();
@@ -254,6 +305,9 @@ test.describe("J12 online store", () => {
     // ── …and cancel order 2 ─────────────────────────────────────
     await listRow(page, order2).click();
     const detail2 = dialog(page, `Order ${order2}`);
+    // The delivery charge shows as its own line: ₹40.00 plus 12% GST, ₹44.80 in all.
+    await expect(detail2.getByTestId("store-order-delivery")).toContainText(inr(44.8));
+    await expect(detail2.getByTestId("store-order-delivery")).toContainText("12%");
     await detail2.getByRole("button", { name: "Cancel Order" }).click();
     const cancel = dialog(page, "Cancel Order");
     await cancel.getByLabel("Reason (optional)").fill("Customer changed their mind");
@@ -279,6 +333,7 @@ test.describe("J12 online store", () => {
         invoice_status: "sent",
         invoice_source: "online_store",
         subtotal: "2050.00",
+        additional_charges: "0.00",
         tax_amount: "134.00",
         invoice_total: "2184.00",
         party_name: "Walk-in Customer",
@@ -287,10 +342,12 @@ test.describe("J12 online store", () => {
         order_number: order2,
         status: "cancelled",
         cancellation_reason: "Customer changed their mind",
-        total_amount: "1008.00",
+        total_amount: "1052.80",
         invoice_status: "cancelled",
         subtotal: "900.00",
-        tax_amount: "108.00",
+        additional_charges: "40.00",
+        tax_amount: "112.80",
+        invoice_total: "1052.80",
       },
     ]);
     expect(orders[0].confirmed_at).not.toBeNull();

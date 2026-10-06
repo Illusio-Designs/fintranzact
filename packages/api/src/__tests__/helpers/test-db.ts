@@ -223,6 +223,7 @@ export async function truncateAllTables(): Promise<void> {
       chart_of_accounts,
       shipment_events,
       shipments,
+      store_order_refunds,
       store_orders,
       audit_log,
       stock_adjustments,

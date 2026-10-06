@@ -39,6 +39,7 @@ import {
   shipments,
   shipmentEvents,
   storeOrders,
+  storeOrderRefunds,
   ewayBills,
   ewayBillVehicleUpdates,
   auditLog,
@@ -579,6 +580,18 @@ export const TABLE_REGISTRY: TableRegistryEntry[] = [
   {
     tableName: "store_orders",
     drizzleTable: storeOrders,
+    redactedFields: [],
+    importable: true,
+    selfFkFields: [],
+    chunkSize: 5000,
+    recomputeOnImport: [],
+    scope: { type: "direct" },
+  },
+
+  // 30b. Refunds of paid store orders — depends on store orders and invoices (the credit note that books it).
+  {
+    tableName: "store_order_refunds",
+    drizzleTable: storeOrderRefunds,
     redactedFields: [],
     importable: true,
     selfFkFields: [],

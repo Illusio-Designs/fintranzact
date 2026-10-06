@@ -43,13 +43,16 @@ import { lineBatchDetails } from "./lib/batch-display.js";
 import { validateEnv } from "./lib/env.js";
 import { createCsrfMiddleware } from "./lib/csrf-middleware.js";
 import { assertAllowedStoreOrigin } from "./lib/store-origin.js";
-import { isStorePolicyKind } from "@fintranzact/shared";
+import { isStorePolicyKind, calcStoreDelivery } from "@fintranzact/shared";
 import { buildPublicPolicyPages, renderPolicyPageHtml } from "./lib/store-policies.js";
 import { registerExportRoute } from "./http/exportStream.js";
 import { registerImportRoute } from "./http/importStream.js";
 import { registerRazorpayWebhook } from "./http/razorpayWebhook.js";
 import { registerBillingInvoiceRoute } from "./http/billingInvoice.js";
 import { registerBusinessRazorpayWebhook } from "./http/businessRazorpayWebhook.js";
+import { registerStorePaymentRoutes } from "./http/storePayments.js";
+import { createStoreOrderPaymentLink, loadStorePaymentOptions } from "./lib/store-payments/order-payment.js";
+import { sendStoreOrderEmail } from "./lib/store-payments/emails.js";
 import { createSharePaymentLink, shareOnlinePaymentAvailable } from "./lib/razorpay/share.js";
 import { createFixedWindowLimiter } from "./lib/fixed-window-limiter.js";
 import { listPublicPlansJson } from "./lib/public-plans.js";
@@ -1459,6 +1462,8 @@ app.get("/store/:slug/catalog.json", async (c) => {
     storeAccentColor: businesses.storeAccentColor,
     storeMinOrderAmount: businesses.storeMinOrderAmount,
     storeDeliveryNote: businesses.storeDeliveryNote,
+    storeDeliveryFee: businesses.storeDeliveryFee,
+    storeFreeDeliveryAbove: businesses.storeFreeDeliveryAbove,
     storeWhatsappNumber: businesses.storeWhatsappNumber,
     storeAllowNegativeStock: businesses.storeAllowNegativeStock,
     currency: businesses.currency,
@@ -1610,14 +1615,23 @@ app.get("/store/:slug/catalog.json", async (c) => {
       return base;
     });
 
+  // Which ways to pay checkout offers: Cash on Delivery only when switched on, online only when
+  // switched on AND the business's own Razorpay connection is ready. No keys or ids, just two booleans.
+  const paymentOptions = await loadStorePaymentOptions(db, resolved.businessId);
+
   return c.json(
     {
       business: {
+        payments: paymentOptions,
         name: biz.name,
         tagline: biz.storeTagline,
         accentColor: biz.storeAccentColor,
         minOrderAmount: biz.storeMinOrderAmount,
         deliveryNote: biz.storeDeliveryNote,
+        // The flat delivery fee (rupees, before GST) and the subtotal at or above which it is free.
+        // The server prices the order from its own settings; these are for display only.
+        deliveryFee: biz.storeDeliveryFee,
+        freeDeliveryAbove: biz.storeFreeDeliveryAbove,
         whatsappNumber: biz.storeWhatsappNumber,
         currency: biz.currency,
         phone: biz.phone,
@@ -1663,6 +1677,8 @@ const POLICY_COLUMNS = {
   state: businesses.state,
   pincode: businesses.pincode,
   storeReturnWindowDays: businesses.storeReturnWindowDays,
+  storeDeliveryFee: businesses.storeDeliveryFee,
+  storeFreeDeliveryAbove: businesses.storeFreeDeliveryAbove,
   storePolicies: businesses.storePolicies,
 };
 
@@ -1713,6 +1729,16 @@ app.get("/store/:slug/policies/:kind", async (c) => {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer-when-downgrade",
   });
+});
+
+// Online payment of an order: GET /store/:slug/order/:orderId (status) and POST .../pay (Pay again).
+registerStorePaymentRoutes(app, {
+  clientIp: getClientIp,
+  checkIpRateLimit: checkStoreIpRateLimit,
+  assertOrigin: assertAllowedStoreOrigin,
+  resolveStoreSlug,
+  getStoreDb,
+  rateLimitDisabled,
 });
 
 // POST /store/:slug/identify — phone-first customer identification (public, no auth)
@@ -1822,6 +1848,7 @@ app.post("/store/:slug/order", async (c) => {
     deliveryNotes,
     notes: legacyNotes,
     items: orderItems,
+    paymentMethod: requestedPaymentMethod,
   } = body as Record<string, unknown>;
   // The storefront sends the customer's order notes as `deliveryNotes`
   // (apps/store api.ts); only `notes` was read, so they were dropped.
@@ -1844,6 +1871,9 @@ app.post("/store/:slug/order", async (c) => {
   }
   if (!Array.isArray(orderItems) || orderItems.length === 0) {
     return c.json({ error: "items array is required and must not be empty" }, 400);
+  }
+  if (requestedPaymentMethod !== undefined && requestedPaymentMethod !== "online" && requestedPaymentMethod !== "cod") {
+    return c.json({ error: "paymentMethod must be \"online\" or \"cod\"" }, 400);
   }
   for (const it of orderItems) {
     if (typeof it !== "object" || it === null) return c.json({ error: "Invalid item in items array" }, 400);
@@ -1882,6 +1912,8 @@ app.post("/store/:slug/order", async (c) => {
     name: businesses.name,
     storeEnabled: businesses.storeEnabled,
     storeMinOrderAmount: businesses.storeMinOrderAmount,
+    storeDeliveryFee: businesses.storeDeliveryFee,
+    storeFreeDeliveryAbove: businesses.storeFreeDeliveryAbove,
     invoicePrefix: businesses.invoicePrefix,
     nextInvoiceNumber: businesses.nextInvoiceNumber,
     storeOrderPrefix: businesses.storeOrderPrefix,
@@ -1892,6 +1924,19 @@ app.post("/store/:slug/order", async (c) => {
     .limit(1);
 
   if (!biz) return c.json({ error: "Store not found" }, 404);
+
+  // How the shopper pays. Checked against what the store offers right now, never against the
+  // client: Cash on Delivery only when switched on, online only with a ready Razorpay connection.
+  const paymentOptions = await loadStorePaymentOptions(db, resolved.businessId);
+  const paymentMethod: "online" | "cod" = requestedPaymentMethod === "online" ? "online"
+    : requestedPaymentMethod === "cod" ? "cod"
+    : paymentOptions.cod ? "cod" : "online";
+  if (paymentMethod === "online" && !paymentOptions.online) {
+    return c.json({ error: "Online payment is not available at this store. Please choose another way to pay." }, 400);
+  }
+  if (paymentMethod === "cod" && !paymentOptions.cod) {
+    return c.json({ error: "Cash on Delivery is not available at this store. Please pay online." }, 400);
+  }
 
   // Validate items exist and are store-enabled
   type OrderItemInput = { itemId: string; quantity: number; variantId?: string; selectedUnit?: string; conversionFactor?: number };
@@ -2007,7 +2052,7 @@ app.post("/store/:slug/order", async (c) => {
   // Customer — no state, so the place of supply is the store's own: intra-state,
   // CGST and SGST each rounded at half the rate (re-checked against the
   // walk-in party below).
-  const totalsFor = (intraState: boolean) => calcInvoiceTotals({
+  const totalsFor = (intraState: boolean, charges?: Array<{ amount: string }>) => calcInvoiceTotals({
     lineItems: lineItemInputs.map((li) => ({
       quantity: li.quantity,
       unitPrice: li.unitPrice,
@@ -2015,19 +2060,37 @@ app.post("/store/:slug/order", async (c) => {
       discountPercent: li.discountPercent,
       taxInclusive: li.taxInclusive,
     })),
+    charges,
     intraState,
   });
-  let totals = totalsFor(true);
+  const goodsTotals = totalsFor(true);
 
-  // Check minimum order amount
+  // Delivery charge: worked out here from the store's settings and the order's subtotal, never taken
+  // from the request. It goes on the invoice as an additional charge, which takes GST the way every
+  // invoice charge does (at the principal supply's rate: see chargeTaxRateFor), so the invoice stays
+  // valid and the order total, payment link, refunds and emails all follow it.
+  const delivery = calcStoreDelivery({
+    fee: biz.storeDeliveryFee,
+    freeAbove: biz.storeFreeDeliveryAbove,
+    subtotal: goodsTotals.subtotal,
+  });
+  const deliveryCharges = delivery.charge === "0.00" ? undefined : [{ amount: delivery.charge }];
+  let totals = totalsFor(true, deliveryCharges);
+
+  // Check minimum order amount (on the goods: delivery does not count towards it)
   if (biz.storeMinOrderAmount) {
     const minAmount = parseFloat(biz.storeMinOrderAmount);
-    const orderTotal = parseFloat(totals.total);
+    const orderTotal = parseFloat(goodsTotals.total);
     if (orderTotal < minAmount) {
       return c.json({
         error: `Minimum order amount is ${biz.currency} ${biz.storeMinOrderAmount}`,
       }, 400);
     }
+  }
+
+  // The smallest amount Razorpay takes is Rs 1.
+  if (paymentMethod === "online" && parseFloat(totals.total) < 1) {
+    return c.json({ error: "Online payment needs an order of at least Rs 1. Please choose Cash on Delivery or add more items." }, 400);
   }
 
   // Atomic transaction: increment counters, create invoice + line items + store order
@@ -2079,7 +2142,7 @@ app.post("/store/:slug/order", async (c) => {
       }
 
       const intraState = await documentIsIntraState(tx, resolved.businessId, walkinPartyId);
-      if (!intraState) totals = totalsFor(false);
+      if (!intraState) totals = totalsFor(false, deliveryCharges);
 
       // Create unfulfilled invoice (online store order awaiting fulfillment)
       const [invoice] = await tx.insert(invoices).values({
@@ -2093,7 +2156,9 @@ app.post("/store/:slug/order", async (c) => {
         subtotal: totals.subtotal,
         taxAmount: totals.taxTotal,
         discountAmount: "0",
-        additionalCharges: "0",
+        additionalCharges: totals.chargesTotal,
+        // The itemised charge, labelled the way the invoice screens show charges.
+        charges: deliveryCharges ? [{ label: "Delivery charge", amount: delivery.charge }] : null,
         roundOff: "0",
         totalAmount: totals.total,
         amountPaid: "0",
@@ -2184,16 +2249,43 @@ app.post("/store/:slug/order", async (c) => {
         totalAmount: totals.total,
         itemCount: lineItemInputs.length,
         source: "online_store",
+        paymentMethod,
       }).returning();
 
       return { order, invoice };
     });
 
+    // Online: the payment link is made after the order is saved, so a Razorpay hiccup never loses
+    // the order; the shopper can use "Pay again" on the order page.
+    let paymentUrl: string | null = null;
+    let paymentError: string | null = null;
+    if (paymentMethod === "online") {
+      try {
+        const link = await createStoreOrderPaymentLink(db, { businessId: resolved.businessId, slug, orderId: result.order.id });
+        if (link.ok) paymentUrl = link.url;
+        else paymentError = link.error;
+      } catch (err) {
+        logger.error({ err }, "[store/order] could not create the payment link");
+        paymentError = "Online payment is unavailable right now. You can pay again from your order page.";
+      }
+    }
+    // Best effort, after the response is decided: the order confirmation email.
+    void sendStoreOrderEmail(db, resolved.businessId, result.order.id, "placed");
+
     return c.json({
       orderId: result.order.id,
       orderNumber: result.order.orderNumber,
       totalAmount: result.order.totalAmount,
-      message: "Order placed successfully! The business will confirm shortly.",
+      subtotal: totals.subtotal,
+      deliveryCharge: totals.chargesTotal,
+      taxAmount: totals.taxTotal,
+      paymentMethod,
+      paymentStatus: "unpaid",
+      paymentUrl,
+      ...(paymentError ? { paymentError } : {}),
+      message: paymentMethod === "online"
+        ? "Order placed. Complete the payment to confirm it."
+        : "Order placed successfully! The business will confirm shortly.",
     }, 201);
   } catch (err) {
     logger.error({ err }, "[store/order] Failed to create order");

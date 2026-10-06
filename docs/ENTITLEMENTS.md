@@ -33,6 +33,7 @@ Operations note: [`TRIAL.md`](TRIAL.md). In short:
 - `source = "none"`: no trial was granted (a trial was already used for this email, phone or GSTIN). Stored as started and ended at the same instant, so it derives `trial_expired`; `billing.status.trialMessage` carries the clear message.
 - A grandfathered organisation never has a trial (`trial.active` false).
 - Caps are **enforced where a hook exists, otherwise exposed only**: no AI, payroll or Store Pro feature exists yet (see `ADDON_FEATURES[...].implemented`), so nothing consumes `trial.caps` today. The future features must read `getEntitlements(tenantId).trial.caps` (AI question counter against `aiQuestions`, employee creation against `payrollEmployees`) while `trial.active`, and `requireAddon` already passes during a trial because the add-ons are on. Plan limits during the trial are enforced (they all read `getEntitlements().limits`).
+- **Count limits follow the effective plan.** `limits` is the effective plan's (Business during a trial), so during a trial a Starter organisation (`maxApiKeys` 0) can create and use API keys, add more businesses and team members, and its audit window is unlimited. Every count limit goes through `getEntitlements`: `maxApiKeys` (`enforceApiKeyLimit`, `apiKeyUsable`), `maxBusinesses` (`enforceBusinessLimit` and `business.canCreate`), `maxTeamMembers`, `maxConcurrentSessions` and `auditRetentionDays`. `maxOwnedOrgs` is per user, across organisations: `ownedOrgLimit` (`enforceOrgCreationLimit`, `tenant.canCreateOrg`) takes the best EFFECTIVE plan over the organisations the user owns (a trialing organisation counts as Business). `business.canCreate` and `tenant.canCreateOrg` used to read the organisation's own plan and disagreed with the enforcing code during a trial; they now use the same source. When the trial ends (no subscription) the plan's own limits apply again with no special case: a Starter organisation's keys stop authenticating (`apiKeyUsable` is false for `maxApiKeys` 0, as for any plan without API access; the key rows are kept and work again on a plan with API access), new keys are refused (read-only), and a plan that has API access (Growth: 3) keeps authenticating existing keys, with the read-only gate refusing their writes. Covered by `integration/trial-count-limits.test.ts`.
 
 ## Error shape
 
@@ -129,7 +130,7 @@ with the message `E-invoicing is available on the Growth plan and above.` (`...o
 
 - **API keys, the CLI and the MCP server** all go through tRPC, so the same gate applies to them.
 - **REST routes** (`REST_ENTITLEMENT_POLICY`): none creates feature data except the signed-token backup import (`POST /api/selfImport/:tenantId`, a whole-business restore: deliberately not feature-gated, a restore must be able to bring back what the business had), the public store order (`onlineStore`, enforced), and the shipping webhook (carrier updates only). The data export route re-checks `dataExport`.
-- **Jobs**: the recurring scheduler checks `recurringInvoices`; the payment reminder job (`lib/payment-reminders.ts`, hourly, `PAYMENT_REMINDERS=off` disables it) is a basic feature on every plan, so it checks no plan flag, but it lists only `active` tenants and skips a read-only organisation (`tickTenant`: no reminder is sent and no history row is written, unlike the TDS reminder digest, which still goes to read-only organisations); the background IRN submission checks `eInvoicing`. There is no scheduled e-invoice retry job (retries are the `retryFailed` / `bulkRetry` mutations).
+- **Jobs**: the recurring scheduler checks `recurringInvoices`; the payment reminder job (`lib/payment-reminders.ts`, hourly, `PAYMENT_REMINDERS=off` disables it) is a basic feature on every plan, so it checks no plan flag, but it lists only `active` tenants and skips a read-only organisation (`tickTenant`: no reminder is sent and no history row is written, unlike the TDS reminder digest, which still goes to read-only organisations). A reminder that is sent carries the business's Razorpay payment link for the current balance when Razorpay is connected (`lib/razorpay/reminder-link.ts`: reuses the active link for an unchanged balance, otherwise `ensureInvoicePaymentLink`; a read-only organisation makes no new link; previews and listings only read, never create; any failure means no link and never blocks the reminder); the background IRN submission checks `eInvoicing`. There is no scheduled e-invoice retry job (retries are the `retryFailed` / `bulkRetry` mutations).
 
 ### Online payments (a business's own Razorpay account)
 
@@ -144,6 +145,20 @@ Not a plan flag: every plan has it. Each business pastes ITS OWN Razorpay keys (
 | `onlinePayments.disconnect` | exempt: revoking credentials is never refused |
 | `POST /api/share/:token/pay` | `public-neutral`: a read-only or suspended organisation answers the same neutral 404 and makes no new link; the share page does not offer Pay now (`onlinePayment.available` is false) |
 | `POST /webhooks/razorpay/business/:token` | `exempt-webhook`: a payment the customer has **already made** is recorded even while read-only (otherwise real money would go unbooked); a suspended organisation's token does not resolve (generic 401). Signature-verified with that business's own webhook secret, never open |
+
+### Online payments at store checkout
+
+Follows the `onlineStore` flag like the rest of the store, and reuses the business's own Razorpay connection above (the platform's `RAZORPAY_KEY_ID` never collects shopper money). No new plan flag. The decisions:
+
+| Surface | Policy |
+|---|---|
+| `store.updateSettings` with `storeOnlinePaymentsEnabled` / `storeCodEnabled` | gated like every settings change: needs the `onlineStore` plan (`enforceOnlineStore`), refused while read-only; `storeOnlinePaymentsEnabled: true` also needs the Razorpay connection with its webhook secret |
+| `store.getOrder`, `store.listOrders` (payment state, Razorpay reference) | readable like the rest of the store admin (`read:Store`) |
+| `store.refundOrder` | gated: **read-only blocks refunding** (it calls Razorpay and writes a credit note); owner/admin only (`manage:Store`) |
+| `store.cancelOrder` with `refund` | the same normal gate as cancelling; `refund: "full"` needs `manage:Store` |
+| `POST /store/:slug/order` (with `paymentMethod`) | unchanged `public-neutral` store order: `onlineStore` enforced (`storeServesTenant`); a read-only or suspended organisation answers the neutral 404 and takes no new order or payment |
+| `GET /store/:slug/order/:orderId`, `POST /store/:slug/order/:orderId/pay` | `public-neutral`: the same neutral 404 for a halted, read-only or suspended organisation, a store that is off, an unknown order and another business's order; **no new payment link is made** for a read-only organisation. Rate limited per IP (and 6 a minute per order); the POST passes the store Origin allow-list |
+| `POST /webhooks/razorpay/business/:token` (store orders) | `exempt-webhook`, unchanged: a payment the shopper has **already made** is recorded and the order marked paid even while read-only; a suspended organisation's token does not resolve |
 
 ### Clients
 

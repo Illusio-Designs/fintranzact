@@ -37,6 +37,7 @@ import { logger } from "../logger.js";
 import { loadPeriodLockState, lockViolation } from "../period-lock.js";
 import { loadInvoiceBalance } from "./payment-link.js";
 import { paiseToMoney } from "./client.js";
+import { handleStorePaymentFailed, markStoreOrderPaidTx, notifyStoreOrderPaid } from "../store-payments/order-paid.js";
 
 /** Audit entries written by the webhook have no signed-in user. */
 export const WEBHOOK_AUDIT_USER_ID = "00000000-0000-0000-0000-000000000000";
@@ -107,7 +108,7 @@ class Unrecordable extends Error {}
 type Tx = Parameters<Parameters<TenantDatabase["transaction"]>[0]>[0];
 
 /** The business's Razorpay gateway bank account (active config), if it keeps one. */
-async function findRazorpayGatewayAccount(tx: Tx, businessId: string): Promise<string | null> {
+export async function findRazorpayGatewayAccount(tx: Tx, businessId: string): Promise<string | null> {
   const [row] = await tx
     .select({ id: bankAccounts.id })
     .from(bankAccounts)
@@ -169,6 +170,8 @@ async function recordPayment(
 
   let outcome: WebhookOutcome;
   let auditMeta: Record<string, unknown> = {};
+  /** Set when this payment settled a store order (so the shopper is emailed once, after the commit). */
+  let paidStoreOrderId = null as string | null;
   try {
     outcome = await db.transaction(async (tx) => {
       // Dedupe first: the unique (business, razorpay payment id) row makes a
@@ -240,6 +243,8 @@ async function recordPayment(
       if (allocated) {
         await applyInvoicePayment(tx, businessId, p.invoiceId, allocation);
         await tx.insert(paymentAllocations).values({ paymentId: payment!.id, invoiceId: p.invoiceId, amount: allocation });
+        // A store order's invoice: its balance cleared means the order is paid (same transaction).
+        paidStoreOrderId = await markStoreOrderPaidTx(tx, businessId, p.invoiceId);
       }
 
       let chargeAmount: string | null = null;
@@ -327,6 +332,7 @@ async function recordPayment(
       entityId: outcome.paymentId,
       metadata: { source: "razorpay_webhook", ...auditMeta },
     });
+    if (paidStoreOrderId) await notifyStoreOrderPaid(db, businessId, paidStoreOrderId, amount);
   }
   return outcome;
 }
@@ -370,6 +376,10 @@ export async function processBusinessWebhookEvent(
     case "payment.failed": {
       // Nothing changes in the books; the customer can retry on the same link.
       logger.info({ businessId, errorCode: payment?.error_code ?? null }, "[razorpay] payment failed");
+      // A failed attempt on a store order's link: email the shopper the way to pay again (notes must name THIS business).
+      const failedNotes = { ...notesObject(link?.notes), ...notesObject(payment?.notes) };
+      const failedInvoiceId = await resolveInvoiceId(db, businessId, link?.id, failedNotes);
+      if (failedInvoiceId) await handleStorePaymentFailed(db, businessId, failedInvoiceId);
       return { result: "ignored", reason: "payment_failed" };
     }
     case "payment_link.expired":

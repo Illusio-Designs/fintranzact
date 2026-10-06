@@ -8,7 +8,7 @@
  */
 
 import { eq, and, gt, gte, isNull, count, sql, inArray, notInArray } from "drizzle-orm";
-import { controlDb, tenants, tenantMembers, invitations } from "@fintranzact/db";
+import { controlDb, tenantMembers, invitations } from "@fintranzact/db";
 import type { TenantDatabase } from "../trpc.js";
 import { businesses, recurringInvoiceRuns } from "@fintranzact/db";
 import { CA_ROLES, type PlanLimits } from "@fintranzact/shared";
@@ -55,30 +55,39 @@ export function effectiveOwnerPlan(ownedOrgs: Array<{ plan: string | null }>): s
 }
 
 /**
- * Enforce org creation limit.
- * Counts orgs the user owns and checks against the highest plan they have.
- * A user's effective plan is the best plan across all orgs they own.
+ * The organisations a user owns, each with the plan whose limits apply to it
+ * right now (Business while its Full Access Trial runs, otherwise its own
+ * plan), so the owned-organisation limit follows the same rules as every other
+ * count limit.
  */
-export async function enforceOrgCreationLimit(userId: string): Promise<void> {
-  // Count orgs this user owns
-  const ownedOrgs = await controlDb.select({ tenantId: tenantMembers.tenantId, plan: tenants.plan })
+export async function ownedOrgEffectivePlans(userId: string): Promise<Array<{ tenantId: string; plan: string }>> {
+  const owned = await controlDb.select({ tenantId: tenantMembers.tenantId })
     .from(tenantMembers)
-    .innerJoin(tenants, eq(tenants.id, tenantMembers.tenantId))
-    .where(and(
-      eq(tenantMembers.userId, userId),
-      eq(tenantMembers.role, "owner"),
-    ));
+    .where(and(eq(tenantMembers.userId, userId), eq(tenantMembers.role, "owner")));
+  return Promise.all(owned.map(async ({ tenantId }) => ({ tenantId, plan: (await getEntitlements(tenantId)).effectivePlan })));
+}
 
+/** The owned-organisation cap for a user: from the best effective plan across the organisations they own, or null when they own none. */
+export async function ownedOrgLimit(userId: string): Promise<{ owned: number; max: number } | null> {
+  const ownedOrgs = await ownedOrgEffectivePlans(userId);
   const bestPlan = effectiveOwnerPlan(ownedOrgs);
   // Owning no org yet: nothing to limit.
-  if (bestPlan === null) return;
+  if (bestPlan === null) return null;
+  return { owned: ownedOrgs.length, max: (await getLimits(bestPlan)).maxOwnedOrgs };
+}
 
-  const limits = await getLimits(bestPlan);
-  if (limits.maxOwnedOrgs === Infinity) return;
+/**
+ * Enforce org creation limit.
+ * Counts orgs the user owns and checks against the highest effective plan they
+ * have (an organisation in its Full Access Trial counts as Business).
+ */
+export async function enforceOrgCreationLimit(userId: string): Promise<void> {
+  const cap = await ownedOrgLimit(userId);
+  if (!cap || cap.max === Infinity) return;
 
-  if (ownedOrgs.length >= limits.maxOwnedOrgs) {
+  if (cap.owned >= cap.max) {
     throw limitError(
-      `Your plan allows up to ${limits.maxOwnedOrgs} organization${limits.maxOwnedOrgs === 1 ? "" : "s"}. Upgrade to create more.`,
+      `Your plan allows up to ${cap.max} organization${cap.max === 1 ? "" : "s"}. Upgrade to create more.`,
     );
   }
 }

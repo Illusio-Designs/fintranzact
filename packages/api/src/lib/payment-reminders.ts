@@ -46,6 +46,7 @@ import { getEntitlements } from "./entitlements.js";
 import { getSmsProvider, type SmsProvider } from "./sms.js";
 import { outstandingOnRow } from "./outstanding.js";
 import { logger } from "./logger.js";
+import { reminderPaymentLink } from "./razorpay/reminder-link.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TICK_MS = 60 * 60_000;
@@ -60,15 +61,26 @@ export interface ReminderDeps {
   /** The SMS provider, or null when SMS is not configured. */
   sms?: () => SmsProvider | null;
   /**
-   * The payment link to put in {{paymentLink}} for an invoice, or null. The
-   * payment-link feature plugs in here; until it does the placeholder is empty.
+   * The payment link to put in {{paymentLink}} for an invoice, or null (the
+   * placeholder, and its line, are then left out). The default is the
+   * business's Razorpay link for the current balance due (lib/razorpay/
+   * reminder-link.ts). `create` is true only when a reminder is about to be
+   * sent; previews and listings pass false and never make a link.
    */
-  paymentLink?: (db: TenantDatabase, businessId: string, invoiceId: string) => Promise<string | null>;
+  paymentLink?: (db: TenantDatabase, businessId: string, invoiceId: string, opts: { create: boolean }) => Promise<string | null>;
+  /** The organisation this run is for (multi-tenant): read-only ones make no links. */
+  tenantId?: string;
 }
 
-/** The hook the payment-link feature fills in; no link until then. */
+/** No link at all (tests, or callers that want none). */
 export async function noPaymentLink(): Promise<string | null> {
   return null;
+}
+
+/** The link for an invoice's reminder: never throws, never blocks the reminder. */
+async function resolvePaymentLink(db: TenantDatabase, deps: ReminderDeps, businessId: string, invoiceId: string, create: boolean): Promise<string | null> {
+  const fn = deps.paymentLink ?? ((d, b, i, o) => reminderPaymentLink(d, b, i, { ...o, tenantId: deps.tenantId }));
+  return fn(db, businessId, invoiceId, { create }).catch(() => null);
 }
 
 interface BusinessRow {
@@ -194,7 +206,7 @@ async function deliver(db: TenantDatabase, input: DeliverInput): Promise<{ outco
   }
 
   try {
-    const link = await (deps.paymentLink ?? noPaymentLink)(db, business.id, inv.id).catch(() => null);
+    const link = await resolvePaymentLink(db, deps, business.id, inv.id, true);
     const msg = buildMessage(business, inv, channel, now, link);
     if (channel === "email") {
       if (!inv.partyEmail) throw new Error("The customer has no email address");
@@ -366,7 +378,7 @@ export async function runPaymentReminders(now: Date = new Date(), deps: Reminder
           readOnly: async (id) => (await getEntitlements(id, now)).readOnly,
           getDb: getTenantDb,
           process: async (db) => {
-            const s = await processPaymentReminders(db, now, deps);
+            const s = await processPaymentReminders(db, now, { ...deps, tenantId: t.id });
             if (s.sent + s.failed > 0) logger.info({ tenantId: t.id, ...s }, "[payment-reminders] run");
           },
         });
@@ -507,7 +519,7 @@ export async function getInvoiceReminderInfo(
   let whatsappUrl: string | null = null;
   let whatsapp = blockedReason;
   if (!whatsapp) {
-    const link = await (deps.paymentLink ?? noPaymentLink)(db, businessId, invoiceId).catch(() => null);
+    const link = await resolvePaymentLink(db, deps, businessId, invoiceId, false);
     whatsappUrl = buildWhatsAppLink(inv.partyPhone, buildMessage(business, inv, "whatsapp", now, link).body);
     if (!whatsappUrl) whatsapp = "The customer has no mobile number.";
   }
@@ -609,7 +621,7 @@ export async function sendReminderNow(
   }
   let url: string | null = null;
   if (channel === "whatsapp") {
-    const link = await (deps.paymentLink ?? noPaymentLink)(db, input.businessId, input.invoiceId).catch(() => null);
+    const link = await resolvePaymentLink(db, deps, input.businessId, input.invoiceId, true);
     url = buildWhatsAppLink(inv.partyPhone, buildMessage(business, inv, "whatsapp", now, link).body);
   }
   return { channel, status: channel === "whatsapp" ? "link_opened" : "sent", url };

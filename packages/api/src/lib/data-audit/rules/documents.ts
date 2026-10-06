@@ -105,11 +105,13 @@ export const documentTables: TableCoverage[] = [
         `SELECT i.business_id, i.id::text, i.invoice_number || ': discount ' || i.discount_amount || ' on subtotal ' || i.subtotal
          FROM invoices i WHERE i.discount_amount::numeric < 0 OR i.discount_amount::numeric > i.subtotal::numeric + ${MONEY_TOLERANCE}`),
       rule("invoices", "amount-paid-matches-allocations", "error",
-        "amount_paid equals what live payments allocated to the document.",
-        PAYMENT_WRITERS,
+        "amount_paid equals what live payments allocated to the document (except a credit note that books a Razorpay refund of a store order: the refund itself marks it paid out, and the refunded amount comes off the invoice's paid amount and the payment's allocation).",
+        PAYMENT_WRITERS.concat("store.refundOrder / store.cancelOrder with a refund"),
         `SELECT i.business_id, i.id::text, i.invoice_number || ': amount_paid ' || i.amount_paid || ' vs allocations ' || COALESCE(p.paid, 0)
          FROM invoices i LEFT JOIN ${PAID_BY_INVOICE} p ON p.invoice_id = i.id
-         WHERE ABS(i.amount_paid::numeric - COALESCE(p.paid, 0)) > ${MONEY_TOLERANCE}`),
+         WHERE ABS(i.amount_paid::numeric - COALESCE(p.paid, 0)) > ${MONEY_TOLERANCE}
+           -- a credit note that books a Razorpay refund of a store order is itself marked as paid out
+           AND NOT EXISTS (SELECT 1 FROM store_order_refunds r WHERE r.credit_note_id = i.id)`),
       rule("invoices", "not-overpaid", "error",
         "amount_paid never exceeds total_amount (payment.create refuses an allocation above the balance; invoice.update must not shrink a total below what was paid).",
         PAYMENT_WRITERS.concat("invoice.update"),
@@ -247,7 +249,10 @@ export const documentTables: TableCoverage[] = [
         ["syncDocumentStock (invoice.create/update/updateStatus/delete, <docType>.create/updateStatus/delete)"],
         `WITH docs AS (
            SELECT i.id, i.business_id, i.invoice_number, i.document_type,
-                  CASE WHEN i.stock_mode = 'tracked' AND i.deleted_at IS NULL AND i.status <> 'cancelled' THEN ${stockDirection("i")} ELSE 0 END AS dir,
+                  -- a cancelled store order that was refunded keeps its invoice (a credit note reversed the sale) but its stock went back
+                  CASE WHEN i.stock_mode = 'tracked' AND i.deleted_at IS NULL AND i.status <> 'cancelled'
+                            AND NOT EXISTS (SELECT 1 FROM store_orders so WHERE so.invoice_id = i.id AND so.status = 'cancelled' AND so.refunded_amount::numeric > 0)
+                       THEN ${stockDirection("i")} ELSE 0 END AS dir,
                   CASE WHEN i.document_type = 'invoice' THEN 'INVOICE' ELSE 'DOCUMENT' END AS prefix
            FROM invoices i WHERE i.stock_mode <> 'legacy'
          ),
@@ -523,6 +528,34 @@ export const documentTables: TableCoverage[] = [
          FROM store_orders o
          WHERE (o.status IN ('confirmed', 'preparing', 'ready', 'delivered') AND o.confirmed_at IS NULL)
             OR (o.status = 'cancelled' AND o.cancelled_at IS NULL)`),
+      rule("store_orders", "payment-state", "error",
+        "An order that is paid or refunded has paid_at; the refunded amount never exceeds the order total and equals the refunds that went through Razorpay; payment_status says refunded only when the whole total came back.",
+        ["Razorpay business webhook (marks the order paid)", "store.refundOrder / cancelOrder with a refund"],
+        `SELECT o.business_id, o.id::text, o.order_number || ' ' || o.payment_status || ': refunded ' || o.refunded_amount || ' of ' || o.total_amount ||
+                ' (refund rows ' || COALESCE(r.done, 0) || ')'
+         FROM store_orders o
+         LEFT JOIN (SELECT store_order_id, SUM(amount_paise)::numeric / 100 AS done FROM store_order_refunds WHERE status = 'processed' GROUP BY store_order_id) r
+           ON r.store_order_id = o.id
+         WHERE (o.payment_status <> 'unpaid' AND o.paid_at IS NULL)
+            OR o.refunded_amount::numeric > o.total_amount::numeric + ${MONEY_TOLERANCE}
+            OR ABS(o.refunded_amount::numeric - COALESCE(r.done, 0)) > ${MONEY_TOLERANCE}
+            OR (o.payment_status = 'refunded' AND o.refunded_amount::numeric < o.total_amount::numeric - ${MONEY_TOLERANCE})
+            OR (o.payment_status = 'partially_refunded' AND (o.refunded_amount::numeric <= 0 OR o.refunded_amount::numeric >= o.total_amount::numeric - ${MONEY_TOLERANCE}))
+            OR (o.payment_status NOT IN ('unpaid', 'paid', 'partially_refunded', 'refunded'))`),
+    ],
+  },
+  {
+    table: "store_order_refunds",
+    rules: [
+      rule("store_order_refunds", "processed-is-booked", "error",
+        "A refund marked processed has its Razorpay refund id and the credit note that books it, and that note is against the order's own invoice.",
+        ["store.refundOrder / cancelOrder with a refund"],
+        `SELECT f.business_id, f.id::text, 'refund ' || f.amount_paise || ' paise: razorpay id ' || COALESCE(f.razorpay_refund_id, 'NULL') || ', note ' || COALESCE(f.credit_note_id::text, 'NULL')
+         FROM store_order_refunds f
+         JOIN store_orders o ON o.id = f.store_order_id
+         LEFT JOIN invoices n ON n.id = f.credit_note_id
+         WHERE f.status = 'processed'
+           AND (NULLIF(f.razorpay_refund_id, '') IS NULL OR n.id IS NULL OR n.reference_document_id IS DISTINCT FROM o.invoice_id OR n.business_id <> f.business_id)`),
     ],
   },
   {

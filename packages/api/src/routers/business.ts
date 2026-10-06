@@ -9,7 +9,6 @@ import {
   businessMembers,
   bankAccounts,
   controlDb,
-  tenants,
   tenantMembers,
   auditLog,
   parties,
@@ -27,7 +26,7 @@ import { router, tenantProcedure, viewerProcedure, adminProcedure, type TenantDa
 import { requireCan, caRoleMutationAllowed, caRoleRefusalMessage, mapDbRole } from "../lib/permissions.js";
 import { logAudit } from "../lib/audit.js";
 import { validateLogoDataUrl } from "../lib/validate-logo.js";
-import { countOrganisationBusinesses, enforceBusinessLimit, enforceDataExport, getLimits, auditWindowStart } from "../lib/plan-limits.js";
+import { countOrganisationBusinesses, enforceBusinessLimit, enforceDataExport, auditWindowStart } from "../lib/plan-limits.js";
 import { getEntitlements } from "../lib/entitlements.js";
 import { seedChartOfAccounts } from "../lib/coa-seed.js";
 import {
@@ -383,8 +382,8 @@ export const businessRouter = router({
 
   // Check if more businesses can be created in this tenant (plan limit).
   canCreate: tenantProcedure.query(async ({ ctx }) => {
-    const [row] = await controlDb.select({ plan: tenants.plan }).from(tenants).where(eq(tenants.id, ctx.tenantId)).limit(1);
-    const limits = await getLimits(row?.plan ?? "starter");
+    // The limits in force (Business-level during the Full Access Trial), the same ones enforceBusinessLimit applies.
+    const { limits } = await getEntitlements(ctx.tenantId);
     if (limits.maxBusinesses === Infinity) return true;
     const bizCount = await countOrganisationBusinesses(ctx.tenantId, ctx.db);
     return bizCount < limits.maxBusinesses;

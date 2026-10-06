@@ -24,6 +24,14 @@ export default defineConfig({
       "^/[^/]+/policies\\.json": { target: API_TARGET, changeOrigin: true, rewrite: (path) => `/store${path}` },
       "^/[^/]+/order$": { target: API_TARGET, changeOrigin: true, rewrite: (path) => `/store${path}` },
       "^/[^/]+/identify$": { target: API_TARGET, changeOrigin: true, rewrite: (path) => `/store${path}` },
+      // An order's status (JSON) shares its path with the order page the browser opens, so a
+      // browser navigation (Accept: text/html) is served by the app and only the fetch is proxied.
+      "^/[^/]+/order/[^/?]+(/pay)?(\\?.*)?$": {
+        target: API_TARGET,
+        changeOrigin: true,
+        rewrite: (path) => `/store${path}`,
+        bypass: (req) => (req.headers.accept?.includes("text/html") ? req.url : undefined),
+      },
     },
   },
 });

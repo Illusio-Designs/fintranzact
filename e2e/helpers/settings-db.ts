@@ -137,7 +137,8 @@ export async function tenantPlan(tenantId: string) {
 
 export async function storeSettings(businessId: string) {
   const [row] = await db()`
-    select store_enabled, store_slug, store_tagline, store_min_order_amount, store_delivery_note
+    select store_enabled, store_slug, store_tagline, store_min_order_amount, store_delivery_note,
+           store_delivery_fee, store_free_delivery_above
     from businesses where id = ${businessId}`;
   return row as {
     store_enabled: boolean;
@@ -145,6 +146,8 @@ export async function storeSettings(businessId: string) {
     store_tagline: string | null;
     store_min_order_amount: string | null;
     store_delivery_note: string | null;
+    store_delivery_fee: string;
+    store_free_delivery_above: string | null;
   };
 }
 
@@ -173,6 +176,7 @@ export type StoreOrderRow = {
   subtotal: string | null;
   tax_amount: string | null;
   invoice_total: string | null;
+  additional_charges: string | null;
   party_name: string | null;
 };
 
@@ -182,7 +186,7 @@ export async function storeOrdersOf(businessId: string) {
     select o.id, o.order_number, o.status, o.customer_name, o.customer_phone, o.delivery_city, o.delivery_pincode,
            o.total_amount, o.item_count, o.cancellation_reason, o.confirmed_at, o.cancelled_at, o.invoice_id,
            i.invoice_number, i.status as invoice_status, i.source as invoice_source, i.subtotal, i.tax_amount,
-           i.total_amount as invoice_total, p.name as party_name
+           i.total_amount as invoice_total, i.additional_charges, p.name as party_name
     from store_orders o
     left join invoices i on i.id = o.invoice_id
     left join parties p on p.id = i.party_id

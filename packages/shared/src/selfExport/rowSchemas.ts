@@ -142,6 +142,12 @@ export const businessRowSchema = z.object({
   storePolicies: z.unknown().nullable().optional(),
   // Added with payment reminders; older exports lack it.
   paymentReminderSettings: z.unknown().nullable().optional(),
+  // Added with online payments at store checkout; older exports lack them.
+  storeOnlinePaymentsEnabled: z.boolean().optional(),
+  storeCodEnabled: z.boolean().optional(),
+  // Added with the store delivery charge; older exports lack them.
+  storeDeliveryFee: money2.optional(),
+  storeFreeDeliveryAbove: money2Nullable.optional(),
   createdAt: isoDatetime,
   updatedAt: isoDatetime,
 });
@@ -733,6 +739,28 @@ export const storeOrderRowSchema = z.object({
   confirmedAt: isoDatetimeNullable,
   cancelledAt: isoDatetimeNullable,
   cancellationReason: z.string().nullable(),
+  // Added with online payments at store checkout; older exports lack them.
+  paymentMethod: z.string().optional(),
+  paymentStatus: z.string().optional(),
+  paidAt: isoDatetimeNullable.optional(),
+  refundedAmount: money2.optional(),
+  paymentFailedEmailedAt: isoDatetimeNullable.optional(),
+  createdAt: isoDatetime,
+  updatedAt: isoDatetime,
+});
+
+export const storeOrderRefundRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  storeOrderId: uuid,
+  razorpayPaymentId: z.string(),
+  razorpayRefundId: z.string().nullable(),
+  amountPaise: z.number().int(),
+  idempotencyKey: z.string(),
+  status: z.string(),
+  reason: z.string().nullable(),
+  creditNoteId: uuidNullable,
+  createdByUserId: uuidNullable,
   createdAt: isoDatetime,
   updatedAt: isoDatetime,
 });
@@ -976,6 +1004,7 @@ export const ROW_SCHEMAS: Record<string, z.ZodTypeAny> = {
   shipments: shipmentRowSchema,
   shipment_events: shipmentEventRowSchema,
   store_orders: storeOrderRowSchema,
+  store_order_refunds: storeOrderRefundRowSchema,
   eway_bills: ewayBillRowSchema,
   eway_bill_vehicle_updates: ewayBillVehicleUpdateRowSchema,
   audit_log: auditLogRowSchema,

@@ -12,6 +12,7 @@ import {
   STORE_POLICY_SHORT_TITLES,
   STORE_RETURN_WINDOW_DEFAULT_DAYS,
   composeBusinessAddress,
+  describeStoreDelivery,
   defaultPolicyTemplate,
   escapeHtml,
   isPolicyCustomised,
@@ -38,6 +39,9 @@ export interface PolicyBusinessRow {
   state: string | null;
   pincode: string | null;
   storeReturnWindowDays: number | null;
+  /** The delivery charge settings, for the shipping page; optional so older callers need not read them. */
+  storeDeliveryFee?: string | null;
+  storeFreeDeliveryAbove?: string | null;
   storePolicies: StoredStorePolicies | null;
 }
 
@@ -57,6 +61,7 @@ export function policyVariables(biz: PolicyBusinessRow): StorePolicyVariables {
     phone: biz.phone,
     email: biz.email,
     returnWindowDays: biz.storeReturnWindowDays ?? STORE_RETURN_WINDOW_DEFAULT_DAYS,
+    deliveryCharges: describeStoreDelivery(biz.storeDeliveryFee, biz.storeFreeDeliveryAbove),
   };
 }
 

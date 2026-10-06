@@ -125,6 +125,8 @@ export const HELP_NAV: HelpNavSection[] = [
       { label: "CA partners and your clients", slug: "team/ca-partners" },
       { label: "Online Store", slug: "online-store" },
       { label: "Store policy pages", slug: "online-store/store-policy-pages" },
+      { label: "Accept online payments in your store", slug: "online-store/accept-online-payments" },
+      { label: "Delivery charges in your store", slug: "online-store/delivery-charges" },
     ],
   },
   {

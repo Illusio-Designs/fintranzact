@@ -8,6 +8,8 @@ import { Icon } from "@/components/ui/Icon";
 import { Cancel01Icon, Loading03Icon, SquareLock02Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { PhoneInput } from "./PhoneInput";
 import { StorePoliciesCard } from "./StorePoliciesCard";
+import { StorePaymentsCard } from "./StorePaymentsCard";
+import { StoreDeliveryCard } from "./StoreDeliveryCard";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -73,7 +75,6 @@ function StoreSettingsCard() {
   const [tagline, setTagline] = useState<string | null>(null);
   const [whatsapp, setWhatsapp] = useState<string | null>(null);
   const [minOrder, setMinOrder] = useState<string | null>(null);
-  const [deliveryNote, setDeliveryNote] = useState<string | null>(null);
   const [returnWindow, setReturnWindow] = useState<string | null>(null);
   const [allowNegativeStock, setAllowNegativeStock] = useState<boolean | null>(null);
 
@@ -83,7 +84,6 @@ function StoreSettingsCard() {
   const effectiveTagline = tagline ?? settings?.storeTagline ?? "";
   const effectiveWhatsapp = whatsapp ?? settings?.storeWhatsappNumber ?? "";
   const effectiveMinOrder = minOrder ?? settings?.storeMinOrderAmount ?? "";
-  const effectiveDeliveryNote = deliveryNote ?? settings?.storeDeliveryNote ?? "";
   const effectiveReturnWindow = returnWindow ?? String(settings?.storeReturnWindowDays ?? 7);
   const returnWindowNumber = Number(effectiveReturnWindow);
   const returnWindowValid =
@@ -120,7 +120,6 @@ function StoreSettingsCard() {
     tagline !== null ||
     whatsapp !== null ||
     minOrder !== null ||
-    deliveryNote !== null ||
     returnWindow !== null ||
     allowNegativeStock !== null;
 
@@ -134,7 +133,6 @@ function StoreSettingsCard() {
       setTagline(null);
       setWhatsapp(null);
       setMinOrder(null);
-      setDeliveryNote(null);
       setReturnWindow(null);
       utils.store.getPolicies.invalidate();
       setAllowNegativeStock(null);
@@ -149,7 +147,6 @@ function StoreSettingsCard() {
       storeTagline: effectiveTagline || undefined,
       storeWhatsappNumber: effectiveWhatsapp || undefined,
       storeMinOrderAmount: effectiveMinOrder || undefined,
-      storeDeliveryNote: effectiveDeliveryNote || undefined,
       storeReturnWindowDays: returnWindowValid ? returnWindowNumber : undefined,
       storeAllowNegativeStock: effectiveAllowNegativeStock,
     });
@@ -276,19 +273,6 @@ function StoreSettingsCard() {
           onChange={(e) => setMinOrder(e.target.value)}
           placeholder="0"
           inputMode="decimal"
-        />
-      </div>
-
-      {/* Delivery note */}
-      <div className="mb-4">
-        <label className="label" htmlFor="store-delivery-note">Delivery Note</label>
-        <input
-          id="store-delivery-note"
-          className="input"
-          value={effectiveDeliveryNote}
-          onChange={(e) => setDeliveryNote(e.target.value)}
-          placeholder="Free delivery above ₹500"
-          maxLength={200}
         />
       </div>
 
@@ -634,6 +618,8 @@ export function StoreTab() {
   return (
     <div>
       <StoreSettingsCard />
+      <StorePaymentsCard />
+      <StoreDeliveryCard />
       <StoreItemsCard />
       {storeIsLive && <StorePreviewCard slug={settings.storeSlug!} />}
       <StorePoliciesCard storeBaseUrl={settings?.storeSlug ? buildStoreUrl(settings.storeSlug) : null} />

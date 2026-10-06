@@ -91,6 +91,16 @@ export default function StoreOrderDetailScreen() {
   const status = data.status as OrderStatus;
   const nextAction = STATUS_NEXT[status];
   const canCancel = status !== "delivered" && status !== "cancelled";
+  // Money received online on this order that has not been refunded. Cancelling it asks what to do
+  // with that money (refund through Razorpay, owner/admin), which is a web screen.
+  const hasOnlineMoney = Number(data.refundable) > 0;
+  const paidOnline = data.paymentMethod === "online";
+  const PAYMENT_STATUS: Record<string, string> = {
+    unpaid: "Unpaid",
+    paid: "Paid",
+    partially_refunded: "Partly refunded",
+    refunded: "Refunded",
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -160,6 +170,28 @@ export default function StoreOrderDetailScreen() {
             <Text style={styles.metaLabel}>Items</Text>
             <Text style={styles.metaValue}>{data.itemCount}</Text>
           </View>
+          <View style={styles.metaRow}>
+            <Text style={styles.metaLabel}>Payment</Text>
+            <Text style={styles.metaValue}>{paidOnline ? "Online (Razorpay)" : "Cash on Delivery"}</Text>
+          </View>
+          {paidOnline ? (
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Payment status</Text>
+              <Text style={styles.metaValue}>{PAYMENT_STATUS[data.paymentStatus] ?? data.paymentStatus}</Text>
+            </View>
+          ) : null}
+          {data.razorpayPayments && data.razorpayPayments.length > 0 ? (
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Razorpay payment</Text>
+              <Text style={styles.metaValue}>{data.razorpayPayments[0]!.razorpayPaymentId}</Text>
+            </View>
+          ) : null}
+          {Number(data.refundedAmount) > 0 ? (
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Refunded</Text>
+              <Text style={styles.metaValue}>{formatCurrency(data.refundedAmount)}</Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Line Items */}
@@ -184,6 +216,21 @@ export default function StoreOrderDetailScreen() {
                   <Text style={styles.lineItemAmount}>{formatCurrency(li.totalAmount)}</Text>
                 </View>
               ))}
+              {/* Delivery charge: its value plus the GST on it, like the item lines above. */}
+              {data.delivery && parseFloat(data.delivery.taxableValue) > 0 ? (
+                <View style={[styles.lineItem, styles.lineItemTopBorder]} testID="store-order-delivery">
+                  <View style={styles.lineItemLeft}>
+                    <Text style={styles.lineItemDesc}>Delivery charge</Text>
+                    <Text style={styles.lineItemMeta}>
+                      {formatCurrency(data.delivery.taxableValue)}
+                      {parseFloat(data.delivery.taxAmount) > 0 ? ` + ${parseFloat(data.delivery.rate)}% GST` : ""}
+                    </Text>
+                  </View>
+                  <Text style={styles.lineItemAmount}>
+                    {formatCurrency(parseFloat(data.delivery.taxableValue) + parseFloat(data.delivery.taxAmount))}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </>
         ) : null}
@@ -254,7 +301,7 @@ export default function StoreOrderDetailScreen() {
             </TouchableOpacity>
           )}
 
-          {canCancel && (
+          {canCancel && !hasOnlineMoney && (
             <TouchableOpacity
               style={[styles.actionBtn, styles.actionBtnDanger]}
               onPress={() => setShowCancelModal(true)}
@@ -263,6 +310,15 @@ export default function StoreOrderDetailScreen() {
               <Ionicons name="close-circle-outline" size={18} color={colors.danger} />
               <Text style={styles.actionBtnDangerText}>Cancel Order</Text>
             </TouchableOpacity>
+          )}
+
+          {canCancel && hasOnlineMoney && (
+            <View style={styles.completedBox}>
+              <Ionicons name="information-circle-outline" size={20} color={colors.textMuted} />
+              <Text style={styles.metaLabel}>
+                Paid online. To cancel it and refund the customer, open this order on the web.
+              </Text>
+            </View>
           )}
 
           {!canCancel && status !== "cancelled" && (
@@ -392,6 +448,7 @@ const useStyles = makeStyles((colors) => ({
     paddingVertical: 12,
   },
   lineItemBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
+  lineItemTopBorder: { borderTopWidth: 1, borderTopColor: colors.border },
   lineItemLeft: { flex: 1, gap: 2 },
   lineItemDesc: { fontSize: 13, fontWeight: "600", color: colors.textPrimary },
   lineItemNotes: { fontSize: 11, fontStyle: "italic", color: colors.textSecondary, marginTop: 2, lineHeight: 14 },

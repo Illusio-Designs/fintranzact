@@ -181,6 +181,11 @@ exceptions:
       - store.getPolicies
       - store.updatePolicy
       - store.resetPolicy
+      # Refunding an order paid online at store checkout (full or partial, through the business's
+      # own Razorpay, with a credit note) is an owner/admin money action done on the web order panel.
+      # Mobile shows the payment state and Razorpay reference and sends owners to the web to cancel
+      # and refund a paid order.
+      - store.refundOrder
       # --- Payment reminders ---
       # Reminder wording, schedule and channels are set up once on the web (Settings -> Payment reminders).
       # Mobile has the invoice reminder history, Send reminder now and the do-not-remind switch on the party.
@@ -492,6 +497,9 @@ exceptions:
       - store.getPolicies
       - store.updatePolicy
       - store.resetPolicy
+      # Refunding an order paid online at store checkout moves real money out of the business's
+      # Razorpay account; it is an owner/admin action done with the web order panel's confirmation step.
+      - store.refundOrder
       # --- Payment reminders ---
       # Reminders are sent by the scheduled job and from the invoice screen; settings are a web form.
       - reminder.getSettings
@@ -838,6 +846,9 @@ exceptions:
       - store.getPolicies
       - store.updatePolicy
       - store.resetPolicy
+      # Refunding an order paid online at store checkout moves real money out of the business's
+      # Razorpay account; it is an owner/admin action done with the web order panel's confirmation step.
+      - store.refundOrder
       # --- Payment reminders ---
       # Reminders are sent by the scheduled job and from the invoice screen; settings are a web form.
       - reminder.getSettings

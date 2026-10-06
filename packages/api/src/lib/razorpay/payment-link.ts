@@ -129,7 +129,13 @@ export async function getActivePaymentLink(db: TenantDatabase, businessId: strin
  */
 export async function ensureInvoicePaymentLink(
   db: TenantDatabase,
-  params: { businessId: string; invoiceId: string; shareUrl: string | null },
+  params: {
+    businessId: string;
+    invoiceId: string;
+    shareUrl: string | null;
+    /** Store orders: pay in full, on the shopper's own details, with the order named in the notes. */
+    storeOrder?: { orderId: string; orderNumber: string; customerName: string; customerEmail: string | null; customerPhone: string };
+  },
 ): Promise<{ link: ActivePaymentLink; created: boolean; supersededRazorpayLinkIds: string[] }> {
   const connection = await getConnectionRow(db, params.businessId);
   if (!connection) throw new PaymentLinkError("not_connected", "Online payments are not set up for this business.");
@@ -162,7 +168,9 @@ export async function ensureInvoicePaymentLink(
       };
     }
 
-    const [party] = await tx.select({ name: parties.name, email: parties.email, phone: parties.phone }).from(parties).where(eq(parties.id, inv.partyId)).limit(1);
+    const [partyRow] = await tx.select({ name: parties.name, email: parties.email, phone: parties.phone }).from(parties).where(eq(parties.id, inv.partyId)).limit(1);
+    const so = params.storeOrder;
+    const party = so ? { name: so.customerName, email: so.customerEmail, phone: so.customerPhone } : partyRow;
     const [biz] = await tx.select({ name: businesses.name }).from(businesses).where(eq(businesses.id, params.businessId)).limit(1);
     const [{ n }] = await tx
       .select({ n: sql<number>`count(*)::int` })
@@ -175,11 +183,19 @@ export async function ensureInvoicePaymentLink(
         amountPaise,
         // Razorpay wants a unique reference per link: the invoice number, then -2, -3 for re-issues.
         referenceId: n === 0 ? inv.invoiceNumber : `${inv.invoiceNumber}-${n + 1}`,
-        description: `Invoice ${inv.invoiceNumber}${biz?.name ? ` - ${biz.name}` : ""}`,
+        description: so
+          ? `Order ${so.orderNumber}${biz?.name ? ` - ${biz.name}` : ""}`
+          : `Invoice ${inv.invoiceNumber}${biz?.name ? ` - ${biz.name}` : ""}`,
         customer: { name: party?.name, email: razorpayEmail(party?.email), contact: razorpayContact(party?.phone) },
         callbackUrl: params.shareUrl,
-        notes: { invoice_id: inv.id, business_id: params.businessId, invoice_number: inv.invoiceNumber },
+        notes: {
+          invoice_id: inv.id,
+          business_id: params.businessId,
+          invoice_number: inv.invoiceNumber,
+          ...(so ? { store_order_id: so.orderId } : {}),
+        },
         firstMinPartialPaise: MIN_LINK_PAISE,
+        ...(so ? { acceptPartial: false } : {}),
       });
     } catch (err) {
       const e = err as { status?: number; description?: string };
