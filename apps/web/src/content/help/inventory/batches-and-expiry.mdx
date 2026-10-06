@@ -5,6 +5,8 @@ sidebar:
   order: 6
 ---
 
+import { ForMobile } from "@/components/help/mdx";
+
 Medicines, food, cosmetics, paints and chemicals are bought and sold in **batches** (also called lots). Each batch has its own number, expiry date and sometimes its own MRP. With batch tracking on, Fintranzact keeps stock **per batch**, so you always know which batch is on the shelf, how much of it is left, and when it expires.
 
 Batch tracking is switched on **item by item**. Items without it work exactly as they always have.
@@ -44,6 +46,17 @@ A sales return made from an invoice starts with the same batches as the invoice,
 
 Stock adjustments that **add** stock and opening stock also record a batch (see below).
 
+<ForMobile>
+**On the mobile app.** The same batch fields appear on **purchase invoices**, **goods receipts** (**More** → **Goods receipts**), **sales returns** and when you edit a purchase invoice. Tap an item that tracks batches and a **Batch** block opens under its name:
+
+- Type the **Batch no.** (required). Existing batches of the item are suggested as chips under the field; tap one to use it and fill in its dates.
+- Pick the **Expiry** date (required when the item tracks expiry, and then marked with an asterisk) and, if you like, the **Mfg date**. An expiry in the past shows **This batch has already expired**; one within 30 days shows a near-expiry warning with the days left.
+- The app checks the batch before it saves: a missing batch number, a missing expiry date or an expiry before the manufacturing date stops the save and tells you which item.
+- A sales return made from an invoice, and an invoice you are editing, start with the batch already saved on each line. Leave it to keep the batch; type another number to change it.
+
+If your plan doesn't include batch tracking, the line shows a plan notice instead of the batch fields and the app sends no batch details. Batch MRP isn't offered on mobile; use the web app for it.
+</ForMobile>
+
 ## Stock going out: first expiry, first out
 
 On a **sale invoice**, **POS bill**, **sales delivery challan** or **purchase return**, each line of a batch-tracked item shows a **Batch** picker:
@@ -69,6 +82,12 @@ When no batch is picked and the unexpired batches together don't cover the quant
 
 - with the **Block** setting, the bill is refused ("Not enough stock of … in unexpired batches");
 - with **Warn** or **Allow**, the rest comes out of the item's stock that isn't in any batch, which can go below zero like any other stock.
+
+<ForMobile>
+**On the mobile app.** Lines of batch-tracked items on a **sales invoice** (new or being edited) and a **sales delivery challan** show a **Batch** block with a picker. It starts on **Earliest expiry first** and previews how the quantity would be split, for example *B2 × 5, A1 × 2*. Tap it to choose a specific batch: each one lists its expiry, a red **Expired** or amber **days left** badge, and how much is left. A batch holding less than the line needs is greyed out, and an expired batch stays blocked until you switch on **Allow expired**. When you edit an invoice, the batch it already took stock from is listed with the quantity the invoice itself holds counted as available again.
+
+If your plan doesn't include batch tracking, the line says *Batches are picked for you, earliest expiry first.* and the server takes the earliest-expiry stock itself.
+</ForMobile>
 
 ## Editing, cancelling and deleting
 

@@ -2562,6 +2562,28 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-07-mobile-grn-batches",
+    updates: [
+      {
+        // Built on mobile: a Goods Receipts screen (More > Goods receipts) with a
+        // list, a detail view (items with batch and expiry, mark sent, convert to
+        // a purchase invoice) and a create form with supplier, receiving date and
+        // item lines carrying the inward batch fields. Batch fields on invoice
+        // edit (sale lines get the picker on the batch they were sold from,
+        // purchase lines the saved batch number and dates) and on sales return
+        // lines (the batch the goods were sold from, or one typed in). Everything
+        // follows the batchesExpiry plan flag. Not built: purchase order link,
+        // rejected and free quantities on a mobile GRN, batch MRP entry, and the
+        // batch-wise stock report, so the inventoryReports.batchStock parity
+        // exception stays and "Remove matching parity exceptions" is not ticked.
+        // Not run on a device or emulator when this was written.
+        title: "Batch fields in the mobile app",
+        status: "in_progress",
+        done: ["Batch and expiry fields on mobile purchase/GRN lines"],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

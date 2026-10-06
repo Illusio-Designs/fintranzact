@@ -29,6 +29,7 @@ const ALL_ITEMS: MenuItem[] = [
   { label: "Expenses", icon: "wallet-outline", route: "/(more)/expenses", group: "Money" },
   { label: "Cash & bank", icon: "business-outline", route: "/(more)/bank", group: "Money" },
   { label: "Stock items", icon: "cube-outline", route: "/(items)", group: "Stock & orders" },
+  { label: "Goods receipts", icon: "download-outline", route: "/(more)/goods-receipts", group: "Stock & orders" },
   { label: "Store orders", icon: "bag-handle-outline", route: "/(more)/store-orders", group: "Stock & orders" },
   { label: "Shipments", icon: "boat-outline", route: "/(more)/shipments", group: "Stock & orders" },
   { label: "GST returns", icon: "pie-chart-outline", route: "/(more)/gst", group: "Tax & reports" },

@@ -12,6 +12,7 @@ export default function MoreLayout() {
       <Stack.Screen name="quotations" />
       <Stack.Screen name="credit-notes" />
       <Stack.Screen name="delivery-challans" />
+      <Stack.Screen name="goods-receipts" />
       <Stack.Screen name="proforma-invoices" />
       <Stack.Screen name="sales-returns" />
       <Stack.Screen name="store-orders" />

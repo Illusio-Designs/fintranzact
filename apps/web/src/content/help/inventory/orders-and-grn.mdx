@@ -5,7 +5,7 @@ sidebar:
   order: 11
 ---
 
-import { ForBusiness } from "@/components/help/mdx";
+import { ForBusiness, ForMobile } from "@/components/help/mdx";
 
 Orders let you record what a customer has asked for, or what you've asked a supplier for, and then track how much is still to be delivered or received. **Goods receipt notes (GRN)** and **delivery challans** record goods physically arriving or leaving, before the bill.
 
@@ -23,6 +23,18 @@ All four are in the sidebar under **Vouchers**: **Sales Orders**, **Delivery Cha
 Orders never move stock. Stock moves when the goods do: on the challan or GRN, or on the invoice if you bill an order directly. An invoice made from a challan or GRN does **not** move stock again, since the goods have already moved. See [How Stock Moves](/help/inventory/how-stock-moves).
 
 On orders, the date field is called **Delivery by**.
+
+<ForMobile>
+**Goods receipts on the mobile app.** Tap **More** → **Goods receipts**. The list shows each GRN's number, supplier, date, total and status, with search and **Draft**, **Sent** and **Cancelled** filters, and the **+** button starts a new one:
+
+1. Tap **Select supplier...** and pick the supplier.
+2. Set the **Receiving Date**.
+3. Under **Items (Received)**, tap **Add Item** for each line and enter the quantity received, the rate, GST % and discount %. The supplier price of the item is filled in for you.
+4. For an item that tracks batches, fill in the **Batch** block: **Batch no.** (required), **Expiry** (required when the item tracks expiry) and **Mfg date**. See [Batches and Expiry](/help/inventory/batches-and-expiry).
+5. Tap **Create Goods Receipt**. The stock comes in straight away.
+
+Tap a GRN to see its items with their batches and expiry, mark a draft as sent, or tap **Convert to Purchase Invoice** to bill what was received; the invoice doesn't add the stock again. The mobile app records a GRN from scratch into your default warehouse. Linking it to a purchase order, accepted and rejected quantities, free goods, purchase orders themselves and the pending-quantity tracking are in the web app.
+</ForMobile>
 
 ## Sales order to delivery
 
