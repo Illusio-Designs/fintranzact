@@ -114,9 +114,18 @@ export interface CreatePaymentLinkParams {
   notes: Record<string, string>;
   /** Smallest part-payment the customer may make, in paise. */
   firstMinPartialPaise: number;
+  /** Whether the customer may pay less than the whole amount. Defaults to on when the amount allows it; store orders are always paid in full. */
+  acceptPartial?: boolean;
 }
 
-async function call<T>(creds: RazorpayCredentials, method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+export interface RazorpayRefund {
+  id: string;
+  payment_id?: string;
+  amount: number;
+  status?: string;
+}
+
+async function call<T>(creds: RazorpayCredentials, method: "GET" | "POST", path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<T> {
   let res: Response;
   try {
     res = await fetchImpl(RAZORPAY_API + path, {
@@ -124,6 +133,7 @@ async function call<T>(creds: RazorpayCredentials, method: "GET" | "POST", path:
       headers: {
         Authorization: "Basic " + Buffer.from(`${creds.keyId}:${creds.keySecret}`).toString("base64"),
         "Content-Type": "application/json",
+        ...(extraHeaders ?? {}),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -157,11 +167,12 @@ export const razorpay = {
     if (p.customer.name) customer.name = p.customer.name.slice(0, 100);
     if (p.customer.email) customer.email = p.customer.email;
     if (p.customer.contact) customer.contact = p.customer.contact;
+    const partial = (p.acceptPartial ?? true) && p.amountPaise > p.firstMinPartialPaise;
     return call<RazorpayPaymentLink>(creds, "POST", "/payment_links", {
       amount: p.amountPaise,
       currency: "INR",
-      accept_partial: p.amountPaise > p.firstMinPartialPaise,
-      ...(p.amountPaise > p.firstMinPartialPaise ? { first_min_partial_amount: p.firstMinPartialPaise } : {}),
+      accept_partial: partial,
+      ...(partial ? { first_min_partial_amount: p.firstMinPartialPaise } : {}),
       reference_id: p.referenceId.slice(0, 40),
       description: p.description.slice(0, 2000),
       customer,
@@ -175,6 +186,25 @@ export const razorpay = {
 
   async cancelPaymentLink(creds: RazorpayCredentials, linkId: string): Promise<void> {
     await call(creds, "POST", `/payment_links/${encodeURIComponent(linkId)}/cancel`);
+  },
+
+  /**
+   * Refund all or part of a captured payment. The idempotency key is sent as
+   * Razorpay's X-Refund-Idempotency header, so a retried call returns the
+   * first refund instead of making another.
+   */
+  refundPayment(
+    creds: RazorpayCredentials,
+    paymentId: string,
+    p: { amountPaise: number; receipt: string; idempotencyKey: string; notes?: Record<string, string> },
+  ): Promise<RazorpayRefund> {
+    return call<RazorpayRefund>(
+      creds,
+      "POST",
+      `/payments/${encodeURIComponent(paymentId)}/refund`,
+      { amount: p.amountPaise, speed: "normal", receipt: p.receipt.slice(0, 40), ...(p.notes ? { notes: p.notes } : {}) },
+      { "X-Refund-Idempotency": p.idempotencyKey },
+    );
   },
 };
 

@@ -80,6 +80,12 @@ export const REST_ENTITLEMENT_POLICY: Readonly<Record<string, RestEntitlementPol
   // suspended organisation makes no new links and answers the same neutral 404.
   "POST /api/share/:token/pay": "public-neutral",
   "GET /store/:slug/logo": "public-neutral",
+  // Online payment of a store order: the order's status, and Pay again (makes a Razorpay payment link
+  // on the business's own account). Same neutral 404 as the rest of /store/*: a halted, read-only or
+  // suspended organisation, a store that is off and an unknown order all look alike; no new link is
+  // made for them. A payment already made is still recorded by the business webhook (exempt-webhook).
+  "GET /store/:slug/order/:orderId": "public-neutral",
+  "POST /store/:slug/order/:orderId/pay": "public-neutral",
   "GET /store/:slug/catalog.json": "public-neutral",
   "GET /store/:slug/policies.json": "public-neutral",
   "GET /store/:slug/policies/:kind": "public-neutral",

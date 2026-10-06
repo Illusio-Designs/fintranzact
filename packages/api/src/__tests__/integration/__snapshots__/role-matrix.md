@@ -472,6 +472,7 @@
 | store.getSettings | query | authorized | read:Store | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | store.listOrders | query | authorized | read:Store | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | store.listStoreItems | query | authorized | read:Store | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| store.refundOrder | mutation | authorized | manage:Store | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | store.resetPolicy | mutation | authorized | manage:Store | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | store.updateItemStoreSettings | mutation | authorized | update:Store | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
 | store.updateOrderStatus | mutation | authorized | update:Store | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |

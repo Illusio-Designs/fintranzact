@@ -1,7 +1,8 @@
 import { eq, and, ilike, sql, desc, gte, lte, inArray, or, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { businesses, items, itemVariants, storeOrders, invoices, invoiceItems } from "@fintranzact/db";
+import { businesses, items, itemVariants, storeOrders, storeOrderRefunds, invoices, invoiceItems, razorpayPayments, invoicePaymentLinks } from "@fintranzact/db";
 import {
+  money,
   paginationSchema,
   STORE_POLICY_KINDS,
   STORE_POLICY_MAX_LENGTH,
@@ -15,6 +16,10 @@ import { requireCan } from "../lib/permissions.js";
 import { escapeLike } from "../lib/escape-like.js";
 import { enforceOnlineStore } from "../lib/plan-limits.js";
 import { syncDocumentStock } from "../lib/inventory-service.js";
+import { recomputeInvoiceStatus } from "../lib/invoice-status.js";
+import { decryptConnection, getConnectionRow } from "../lib/razorpay/connection.js";
+import { razorpay, paiseToMoney } from "../lib/razorpay/client.js";
+import { RefundError, refundStoreOrder, refundableForOrder, restoreInvoiceStock, type RefundContext } from "../lib/store-payments/refund.js";
 
 // ── Validators ─────────────────────────────────────────────────
 
@@ -34,6 +39,9 @@ const updateStoreSettingsSchema = z.object({
   storeAllowNegativeStock: z.boolean().optional(),
   storeOrderPrefix: z.string().min(1).max(10).optional(),
   storeReturnWindowDays: z.number().int().min(1).max(STORE_RETURN_WINDOW_MAX_DAYS).optional(),
+  // Checkout payment choices (online needs the business's Razorpay connection).
+  storeOnlinePaymentsEnabled: z.boolean().optional(),
+  storeCodEnabled: z.boolean().optional(),
 });
 
 const policyKindSchema = z.enum(STORE_POLICY_KINDS);
@@ -56,6 +64,38 @@ const policyBusinessColumns = {
 };
 
 const storeOrderStatuses = ["pending", "confirmed", "preparing", "ready", "delivered", "cancelled"] as const;
+
+/** A refund refusal as the tRPC error the owner sees. */
+function refundErrorToTrpc(err: unknown): unknown {
+  if (!(err instanceof RefundError)) return err;
+  const code = err.code === "BAD_GATEWAY" ? "BAD_GATEWAY"
+    : err.code === "NOT_FOUND" ? "NOT_FOUND"
+    : err.code === "CONFLICT" ? "CONFLICT"
+    : err.code === "PRECONDITION_FAILED" ? "PRECONDITION_FAILED"
+    : "BAD_REQUEST";
+  return new TRPCError({ code, message: err.message });
+}
+
+/** Stop the order's live Razorpay payment links so a cancelled order cannot be paid (best effort). */
+async function cancelOrderPaymentLinks(db: Parameters<typeof getConnectionRow>[0], businessId: string, invoiceId: string): Promise<void> {
+  const active = await db
+    .select({ id: invoicePaymentLinks.id, razorpayLinkId: invoicePaymentLinks.razorpayLinkId })
+    .from(invoicePaymentLinks)
+    .where(and(
+      eq(invoicePaymentLinks.businessId, businessId),
+      eq(invoicePaymentLinks.invoiceId, invoiceId),
+      inArray(invoicePaymentLinks.status, ["created", "partially_paid"]),
+    ));
+  if (active.length === 0) return;
+  await db
+    .update(invoicePaymentLinks)
+    .set({ status: "cancelled", updatedAt: new Date() })
+    .where(inArray(invoicePaymentLinks.id, active.map((l) => l.id)));
+  const conn = await getConnectionRow(db, businessId);
+  if (!conn) return;
+  const creds = decryptConnection(conn);
+  await Promise.allSettled(active.map((l) => razorpay.cancelPaymentLink(creds, l.razorpayLinkId)));
+}
 
 // ── Router ─────────────────────────────────────────────────────
 
@@ -90,6 +130,8 @@ export const storeRouter = router({
       storeAllowNegativeStock: businesses.storeAllowNegativeStock,
       storeOrderPrefix: businesses.storeOrderPrefix,
       storeReturnWindowDays: businesses.storeReturnWindowDays,
+      storeOnlinePaymentsEnabled: businesses.storeOnlinePaymentsEnabled,
+      storeCodEnabled: businesses.storeCodEnabled,
       nextStoreOrderNumber: businesses.nextStoreOrderNumber,
       currency: businesses.currency,
     }).from(businesses)
@@ -97,7 +139,19 @@ export const storeRouter = router({
       .limit(1);
 
     if (!biz) throw new TRPCError({ code: "NOT_FOUND", message: "Business not found" });
-    return biz;
+    // The business's Razorpay connection (Settings, Online payments) as the store settings need it:
+    // no keys, only whether shoppers can really be offered online payment.
+    const conn = await getConnectionRow(ctx.db, ctx.businessId);
+    return {
+      ...biz,
+      payments: {
+        connected: !!conn,
+        hasWebhookSecret: !!conn?.webhookSecretEncrypted,
+        mode: conn ? (conn.mode === "live" ? ("live" as const) : ("test" as const)) : null,
+        /** Online payment is switched on AND ready: shoppers see "Pay online". */
+        onlineActive: biz.storeOnlinePaymentsEnabled && !!conn?.webhookSecretEncrypted,
+      },
+    };
   }),
 
   updateSettings: adminProcedure
@@ -107,6 +161,32 @@ export const storeRouter = router({
       // Turning the store off is always allowed; anything else needs a plan with the store.
       const onlyDisabling = input.storeEnabled === false && Object.keys(input).every((k) => k === "storeEnabled");
       if (!onlyDisabling) await enforceOnlineStore(ctx.tenantId);
+
+      // Payment choices: online needs the business's own Razorpay connection (with its webhook
+      // secret, or a payment could never be recorded); a store must keep one way to pay.
+      const touchesPayments = input.storeOnlinePaymentsEnabled !== undefined || input.storeCodEnabled !== undefined || input.storeEnabled === true;
+      if (touchesPayments) {
+        const [cur] = await ctx.db.select({
+          online: businesses.storeOnlinePaymentsEnabled,
+          cod: businesses.storeCodEnabled,
+          enabled: businesses.storeEnabled,
+        }).from(businesses).where(eq(businesses.id, ctx.businessId)).limit(1);
+        const online = input.storeOnlinePaymentsEnabled ?? cur?.online ?? false;
+        const cod = input.storeCodEnabled ?? cur?.cod ?? true;
+        const enabled = input.storeEnabled ?? cur?.enabled ?? false;
+        if (input.storeOnlinePaymentsEnabled === true) {
+          const conn = await getConnectionRow(ctx.db, ctx.businessId);
+          if (!conn) {
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Connect your Razorpay account in Settings, Online payments first." });
+          }
+          if (!conn.webhookSecretEncrypted) {
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Add your Razorpay webhook secret in Settings, Online payments first. Without it a payment cannot be recorded." });
+          }
+        }
+        if (enabled && !online && !cod) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Switch on at least one way to pay: online payment or Cash on Delivery." });
+        }
+      }
 
       // Validate slug uniqueness within this tenant's businesses
       if (input.storeSlug) {
@@ -144,6 +224,8 @@ export const storeRouter = router({
           storeAllowNegativeStock: businesses.storeAllowNegativeStock,
           storeOrderPrefix: businesses.storeOrderPrefix,
           storeReturnWindowDays: businesses.storeReturnWindowDays,
+          storeOnlinePaymentsEnabled: businesses.storeOnlinePaymentsEnabled,
+          storeCodEnabled: businesses.storeCodEnabled,
         });
 
       return updated;
@@ -400,6 +482,8 @@ export const storeRouter = router({
           totalAmount: storeOrders.totalAmount,
           itemCount: storeOrders.itemCount,
           invoiceId: storeOrders.invoiceId,
+          paymentMethod: storeOrders.paymentMethod,
+          paymentStatus: storeOrders.paymentStatus,
           createdAt: storeOrders.createdAt,
           confirmedAt: storeOrders.confirmedAt,
         }).from(storeOrders)
@@ -449,7 +533,37 @@ export const storeRouter = router({
         }
       }
 
-      return { ...order, invoice, lineItems };
+      // Online payment: the Razorpay payments and refunds behind this order, and what can still be refunded.
+      let razorpayPaymentRows: Array<{ razorpayPaymentId: string; amount: string; fee: string | null; method: string | null; createdAt: Date }> = [];
+      let refunds: Array<{ id: string; amount: string; status: string; razorpayRefundId: string | null; creditNoteId: string | null; reason: string | null; createdAt: Date }> = [];
+      let refundable = "0.00";
+      if (order.invoiceId) {
+        const rows = await ctx.db.select().from(razorpayPayments)
+          .where(and(eq(razorpayPayments.businessId, ctx.businessId), eq(razorpayPayments.invoiceId, order.invoiceId)))
+          .orderBy(razorpayPayments.createdAt);
+        razorpayPaymentRows = rows.map((r) => ({
+          razorpayPaymentId: r.razorpayPaymentId,
+          amount: paiseToMoney(r.amountPaise),
+          fee: r.feePaise === null ? null : paiseToMoney(r.feePaise),
+          method: r.method,
+          createdAt: r.createdAt,
+        }));
+        const refundRows = await ctx.db.select().from(storeOrderRefunds)
+          .where(and(eq(storeOrderRefunds.storeOrderId, order.id), eq(storeOrderRefunds.businessId, ctx.businessId)))
+          .orderBy(storeOrderRefunds.createdAt);
+        refunds = refundRows.map((r) => ({
+          id: r.id,
+          amount: paiseToMoney(r.amountPaise),
+          status: r.status,
+          razorpayRefundId: r.razorpayRefundId,
+          creditNoteId: r.creditNoteId,
+          reason: r.reason,
+          createdAt: r.createdAt,
+        }));
+        if (rows.length > 0) refundable = paiseToMoney((await refundableForOrder(ctx.db, ctx.businessId, order.invoiceId)).remainingPaise);
+      }
+
+      return { ...order, invoice, lineItems, razorpayPayments: razorpayPaymentRows, refunds, refundable };
     }),
 
   confirmOrder: memberProcedure
@@ -487,26 +601,82 @@ export const storeRouter = router({
           await tx.update(invoices)
             .set({ status: "sent", updatedAt: new Date() })
             .where(eq(invoices.id, order.invoiceId));
+          // An order already paid online must not show as merely sent: work the status out from its payments.
+          await recomputeInvoiceStatus(tx, ctx.businessId, order.invoiceId);
         }
 
         return { success: true, orderId: input.orderId };
       });
     }),
 
+  /**
+   * Cancel an order. An order the shopper already paid online must say what
+   * happens to the money: `refund: "full"` refunds what is left through the
+   * business's Razorpay (credit note in the books, stock back, owner/admin
+   * only) and `refund: "none"` cancels and keeps the payment (refund it by
+   * hand). Anything else is cancelled as before.
+   */
   cancelOrder: memberProcedure
     .input(z.object({
       orderId: z.string().uuid(),
       reason: z.string().max(500).optional(),
+      refund: z.enum(["full", "none"]).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       requireCan(ctx.ability, "update", "Store");
 
-      return ctx.db.transaction(async (tx) => {
+      const [pre] = await ctx.db.select().from(storeOrders)
+        .where(and(eq(storeOrders.id, input.orderId), eq(storeOrders.businessId, ctx.businessId)))
+        .limit(1);
+      if (!pre) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
+      if (pre.status === "delivered" || pre.status === "cancelled") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: `Cannot cancel an order with status "${pre.status}"` });
+      }
+
+      // Money the shopper paid online and that has not been refunded yet.
+      const paidOnline = pre.paymentStatus !== "unpaid";
+      const hasRefunds = money.compare(pre.refundedAmount, "0") > 0;
+      const remaining = paidOnline && pre.invoiceId ? (await refundableForOrder(ctx.db, ctx.businessId, pre.invoiceId)).remainingPaise : 0;
+      if (remaining > 0 && !input.refund) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "This order was paid online. Choose whether to refund the payment (full) or keep it before cancelling.",
+        });
+      }
+      if (remaining > 0 && hasRefunds && input.refund === "none") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "This order was already partly refunded. Cancel it with a refund of the rest.",
+        });
+      }
+      const refundNow = input.refund === "full" && remaining > 0;
+      // A credit note (not a cancelled invoice) reverses the sale of an order that was refunded: the
+      // invoice stays, and the stock the order took goes back here.
+      const reversedByCreditNote = refundNow || hasRefunds;
+      let restockedByRefund = false;
+      if (refundNow) {
+        requireCan(ctx.ability, "manage", "Store");
+        try {
+          await refundStoreOrder(ctx as unknown as RefundContext, {
+            orderId: pre.id,
+            reason: input.reason ?? "Order cancelled",
+            // One key per order: a retried cancellation never refunds twice.
+            idempotencyKey: `cancel-${pre.id}`,
+            restock: true,
+          });
+          restockedByRefund = true;
+        } catch (err) {
+          throw refundErrorToTrpc(err);
+        }
+      }
+
+      const result = await ctx.db.transaction(async (tx) => {
         const [order] = await tx.select().from(storeOrders)
           .where(and(
             eq(storeOrders.id, input.orderId),
             eq(storeOrders.businessId, ctx.businessId),
           ))
+          .for("update")
           .limit(1);
 
         if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "Order not found" });
@@ -527,9 +697,13 @@ export const storeRouter = router({
           })
           .where(eq(storeOrders.id, input.orderId));
 
-        // Cancel linked invoice, and give back the stock checkout took out
-        // (as cancelling any document does).
-        if (order.invoiceId) {
+        if (order.invoiceId && reversedByCreditNote) {
+          // The credit note reversed the sale, so the invoice stays; its stock goes back
+          // (done with the refund, or here for an order already refunded in full).
+          if (!restockedByRefund) await restoreInvoiceStock(tx, ctx.businessId, order.invoiceId, ctx.user.id);
+        } else if (order.invoiceId) {
+          // Cancel linked invoice, and give back the stock checkout took out
+          // (as cancelling any document does).
           const [cancelled] = await tx.update(invoices)
             .set({ status: "cancelled", updatedAt: new Date() })
             .where(and(
@@ -548,8 +722,40 @@ export const storeRouter = router({
           }
         }
 
-        return { success: true, orderId: input.orderId };
+        return { success: true, orderId: input.orderId, invoiceId: order.invoiceId };
       });
+
+      // A cancelled order must not be payable: stop its live payment links on Razorpay (best effort).
+      if (result.invoiceId) await cancelOrderPaymentLinks(ctx.db, ctx.businessId, result.invoiceId);
+      return { success: result.success, orderId: result.orderId };
+    }),
+
+  /**
+   * Refund an online-paid order, in full or in part, through the business's
+   * own Razorpay account. Owner and admin only. The idempotency key makes a
+   * retry (a double click, a dropped connection) return the first result
+   * instead of refunding twice. Books a credit note against the order's invoice.
+   */
+  refundOrder: adminProcedure
+    .input(z.object({
+      orderId: z.string().uuid(),
+      /** Rupees, like "250.50". Omitted: everything still refundable. */
+      amount: z.string().regex(/^\d{1,13}(\.\d{1,2})?$/, "Enter the amount in rupees, like 250 or 250.50").optional(),
+      reason: z.string().trim().max(300).optional(),
+      idempotencyKey: z.string().min(8).max(64).regex(/^[A-Za-z0-9_-]+$/),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      requireCan(ctx.ability, "manage", "Store");
+      try {
+        return await refundStoreOrder(ctx as unknown as RefundContext, {
+          orderId: input.orderId,
+          amount: input.amount,
+          reason: input.reason,
+          idempotencyKey: input.idempotencyKey,
+        });
+      } catch (err) {
+        throw refundErrorToTrpc(err);
+      }
     }),
 
   updateOrderStatus: memberProcedure

@@ -50,6 +50,9 @@ import { registerImportRoute } from "./http/importStream.js";
 import { registerRazorpayWebhook } from "./http/razorpayWebhook.js";
 import { registerBillingInvoiceRoute } from "./http/billingInvoice.js";
 import { registerBusinessRazorpayWebhook } from "./http/businessRazorpayWebhook.js";
+import { registerStorePaymentRoutes } from "./http/storePayments.js";
+import { createStoreOrderPaymentLink, loadStorePaymentOptions } from "./lib/store-payments/order-payment.js";
+import { sendStoreOrderEmail } from "./lib/store-payments/emails.js";
 import { createSharePaymentLink, shareOnlinePaymentAvailable } from "./lib/razorpay/share.js";
 import { createFixedWindowLimiter } from "./lib/fixed-window-limiter.js";
 import { listPublicPlansJson } from "./lib/public-plans.js";
@@ -1610,9 +1613,14 @@ app.get("/store/:slug/catalog.json", async (c) => {
       return base;
     });
 
+  // Which ways to pay checkout offers: Cash on Delivery only when switched on, online only when
+  // switched on AND the business's own Razorpay connection is ready. No keys or ids, just two booleans.
+  const paymentOptions = await loadStorePaymentOptions(db, resolved.businessId);
+
   return c.json(
     {
       business: {
+        payments: paymentOptions,
         name: biz.name,
         tagline: biz.storeTagline,
         accentColor: biz.storeAccentColor,
@@ -1713,6 +1721,16 @@ app.get("/store/:slug/policies/:kind", async (c) => {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer-when-downgrade",
   });
+});
+
+// Online payment of an order: GET /store/:slug/order/:orderId (status) and POST .../pay (Pay again).
+registerStorePaymentRoutes(app, {
+  clientIp: getClientIp,
+  checkIpRateLimit: checkStoreIpRateLimit,
+  assertOrigin: assertAllowedStoreOrigin,
+  resolveStoreSlug,
+  getStoreDb,
+  rateLimitDisabled,
 });
 
 // POST /store/:slug/identify — phone-first customer identification (public, no auth)
@@ -1822,6 +1840,7 @@ app.post("/store/:slug/order", async (c) => {
     deliveryNotes,
     notes: legacyNotes,
     items: orderItems,
+    paymentMethod: requestedPaymentMethod,
   } = body as Record<string, unknown>;
   // The storefront sends the customer's order notes as `deliveryNotes`
   // (apps/store api.ts); only `notes` was read, so they were dropped.
@@ -1844,6 +1863,9 @@ app.post("/store/:slug/order", async (c) => {
   }
   if (!Array.isArray(orderItems) || orderItems.length === 0) {
     return c.json({ error: "items array is required and must not be empty" }, 400);
+  }
+  if (requestedPaymentMethod !== undefined && requestedPaymentMethod !== "online" && requestedPaymentMethod !== "cod") {
+    return c.json({ error: "paymentMethod must be \"online\" or \"cod\"" }, 400);
   }
   for (const it of orderItems) {
     if (typeof it !== "object" || it === null) return c.json({ error: "Invalid item in items array" }, 400);
@@ -1892,6 +1914,19 @@ app.post("/store/:slug/order", async (c) => {
     .limit(1);
 
   if (!biz) return c.json({ error: "Store not found" }, 404);
+
+  // How the shopper pays. Checked against what the store offers right now, never against the
+  // client: Cash on Delivery only when switched on, online only with a ready Razorpay connection.
+  const paymentOptions = await loadStorePaymentOptions(db, resolved.businessId);
+  const paymentMethod: "online" | "cod" = requestedPaymentMethod === "online" ? "online"
+    : requestedPaymentMethod === "cod" ? "cod"
+    : paymentOptions.cod ? "cod" : "online";
+  if (paymentMethod === "online" && !paymentOptions.online) {
+    return c.json({ error: "Online payment is not available at this store. Please choose another way to pay." }, 400);
+  }
+  if (paymentMethod === "cod" && !paymentOptions.cod) {
+    return c.json({ error: "Cash on Delivery is not available at this store. Please pay online." }, 400);
+  }
 
   // Validate items exist and are store-enabled
   type OrderItemInput = { itemId: string; quantity: number; variantId?: string; selectedUnit?: string; conversionFactor?: number };
@@ -2028,6 +2063,11 @@ app.post("/store/:slug/order", async (c) => {
         error: `Minimum order amount is ${biz.currency} ${biz.storeMinOrderAmount}`,
       }, 400);
     }
+  }
+
+  // The smallest amount Razorpay takes is Rs 1.
+  if (paymentMethod === "online" && parseFloat(totals.total) < 1) {
+    return c.json({ error: "Online payment needs an order of at least Rs 1. Please choose Cash on Delivery or add more items." }, 400);
   }
 
   // Atomic transaction: increment counters, create invoice + line items + store order
@@ -2184,16 +2224,42 @@ app.post("/store/:slug/order", async (c) => {
         totalAmount: totals.total,
         itemCount: lineItemInputs.length,
         source: "online_store",
+        paymentMethod,
       }).returning();
 
       return { order, invoice };
     });
 
+    // Online: the payment link is made after the order is saved, so a Razorpay hiccup never loses
+    // the order; the shopper can use "Pay again" on the order page.
+    let paymentUrl: string | null = null;
+    let paymentError: string | null = null;
+    if (paymentMethod === "online") {
+      try {
+        const link = await createStoreOrderPaymentLink(db, { businessId: resolved.businessId, slug, orderId: result.order.id });
+        if (link.ok) paymentUrl = link.url;
+        else paymentError = link.error;
+      } catch (err) {
+        logger.error({ err }, "[store/order] could not create the payment link");
+        paymentError = "Online payment is unavailable right now. You can pay again from your order page.";
+      }
+    }
+    // Best effort, after the response is decided: the order confirmation email.
+    void sendStoreOrderEmail(db, resolved.businessId, result.order.id, "placed");
+
     return c.json({
       orderId: result.order.id,
       orderNumber: result.order.orderNumber,
       totalAmount: result.order.totalAmount,
-      message: "Order placed successfully! The business will confirm shortly.",
+      subtotal: totals.subtotal,
+      taxAmount: totals.taxTotal,
+      paymentMethod,
+      paymentStatus: "unpaid",
+      paymentUrl,
+      ...(paymentError ? { paymentError } : {}),
+      message: paymentMethod === "online"
+        ? "Order placed. Complete the payment to confirm it."
+        : "Order placed successfully! The business will confirm shortly.",
     }, 201);
   } catch (err) {
     logger.error({ err }, "[store/order] Failed to create order");

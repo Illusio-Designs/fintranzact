@@ -166,6 +166,11 @@ export const businesses = pgTable("businesses", {
   storeDeliveryNote: text("store_delivery_note"),
   storeWhatsappNumber: text("store_whatsapp_number"),
   storeAllowNegativeStock: boolean("store_allow_negative_stock").default(false).notNull(),
+  // Checkout payment choices. Online payments need the business's own Razorpay
+  // connection (razorpay_connections); Cash on Delivery stays on until the
+  // owner switches it off, so stores that never set this up behave as before.
+  storeOnlinePaymentsEnabled: boolean("store_online_payments_enabled").default(false).notNull(),
+  storeCodEnabled: boolean("store_cod_enabled").default(true).notNull(),
   // Custom shipping/delivery methods configured by the business (in addition to built-in ones)
   customShippingMethods: jsonb("custom_shipping_methods").$type<Array<{ id: string; label: string; hasTracking: boolean }>>(),
   // Carrier API credentials (encrypted at rest) — keyed by carrier slug
@@ -1770,6 +1775,16 @@ export const storeOrders = pgTable("store_orders", {
   confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
   cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   cancellationReason: text("cancellation_reason"),
+  // How the shopper chose to pay, and where the money stands: unpaid | paid |
+  // partially_refunded | refunded. Cash on Delivery orders stay unpaid here
+  // (the owner records that cash on the invoice); only Razorpay moves it.
+  paymentMethod: text("payment_method").default("cod").notNull(),
+  paymentStatus: text("payment_status").default("unpaid").notNull(),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  refundedAmount: numeric("refunded_amount", { precision: 15, scale: 2 }).default("0").notNull(),
+  // When the shopper was last emailed that a payment failed (so a redelivered
+  // webhook or a second failed attempt does not send the same email again).
+  paymentFailedEmailedAt: timestamp("payment_failed_emailed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
@@ -1779,6 +1794,31 @@ export const storeOrders = pgTable("store_orders", {
   index("store_orders_phone_idx").on(t.businessId, t.customerPhone),
   uniqueIndex("store_orders_number_idx").on(t.businessId, t.orderNumber),
   index("store_orders_invoice_idx").on(t.invoiceId),
+]);
+
+// A refund of a paid online store order, made through the business's own
+// Razorpay account. The client-supplied idempotency key (unique per business)
+// makes a retried request return the first result instead of refunding twice;
+// the row is written "pending" before Razorpay is called.
+export const storeOrderRefunds = pgTable("store_order_refunds", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  storeOrderId: uuid("store_order_id").notNull().references(() => storeOrders.id, { onDelete: "cascade" }),
+  razorpayPaymentId: text("razorpay_payment_id").notNull(),
+  razorpayRefundId: text("razorpay_refund_id"),
+  amountPaise: integer("amount_paise").notNull(),
+  idempotencyKey: text("idempotency_key").notNull(),
+  /** pending | processed | failed */
+  status: text("status").default("pending").notNull(),
+  reason: text("reason"),
+  /** The credit note (partial refund) or sales return (full refund on a cancelled order) that books it. */
+  creditNoteId: uuid("credit_note_id").references(() => invoices.id, { onDelete: "set null" }),
+  createdByUserId: uuid("created_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("store_order_refunds_key_idx").on(t.businessId, t.idempotencyKey),
+  index("store_order_refunds_order_idx").on(t.storeOrderId),
 ]);
 
 // ── Recurring Invoice Templates ────────────────────────────────

@@ -22,6 +22,7 @@ Every route outside tRPC and what a read-only or suspended organisation may do. 
 | GET /pay/upi | public-static | server.ts |
 | GET /store/:slug/catalog.json | public-neutral | server.ts |
 | GET /store/:slug/logo | public-neutral | server.ts |
+| GET /store/:slug/order/:orderId | public-neutral | http/storePayments.ts |
 | GET /store/:slug/policies.json | public-neutral | server.ts |
 | GET /store/:slug/policies/:kind | public-neutral | server.ts |
 | GET /up | public-static | server.ts |
@@ -30,6 +31,7 @@ Every route outside tRPC and what a read-only or suspended organisation may do. 
 | POST /api/share/:token/pay | public-neutral | server.ts |
 | POST /store/:slug/identify | public-neutral | server.ts |
 | POST /store/:slug/order | public-neutral | server.ts |
+| POST /store/:slug/order/:orderId/pay | public-neutral | http/storePayments.ts |
 | POST /webhooks/razorpay | exempt-webhook | http/razorpayWebhook.ts |
 | POST /webhooks/razorpay/business/:token | exempt-webhook | http/businessRazorpayWebhook.ts |
 | POST /webhooks/shipping/:businessId | exempt-webhook | server.ts |

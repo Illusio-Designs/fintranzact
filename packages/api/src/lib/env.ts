@@ -11,6 +11,7 @@ const checks: EnvCheck[] = [
   { key: "DATABASE_URL", required: true, hint: "PostgreSQL connection string" },
   { key: "CORS_ORIGINS", required: true, hint: "Comma-separated allowed origins (e.g. https://app.fintranzact.com)" },
   { key: "APP_URL", required: false, hint: "Frontend URL for links in emails (email change, invitations) and where customers return after paying an invoice online" },
+  { key: "STORE_URL", required: false, hint: "Origin of the public storefront (e.g. https://store.fintranzact.com). Shoppers are sent back to <STORE_URL>/<slug>/order/<id> after paying online, and order emails link there. Without it they stay on Razorpay's confirmation page" },
   { key: "API_URL", required: false, hint: "Public origin of this API server, shown in the Razorpay webhook URL businesses add in their own dashboard (defaults to the request host)" },
   {
     key: "ENCRYPTION_KEY",
