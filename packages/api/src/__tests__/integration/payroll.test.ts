@@ -670,6 +670,69 @@ describe("a single-user business may approve its own payroll", () => {
   });
 });
 
+describe("photo, tax regime, shifts, branch holidays, overtime rate and leave encashment", () => {
+  const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+  let empId: string;
+
+  it("stores a photo and the tax regime, and keeps the photo out of lists", async () => {
+    empId = (await ownerBC.payrollEmployee.list({ status: "active", page: 1, limit: 10 })).data[0]!.id;
+    const updated = await ownerBC.payrollEmployee.update({ id: empId, photoDataUrl: PNG, taxRegime: "old", branch: "Pune", workState: "27" });
+    expect(updated.employee).toMatchObject({ photoDataUrl: PNG, taxRegime: "old", branch: "Pune" });
+    expect((await ownerBC.payrollEmployee.get({ id: empId })).photoDataUrl).toBe(PNG);
+    expect(JSON.stringify(await ownerBC.payrollEmployee.list({ status: "active", page: 1, limit: 10 }))).not.toContain("base64");
+    await expect(ownerBC.payrollEmployee.update({ id: empId, photoDataUrl: "http://example.in/x.png" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("a shift's weekly offs replace the business default for that employee", async () => {
+    const shift = await ownerBC.payrollEmployee.shiftCreate({ name: "Five-day week", startTime: "09:00", endTime: "17:00", weeklyOffDays: [0, 6], standardHours: 8 });
+    await ownerBC.payrollEmployee.update({ id: empId, shiftId: shift.id });
+    const view = await ownerBC.payrollAttendance.month({ month: "2026-09" });
+    expect(view.employees.find((e) => e.id === empId)!.weeklyOffDays).toEqual([0, 6]);
+    // Sundays and Saturdays are paid weekly offs: 30 days, all paid, once everything else is marked present.
+    const dates = Array.from({ length: 30 }, (_, i) => `2026-09-${String(i + 1).padStart(2, "0")}`);
+    await ownerBC.payrollAttendance.bulkMark({ employeeIds: [empId], dates, status: "present" });
+    expect((await ownerBC.payrollAttendance.month({ month: "2026-09" })).employees[0]!.summary).toMatchObject({ paidDays: 30, lopDays: 0 });
+  });
+
+  it("branch and state holidays reach only the employees they apply to", async () => {
+    await ownerBC.payrollAttendance.holidayCreate({ date: "2026-09-10", name: "Pune local", scope: "branch", branch: "pune" });
+    await ownerBC.payrollAttendance.holidayCreate({ date: "2026-09-11", name: "Delhi local", scope: "branch", branch: "Delhi" });
+    await ownerBC.payrollAttendance.holidayCreate({ date: "2026-09-12", name: "Karnataka only", scope: "state", stateCode: "29" });
+    await ownerBC.payrollAttendance.holidayCreate({ date: "2026-09-13", name: "Maharashtra day", scope: "state", stateCode: "27" });
+    const e = (await ownerBC.payrollAttendance.month({ month: "2026-09" })).employees.find((x) => x.id === empId)!;
+    expect(e.holidayDates).toEqual(["2026-09-10", "2026-09-13"]);
+  });
+
+  it("an encashment takes days off the balance and is paid as an earning in the next run; the overtime rate is the configured one", async () => {
+    await ownerBC.payrollLeave.typeSeedDefaults();
+    await ownerBC.payrollLeave.accrue({ month: "2026-08" });
+    const bal = await ownerBC.payrollLeave.balances({ leaveYear: 2026, employeeId: empId });
+    const el = bal.types.find((t) => t.code === "EL")!;
+    expect(bal.employees[0]!.balances[el.id]).toBe(1.5);
+    await expect(ownerBC.payrollLeave.encash({ employeeId: empId, leaveTypeId: el.id, days: 2, amount: 1000 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    const enc = await ownerBC.payrollLeave.encash({ employeeId: empId, leaveTypeId: el.id, days: 1, amount: 800 });
+    expect(enc).toMatchObject({ days: "1.00", amount: "800.00", payrollRunId: null });
+    expect((await ownerBC.payrollLeave.balances({ leaveYear: 2026, employeeId: empId })).employees[0]!.balances[el.id]).toBe(0.5);
+
+    // Overtime at 1.5x the ordinary wage, with 8 hours worked on one day.
+    await ownerBC.payrollAttendance.updateSettings({ defaultWeeklyOffDays: [0], standardHoursPerDay: 8, overtimeMultiplier: 1.5, leaveYearStartMonth: 4 });
+    await ownerBC.payrollEmployee.update({ id: empId, shiftId: null });
+    await ownerBC.payrollAttendance.mark({ employeeId: empId, date: "2026-08-03", status: "present", overtimeHours: 8 });
+    const run = await ownerBC.payrollRun.create({ month: "2026-08" });
+    await ownerBC.payrollRun.lockAttendance({ id: run.id, fillUnmarked: "present" });
+    await ownerBC.payrollRun.calculate({ id: run.id });
+    const line = (await ownerBC.payrollRun.get({ id: run.id })).lines[0]!;
+    const by = Object.fromEntries(line.components.map((c) => [c.name, c.amount]));
+    expect(by["Leave encashment"]).toBe("800.00");
+    // wages 20000 / 31 days / 8 hours = 80.64516 an hour; x 1.5 x 8 hours = 967.74
+    expect(by["Overtime"]).toBe("967.74");
+    expect(line.grossEarnings).toBe("21767.74"); // 20000 + 800 + 967.74
+    // The encashment is attached to this run and not offered again to the next one.
+    await ownerBC.payrollRun.reopen({ id: run.id });
+    await ownerBC.payrollRun.delete({ id: run.id });
+  });
+});
+
 describe("isolation between businesses", () => {
   it("another organisation cannot read or change this business's payroll", async () => {
     await expect(ownerBC.payrollEmployee.get({ id: ids.e1! })).rejects.toMatchObject({ code: "NOT_FOUND" });
