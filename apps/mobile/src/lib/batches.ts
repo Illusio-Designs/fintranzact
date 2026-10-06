@@ -86,6 +86,11 @@ export function fromDateOnly(s: string | undefined | null): Date | null {
 // ── Inward ─────────────────────────────────────────────────────
 
 export type BatchInValue = {
+  /**
+   * A saved line's batch (editing a document, or a return made from an invoice),
+   * sent as is. Typing a different batch number or date drops it.
+   */
+  batchId?: string;
   batchNumber?: string;
   mfgDate?: string;
   expiryDate?: string;
@@ -97,6 +102,7 @@ export function inwardBatchError(
   v: BatchInValue,
   opts: { trackExpiry: boolean; itemName?: string },
 ): string | null {
+  if (v.batchId) return null;
   const of = opts.itemName ? ` for ${opts.itemName}` : "";
   const number = v.batchNumber?.trim();
   if (!number) return `Enter a batch number${of}`;
@@ -107,8 +113,9 @@ export function inwardBatchError(
   return null;
 }
 
-/** Fields to send on an inward line (the API's lineBatchFields), or {} when none was typed. */
+/** Fields to send on an inward line (the API's lineBatchFields): the saved batch, or the number typed in, or {}. */
 export function inwardBatchPayload(v: BatchInValue | undefined) {
+  if (v?.batchId) return { batchId: v.batchId };
   const batchNumber = v?.batchNumber?.trim();
   if (!v || !batchNumber) return {};
   return {
@@ -149,6 +156,57 @@ export function outwardBatchPayload(v: BatchOutValue | undefined) {
   return { batchId: v.batchId, ...(v.allowExpired ? { allowExpired: true } : {}) };
 }
 
+/** The batch a saved line was posted from, and how much of it the line holds (base unit). */
+export type SavedBatch = {
+  id: string;
+  batchNumber: string;
+  expiryDate: string | null;
+  quantity: number;
+};
+
+/**
+ * The item's batches with the saved line's own holding counted as available
+ * again (the server does the same when it re-posts an edited document), and
+ * the saved batch listed even when it has run to zero.
+ */
+export function withSavedBatch(rows: BatchRow[], saved: SavedBatch | undefined | null): BatchRow[] {
+  if (!saved) return rows;
+  const found = rows.some((r) => r.id === saved.id);
+  if (found) {
+    return rows.map((r) =>
+      r.id === saved.id ? { ...r, quantity: String(Math.round((parseFloat(r.quantity) + saved.quantity) * 1000) / 1000) } : r,
+    );
+  }
+  return [
+    ...rows,
+    {
+      id: saved.id,
+      batchNumber: saved.batchNumber,
+      mfgDate: null,
+      expiryDate: saved.expiryDate,
+      mrp: null,
+      quantity: String(saved.quantity),
+      expired: false,
+      daysToExpiry: null,
+    },
+  ];
+}
+
+/** The saved batch as an inward line value, from the batch a saved line carries (`line.batch`). */
+export function batchInFromSaved(
+  batchId: string | null | undefined,
+  batch: { batchNumber: string; mfgDate: string | null; expiryDate: string | null; mrp: string | null } | null | undefined,
+): BatchInValue | undefined {
+  if (!batchId) return undefined;
+  return {
+    batchId,
+    batchNumber: batch?.batchNumber ?? "",
+    mfgDate: batch?.mfgDate ?? "",
+    expiryDate: batch?.expiryDate ?? "",
+    batchMrp: batch?.mrp ?? "",
+  };
+}
+
 // ── Line-level glue ────────────────────────────────────────────
 
 /** The batch.list input for an outward picker, shared by the picker and the submit check so they hit one cache entry. */
@@ -167,6 +225,8 @@ export type BatchLineState = {
   trackExpiry?: boolean;
   batchIn?: BatchInValue;
   batchOut?: BatchOutValue;
+  /** Editing: the batch this line already holds stock in. */
+  savedBatch?: SavedBatch;
 };
 
 /** The line's quantity in the item's base unit (variants and base-unit lines have no factor). */
@@ -205,7 +265,7 @@ export async function outwardLinesError(
 ): Promise<string | null> {
   for (const l of lines) {
     if (!l.trackBatches || !l.itemId || !l.batchOut?.batchId) continue;
-    const rows = await fetchBatches(batchOutListInput(l.itemId, l.variantId, asOf));
+    const rows = withSavedBatch(await fetchBatches(batchOutListInput(l.itemId, l.variantId, asOf)), l.savedBatch);
     const err = outwardBatchError(l.batchOut, rows, baseQuantity(l), l.itemName);
     if (err) return err;
   }

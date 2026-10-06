@@ -123,6 +123,21 @@ describe("BatchOutPicker", () => {
     expect(onChange).toHaveBeenCalledWith({ allowExpired: true });
   });
 
+  it("shows the batch an edited line already holds, even when it has run to zero", () => {
+    mockBatches.current = [];
+    wrap(
+      <BatchOutPicker
+        {...props}
+        needed={3}
+        value={{ batchId: "saved" }}
+        savedBatch={{ id: "saved", batchNumber: "OLDB", expiryDate: "2027-01-01", quantity: 3 }}
+      />,
+    );
+    expect(screen.getByText("OLDB")).toBeTruthy();
+    expect(screen.getByText(/3 pcs left/)).toBeTruthy();
+    expect(screen.queryByTestId("batch-picked-error")).toBeNull();
+  });
+
   it("flags a picked batch that holds less than the line needs", () => {
     mockBatches.current = [batch({ id: "low", batchNumber: "LOW", quantity: "2.000" })];
     wrap(<BatchOutPicker {...props} value={{ batchId: "low" }} />);
@@ -140,6 +155,13 @@ describe("BatchInFields", () => {
     expect(onChange).toHaveBeenCalledWith({ batchNumber: "B200" });
     fireEvent.press(screen.getByLabelText("Use batch B100"));
     expect(onChange).toHaveBeenLastCalledWith({ batchNumber: "B100", mfgDate: "2026-05-01", expiryDate: "2027-05-01", batchMrp: "" });
+  });
+
+  it("turns a saved batch into a typed-in one as soon as a field changes", () => {
+    const onChange = jest.fn();
+    wrap(<BatchInFields itemId="i" trackExpiry={false} value={{ batchId: "saved", batchNumber: "B1" }} onChange={onChange} />);
+    fireEvent.changeText(screen.getByTestId("batch-number-input"), "B9");
+    expect(onChange).toHaveBeenCalledWith({ batchId: undefined, batchNumber: "B9" });
   });
 
   it("marks expiry required when the item tracks expiry, and notes an existing batch", () => {

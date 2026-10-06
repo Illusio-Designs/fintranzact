@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { trpc } from "../../../../src/lib/trpc";
 import { useIntraState } from "../../../../src/hooks/useIntraState";
@@ -26,7 +26,11 @@ import { DatePickerField } from "../../../../src/components/ui";
 import { LineItemNotesField } from "../../../../src/components/LineItemNotesField";
 import { BatchLineFields } from "../../../../src/components/BatchFields";
 import { useFeature } from "../../../../src/hooks/useFeature";
-import { batchInFromSaved, inwardLinesError, lineBatchPayload, type BatchInValue } from "../../../../src/lib/batches";
+import {
+  inwardLinesError,
+  lineBatchPayload,
+  type BatchInValue,
+} from "../../../../src/lib/batches";
 
 interface LineItem {
   itemId?: string;
@@ -37,10 +41,10 @@ interface LineItem {
   unitPrice: string;
   taxPercent: string;
   discountPercent: string;
-  /** Batch tracking of the item; the batch block shows only for items that track batches. */
+  /** Batch tracking of the selected item; the picker shows only for items that track batches. */
   trackBatches?: boolean;
   trackExpiry?: boolean;
-  /** The batch the goods go back into: the invoice line's own batch until changed. */
+  /** The batch the goods arrive in: number, dates and MRP typed in. */
   batchIn?: BatchInValue;
 }
 
@@ -56,7 +60,7 @@ function PartyPickerModal({ visible, onSelect, onClose }: {
   const ms = useMs();
   const colors = useColors();
   const [search, setSearch] = useState("");
-  const { data } = trpc.party.list.useQuery({ type: "customer", page: 1, limit: 200 }, { enabled: visible });
+  const { data } = trpc.party.list.useQuery({ type: "supplier", page: 1, limit: 200 }, { enabled: visible });
   const parties = data?.data ?? [];
   const filtered = search ? parties.filter((p) => p.name.toLowerCase().includes(search.toLowerCase())) : parties;
   return (
@@ -64,7 +68,7 @@ function PartyPickerModal({ visible, onSelect, onClose }: {
       <View style={ms.overlay}>
         <View style={ms.sheet}>
           <View style={ms.header}>
-            <Text style={ms.title}>Select Customer</Text>
+            <Text style={ms.title}>Select Supplier</Text>
             <TouchableOpacity onPress={onClose} style={ms.closeBtn}><Ionicons name="close" size={22} color={colors.textSecondary} /></TouchableOpacity>
           </View>
           <View style={ms.searchWrap}>
@@ -78,7 +82,7 @@ function PartyPickerModal({ visible, onSelect, onClose }: {
                 <View><Text style={ms.listItemName}>{item.name}</Text>{item.phone && <Text style={ms.listItemSub}>{item.phone}</Text>}</View>
               </TouchableOpacity>
             )}
-            ListEmptyComponent={<Text style={ms.emptyText}>No customers found</Text>}
+            ListEmptyComponent={<Text style={ms.emptyText}>No suppliers found</Text>}
           />
         </View>
       </View>
@@ -87,7 +91,7 @@ function PartyPickerModal({ visible, onSelect, onClose }: {
 }
 
 function ItemPickerModal({ visible, onSelect, onClose }: {
-  visible: boolean; onSelect: (i: { id: string; name: string; salePrice?: string | null; taxPercent: string; trackBatches?: boolean | null; trackExpiry?: boolean | null }) => void; onClose: () => void;
+  visible: boolean; onSelect: (i: { id: string; name: string; salePrice?: string | null; purchasePrice?: string | null; taxPercent: string; unit?: string | null; trackBatches?: boolean | null; trackExpiry?: boolean | null }) => void; onClose: () => void;
 }) {
   const ms = useMs();
   const colors = useColors();
@@ -113,7 +117,7 @@ function ItemPickerModal({ visible, onSelect, onClose }: {
                 <View style={ms.listItemIcon}><Ionicons name="cube-outline" size={16} color={colors.brand} /></View>
                 <View style={ms.listItemContent}>
                   <Text style={ms.listItemName}>{item.name}</Text>
-                  <Text style={ms.listItemSub}>{item.salePrice ? formatCurrency(item.salePrice) : "No price"} · GST {item.taxPercent}%</Text>
+                  <Text style={ms.listItemSub}>{(item.purchasePrice ?? item.salePrice) ? formatCurrency((item.purchasePrice ?? item.salePrice) as string) : "No price"} · GST {item.taxPercent}%</Text>
                 </View>
               </TouchableOpacity>
             )}
@@ -151,7 +155,6 @@ function LineItemRow({ item, index, onChange, onRemove, onPickItem, onBatchIn }:
       {item.itemName ? (
         <LineItemNotesField value={item.notes} onChange={(v) => onChange(index, "notes", v)} />
       ) : null}
-      {/* Returned goods come back into stock: the batch they left from, or one typed in. */}
       {item.trackBatches && item.itemId ? (
         <BatchLineFields
           direction="in"
@@ -180,11 +183,10 @@ function LineItemRow({ item, index, onChange, onRemove, onPickItem, onBatchIn }:
   );
 }
 
-export default function SalesReturnCreateScreen() {
+export default function GoodsReceiptCreateScreen() {
   const s = useS();
   const colors = useColors();
   const router = useRouter();
-  const { prefillFromInvoiceId } = useLocalSearchParams<{ prefillFromInvoiceId?: string }>();
   const [selectedParty, setSelectedParty] = useState<{ id: string; name: string } | null>(null);
   // Intra-state: CGST and SGST each rounded at half the rate, as the server saves it.
   const intraState = useIntraState(selectedParty?.id);
@@ -194,64 +196,15 @@ export default function SalesReturnCreateScreen() {
   const [showPartyPicker, setShowPartyPicker] = useState(false);
   const [showItemPicker, setShowItemPicker] = useState(false);
   const [activeLineIndex, setActiveLineIndex] = useState(0);
-  const [referenceDocumentId, setReferenceDocumentId] = useState<string | undefined>(undefined);
-
-  const { data: sourceInvoice } = trpc.invoice.getById.useQuery(
-    { id: prefillFromInvoiceId! },
-    { enabled: !!prefillFromInvoiceId }
-  );
-
-  useEffect(() => {
-    if (!sourceInvoice) return;
-    setReferenceDocumentId(sourceInvoice.id);
-    if (sourceInvoice.party) {
-      setSelectedParty({ id: sourceInvoice.partyId, name: sourceInvoice.party.name });
-    }
-    if (sourceInvoice.lineItems && sourceInvoice.lineItems.length > 0) {
-      setLineItems(
-        sourceInvoice.lineItems.map((li) => ({
-          itemId: li.itemId ?? undefined,
-          itemName: li.itemName,
-          notes: li.description ?? "",
-          quantity: li.quantity,
-          unitPrice: li.unitPrice,
-          taxPercent: li.taxPercent ?? "0",
-          discountPercent: li.discountPercent ?? "0",
-          // The goods go back into the batch they were sold from.
-          trackBatches: !!li.batchId,
-          batchIn: batchInFromSaved(li.batchId, li.batch),
-        }))
-      );
-    }
-    setInvoiceDate(todayDate());
-  }, [sourceInvoice]);
 
   const utils = trpc.useUtils();
   // Batch fields are sent only when the plan has them (allowed while billing status loads).
   const batches = useFeature("batchesExpiry");
-  // Which items track batches and expiry (lines copied from an invoice don't carry it).
-  const { data: allItemsData } = trpc.item.list.useQuery({ page: 1, limit: 200 });
-  const itemById = useMemo(() => {
-    const m = new Map<string, { trackBatches?: boolean | null; trackExpiry?: boolean | null }>();
-    for (const it of allItemsData?.data ?? []) m.set(it.id, it);
-    return m;
-  }, [allItemsData]);
-  const tracked = useMemo(
-    () =>
-      lineItems.map((li) => {
-        const it = li.itemId ? itemById.get(li.itemId) : undefined;
-        if (!it) return li;
-        const trackBatches = !!it.trackBatches || !!li.trackBatches;
-        return { ...li, trackBatches, trackExpiry: trackBatches && (!!it.trackExpiry || !!li.trackExpiry) };
-      }),
-    [lineItems, itemById],
-  );
 
-  const createMutation = trpc.salesReturn.create.useMutation({
+  const createMutation = trpc.goodsReceiptNote.create.useMutation({
     onSuccess: () => {
-      utils.salesReturn.list.invalidate();
-      utils.invoice.list.invalidate();
-      utils.dashboard.summary.invalidate();
+      utils.goodsReceiptNote.list.invalidate();
+      utils.batch.list.invalidate();
       utils.party.list.invalidate();
       utils.item.list.invalidate();
       haptic.success();
@@ -276,9 +229,13 @@ export default function SalesReturnCreateScreen() {
 
   const handlePickItemForLine = useCallback((index: number) => { setActiveLineIndex(index); setShowItemPicker(true); }, []);
 
-  const handleItemSelected = useCallback((item: { id: string; name: string; salePrice?: string | null; taxPercent: string; trackBatches?: boolean | null; trackExpiry?: boolean | null }) => {
-    // A different item starts without a batch.
-    setLineItems((prev) => { const next = [...prev]; next[activeLineIndex] = { ...next[activeLineIndex], itemId: item.id, itemName: item.name, unitPrice: item.salePrice ?? "0", taxPercent: item.taxPercent, trackBatches: !!item.trackBatches, trackExpiry: !!item.trackBatches && !!item.trackExpiry, batchIn: undefined }; return next; });
+  const handleItemSelected = useCallback((item: { id: string; name: string; salePrice?: string | null; purchasePrice?: string | null; taxPercent: string; unit?: string | null; trackBatches?: boolean | null; trackExpiry?: boolean | null }) => {
+    setLineItems((prev) => {
+      const next = [...prev];
+      // A different item starts without a batch.
+      next[activeLineIndex] = { ...next[activeLineIndex], itemId: item.id, itemName: item.name, unitPrice: item.purchasePrice ?? item.salePrice ?? "0", taxPercent: item.taxPercent, trackBatches: !!item.trackBatches, trackExpiry: !!item.trackBatches && !!item.trackExpiry, batchIn: undefined };
+      return next;
+    });
   }, [activeLineIndex]);
 
   const handleBatchIn = useCallback((index: number, patch: BatchInValue) => {
@@ -286,19 +243,18 @@ export default function SalesReturnCreateScreen() {
   }, []);
 
   const handleCreate = useCallback(() => {
-    if (!selectedParty) { Alert.alert("Validation", "Please select a customer."); return; }
-    const validItems = tracked.filter((li) => li.itemName.trim().length > 0 && parseFloat(li.quantity) > 0);
+    if (!selectedParty) { Alert.alert("Validation", "Please select a supplier."); return; }
+    const validItems = lineItems.filter((li) => li.itemName.trim().length > 0 && parseFloat(li.quantity) > 0);
     if (validItems.length === 0) { Alert.alert("Validation", "Add at least one item."); return; }
-    // Returned goods come back into a batch: the one they left from, or one typed in.
+    // Batch-tracked items come in under a batch number (and an expiry date when the item tracks expiry).
     if (batches.allowed) {
       const batchError = inwardLinesError(validItems);
       if (batchError) { Alert.alert("Batch", batchError); return; }
     }
     createMutation.mutate({
-      partyId: selectedParty.id, type: "sale", documentType: "sales_return",
+      partyId: selectedParty.id, type: "purchase", documentType: "goods_receipt_note",
       invoiceDate: invoiceDate.toISOString(), notes: notes.trim() || undefined,
       additionalCharges: "0", invoiceDiscount: "0", invoiceDiscountType: "amount", roundOff: "0",
-      referenceDocumentId: referenceDocumentId,
       // Bug B: itemName is the required name snapshot; description is the
       // optional free-text per-line note (empty → omitted).
       lineItems: validItems.map((li) => ({
@@ -312,7 +268,7 @@ export default function SalesReturnCreateScreen() {
         ...lineBatchPayload(li, "in", batches.allowed),
       })),
     });
-  }, [selectedParty, tracked, invoiceDate, notes, referenceDocumentId, createMutation, batches.allowed]);
+  }, [selectedParty, lineItems, invoiceDate, notes, createMutation, batches.allowed]);
 
   return (
     <SafeAreaView style={s.container} edges={["top"]}>
@@ -320,35 +276,39 @@ export default function SalesReturnCreateScreen() {
         <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
           <Ionicons name="chevron-back" size={20} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.topBarTitle}>New Sales Return</Text>
+        <Text style={s.topBarTitle}>New Goods Receipt</Text>
         <View style={{ width: 44 }} />
       </View>
 
       <View style={s.infoBox}>
-        <Ionicons name="information-circle-outline" size={16} color={colors.info} />
-        <Text style={s.infoText}>Creating a sales return will increment stock (goods returned by customer).</Text>
+        <Ionicons name="information-circle-outline" size={16} color={colors.warning} />
+        <Text style={s.infoText}>Recording a goods receipt adds the received goods to stock now; the supplier's bill made from it won't add them again.</Text>
       </View>
 
       <KeyboardAvoidingView style={s.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <Text style={s.sectionLabel}>Customer</Text>
+          <Text style={s.sectionLabel}>Supplier</Text>
           <TouchableOpacity style={[s.selectorBtn, selectedParty ? s.selectorBtnFilled : {}]} onPress={() => setShowPartyPicker(true)} activeOpacity={0.7}>
             <Ionicons name="person-outline" size={18} color={selectedParty ? colors.textPrimary : colors.textMuted} style={s.selectorIcon} />
-            <Text style={selectedParty ? s.selectorValueText : s.selectorPlaceholder}>{selectedParty ? selectedParty.name : "Select customer..."}</Text>
+            <Text style={selectedParty ? s.selectorValueText : s.selectorPlaceholder}>{selectedParty ? selectedParty.name : "Select supplier..."}</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </TouchableOpacity>
 
           <Text style={s.sectionLabel}>Date</Text>
           <View style={s.dateCard}>
-            <DatePickerField label="Return Date" value={invoiceDate} onChange={setInvoiceDate} />
+            <DatePickerField
+              label="Receiving Date"
+              value={invoiceDate}
+              onChange={setInvoiceDate}
+            />
           </View>
 
           <View style={s.lineItemsHeader}>
-            <Text style={s.sectionLabel}>Items (Returned)</Text>
+            <Text style={s.sectionLabel}>Items (Received)</Text>
             <Text style={s.lineCount}>{lineItems.length} {lineItems.length === 1 ? "item" : "items"}</Text>
           </View>
 
-          {tracked.map((li, idx) => (
+          {lineItems.map((li, idx) => (
             <LineItemRow key={idx} item={li} index={idx} onChange={handleLineChange} onRemove={handleRemoveLine} onPickItem={handlePickItemForLine} onBatchIn={handleBatchIn} />
           ))}
 
@@ -358,7 +318,7 @@ export default function SalesReturnCreateScreen() {
           </TouchableOpacity>
 
           <Text style={s.sectionLabel}>Notes (optional)</Text>
-          <TextInput style={s.notesInput} value={notes} onChangeText={setNotes} placeholder="Reason for return, original invoice reference, etc." placeholderTextColor={colors.textMuted} multiline numberOfLines={3} textAlignVertical="top" />
+          <TextInput style={s.notesInput} value={notes} onChangeText={setNotes} placeholder="Supplier challan number, vehicle number, etc." placeholderTextColor={colors.textMuted} multiline numberOfLines={3} textAlignVertical="top" />
 
           <Text style={s.sectionLabel}>Summary</Text>
           <View style={s.totalsCard}>
@@ -370,7 +330,7 @@ export default function SalesReturnCreateScreen() {
               <View style={s.totalRow}><Text style={s.totalLabel}>Tax</Text><Text style={s.totalValue}>{formatCurrency(totals.taxTotal)}</Text></View>
             )}
             <View style={s.totalDivider} />
-            <View style={s.totalRow}><Text style={s.totalLabelBold}>Return Amount</Text><Text style={s.totalValueBold}>{formatCurrency(totals.total)}</Text></View>
+            <View style={s.totalRow}><Text style={s.totalLabelBold}>Total</Text><Text style={s.totalValueBold}>{formatCurrency(totals.total)}</Text></View>
           </View>
 
           <View style={{ height: 100 }} />
@@ -381,7 +341,7 @@ export default function SalesReturnCreateScreen() {
             {createMutation.isPending ? <ActivityIndicator color={colors.textPrimary} size="small" /> : (
               <>
                 <Ionicons name="checkmark-circle-outline" size={20} color={colors.textPrimary} />
-                <Text style={s.createBtnText}>Create Sales Return</Text>
+                <Text style={s.createBtnText}>Create Goods Receipt</Text>
               </>
             )}
           </TouchableOpacity>
@@ -400,8 +360,8 @@ const useS = makeStyles((colors) => ({
   topBar: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, gap: 10 },
   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   topBarTitle: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.textPrimary },
-  infoBox: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.infoBg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginHorizontal: 16, marginBottom: 4, borderWidth: 1, borderColor: colors.info + "30" },
-  infoText: { fontSize: 12, color: colors.info, flex: 1 },
+  infoBox: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.warningBg, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginHorizontal: 16, marginBottom: 4, borderWidth: 1, borderColor: colors.warning + "30" },
+  infoText: { fontSize: 12, color: colors.warning, flex: 1 },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16 },
   sectionLabel: { fontSize: 11, fontWeight: "700", color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 16, marginBottom: 8 },
@@ -411,6 +371,8 @@ const useS = makeStyles((colors) => ({
   selectorValueText: { flex: 1, fontSize: 15, fontWeight: "600", color: colors.textPrimary },
   selectorPlaceholder: { flex: 1, fontSize: 15, color: colors.textMuted },
   dateCard: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 14 },
+  dateLabel: { fontSize: 11, color: colors.textMuted, fontWeight: "500", marginBottom: 4 },
+  dateValue: { fontSize: 14, fontWeight: "600", color: colors.textPrimary },
   lineItemsHeader: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginTop: 16, marginBottom: 8 },
   lineCount: { fontSize: 12, color: colors.textMuted },
   lineItemCard: { backgroundColor: colors.surface, borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 14, marginBottom: 10 },

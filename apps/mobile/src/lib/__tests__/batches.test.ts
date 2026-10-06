@@ -14,6 +14,8 @@ import {
   outwardLinesError,
   sortBatchesFefo,
   toDateOnly,
+  batchInFromSaved,
+  withSavedBatch,
   type BatchRow,
 } from "../batches";
 
@@ -177,5 +179,52 @@ describe("line glue", () => {
     fetch.mockClear();
     await expect(outwardLinesError([{ ...line, batchOut: {} }, { ...line, trackBatches: false }], "2026-10-05", fetch)).resolves.toBeNull();
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("saved batches (editing a document, returns)", () => {
+  it("sends a saved inward batch by id and skips the typed-in checks", () => {
+    expect(inwardBatchPayload({ batchId: "b1", batchNumber: "B1", expiryDate: "2027-01-01" })).toEqual({ batchId: "b1" });
+    expect(inwardBatchError({ batchId: "b1" }, { trackExpiry: true })).toBeNull();
+    // Once the user types over it the batchId is gone and the number rules apply again.
+    expect(inwardBatchPayload({ batchId: undefined, batchNumber: "B2", expiryDate: "2027-01-01" })).toMatchObject({ batchNumber: "B2" });
+    expect(inwardBatchError({ batchNumber: "" }, { trackExpiry: false })).toMatch(/batch number/);
+  });
+
+  it("builds the inward value from the batch a saved line carries", () => {
+    expect(batchInFromSaved(null, null)).toBeUndefined();
+    expect(batchInFromSaved("b1", { batchNumber: "B1", mfgDate: "2026-01-01", expiryDate: "2027-01-01", mrp: "12.50" })).toEqual({
+      batchId: "b1",
+      batchNumber: "B1",
+      mfgDate: "2026-01-01",
+      expiryDate: "2027-01-01",
+      batchMrp: "12.50",
+    });
+    expect(batchInFromSaved("b1", null)).toMatchObject({ batchId: "b1", batchNumber: "" });
+  });
+
+  it("counts what the saved line holds as available again", () => {
+    const rows = [row({ id: "b1", batchNumber: "B1", quantity: "2.000" })];
+    const saved = { id: "b1", batchNumber: "B1", expiryDate: null, quantity: 3 };
+    expect(withSavedBatch(rows, undefined)).toBe(rows);
+    expect(withSavedBatch(rows, saved)[0].quantity).toBe("5");
+    // A batch drained to zero is not listed any more; the saved one is added back.
+    const added = withSavedBatch([], { ...saved, expiryDate: "2027-01-01" });
+    expect(added).toHaveLength(1);
+    expect(added[0]).toMatchObject({ id: "b1", batchNumber: "B1", quantity: "3", expiryDate: "2027-01-01", expired: false });
+  });
+
+  it("lets an edited line keep its own batch when the batch holds only what the line took", async () => {
+    const fetch = jest.fn().mockResolvedValue([]);
+    const line = {
+      itemId: "i",
+      itemName: "Syrup",
+      quantity: "3",
+      trackBatches: true,
+      batchOut: { batchId: "b1" },
+      savedBatch: { id: "b1", batchNumber: "B1", expiryDate: null, quantity: 3 },
+    };
+    await expect(outwardLinesError([line], "2026-10-05", fetch)).resolves.toBeNull();
+    await expect(outwardLinesError([{ ...line, quantity: "4" }], "2026-10-05", fetch)).resolves.toMatch(/Only 3 left in batch B1/);
   });
 });

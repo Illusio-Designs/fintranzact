@@ -24,6 +24,20 @@ import { useColors } from "../../../src/contexts/ThemeContext";
 import { haptic } from "../../../src/lib/haptics";
 import { QueryError, DatePickerField } from "../../../src/components/ui";
 import { LineItemNotesField } from "../../../src/components/LineItemNotesField";
+import { BatchLineFields } from "../../../src/components/BatchFields";
+import { useFeature } from "../../../src/hooks/useFeature";
+import {
+  baseQuantity,
+  batchInFromSaved,
+  inwardLinesError,
+  lineBatchPayload,
+  outwardLinesError,
+  toDateOnly,
+  type BatchInValue,
+  type BatchOutValue,
+  type BatchRow,
+  type SavedBatch,
+} from "../../../src/lib/batches";
 
 interface LineItem {
   itemId?: string;
@@ -34,6 +48,18 @@ interface LineItem {
   unitPrice: string;
   taxPercent: string;
   discountPercent: string;
+  /** Unit conversion saved with the line (the base-unit quantity for batch checks). */
+  conversionFactor?: string;
+  variantId?: string;
+  /** Batch tracking of the item; the batch block shows only for items that track batches. */
+  trackBatches?: boolean;
+  trackExpiry?: boolean;
+  /** Purchase: the batch the goods came in as (the saved one until changed). */
+  batchIn?: BatchInValue;
+  /** Sale: the batch picked (the saved one until changed; empty = earliest expiry first). */
+  batchOut?: BatchOutValue;
+  /** The batch the saved line already holds stock in. */
+  savedBatch?: SavedBatch;
 }
 
 function newLineItem(): LineItem {
@@ -46,6 +72,9 @@ function newLineItem(): LineItem {
     discountPercent: "0",
   };
 }
+
+/** The item fields batch handling reads. */
+type ItemTracking = { id: string; unit?: string | null; trackBatches?: boolean | null; trackExpiry?: boolean | null };
 
 function safeNum(s: string) {
   const n = parseFloat(s);
@@ -145,6 +174,9 @@ interface ItemPickerProps {
     salePrice?: string | null;
     purchasePrice?: string | null;
     taxPercent: string;
+    unit?: string | null;
+    trackBatches?: boolean | null;
+    trackExpiry?: boolean | null;
   }) => void;
   onClose: () => void;
 }
@@ -233,9 +265,14 @@ interface LineItemRowProps {
   onChange: (index: number, field: keyof LineItem, value: string) => void;
   onRemove: (index: number) => void;
   onPickItem: (index: number) => void;
+  invoiceType: "sale" | "purchase";
+  documentDate: string;
+  unit?: string | null;
+  onBatchIn: (index: number, patch: BatchInValue) => void;
+  onBatchOut: (index: number, patch: BatchOutValue) => void;
 }
 
-function LineItemRow({ item, index, onChange, onRemove, onPickItem }: LineItemRowProps) {
+function LineItemRow({ item, index, onChange, onRemove, onPickItem, invoiceType, documentDate, unit, onBatchIn, onBatchOut }: LineItemRowProps) {
   const styles = useStyles();
   const colors = useColors();
   const lineTotal = useMemo(() => {
@@ -272,6 +309,24 @@ function LineItemRow({ item, index, onChange, onRemove, onPickItem }: LineItemRo
 
       {item.itemName ? (
         <LineItemNotesField value={item.notes} onChange={(v) => onChange(index, "notes", v)} />
+      ) : null}
+
+      {/* Batch fields: purchase names the batch, sale picks one (FEFO). Batch-tracked items only. */}
+      {item.trackBatches && item.itemId ? (
+        <BatchLineFields
+          direction={invoiceType === "purchase" ? "in" : "out"}
+          itemId={item.itemId}
+          variantId={item.variantId}
+          trackExpiry={!!item.trackExpiry}
+          date={documentDate}
+          needed={baseQuantity(item)}
+          unit={unit}
+          batchIn={item.batchIn}
+          batchOut={item.batchOut}
+          savedBatch={item.savedBatch}
+          onBatchIn={(patch) => onBatchIn(index, patch)}
+          onBatchOut={(patch) => onBatchOut(index, patch)}
+        />
       ) : null}
 
       <View style={styles.lineItemFields}>
@@ -329,6 +384,30 @@ function LineItemRow({ item, index, onChange, onRemove, onPickItem }: LineItemRo
   );
 }
 
+/** A saved line's batch, as the batch fields of the edit form. */
+function savedBatchFields(
+  direction: "in" | "out",
+  li: {
+    batchId?: string | null;
+    batch?: { batchNumber: string; mfgDate: string | null; expiryDate: string | null; mrp: string | null } | null;
+    quantity?: string | null;
+    conversionFactor?: string | null;
+    variantId?: string | null;
+  },
+): Pick<LineItem, "batchIn" | "batchOut" | "savedBatch"> {
+  if (!li.batchId) return {};
+  if (direction === "in") return { batchIn: batchInFromSaved(li.batchId, li.batch) };
+  const held = baseQuantity({
+    quantity: li.quantity ?? "0",
+    conversionFactor: li.conversionFactor ?? undefined,
+    variantId: li.variantId ?? undefined,
+  });
+  return {
+    batchOut: { batchId: li.batchId },
+    savedBatch: { id: li.batchId, batchNumber: li.batch?.batchNumber ?? "Saved batch", expiryDate: li.batch?.expiryDate ?? null, quantity: held },
+  };
+}
+
 // ── Main Edit Screen ──────────────────────────────────────────
 
 export default function InvoiceEditScreen() {
@@ -354,6 +433,26 @@ export default function InvoiceEditScreen() {
   const [showItemPicker, setShowItemPicker] = useState(false);
   const [activeLineIndex, setActiveLineIndex] = useState(0);
   const [initialized, setInitialized] = useState(false);
+
+  // Batch fields are sent only when the plan has them (allowed while billing status loads).
+  const batches = useFeature("batchesExpiry");
+  // Which items track batches and expiry (saved lines don't carry it).
+  const { data: allItemsData } = trpc.item.list.useQuery({ page: 1, limit: 200 });
+  const itemById = useMemo(() => {
+    const m = new Map<string, ItemTracking>();
+    for (const it of allItemsData?.data ?? []) m.set(it.id, it);
+    return m;
+  }, [allItemsData]);
+  const tracked = useMemo(
+    () =>
+      lineItems.map((li) => {
+        const it = li.itemId ? itemById.get(li.itemId) : undefined;
+        if (!it) return li;
+        const trackBatches = !!it.trackBatches || !!li.trackBatches;
+        return { ...li, trackBatches, trackExpiry: trackBatches && (!!it.trackExpiry || !!li.trackExpiry) };
+      }),
+    [lineItems, itemById],
+  );
 
   useEffect(() => {
     if (invoice && !initialized) {
@@ -383,6 +482,11 @@ export default function InvoiceEditScreen() {
             unitPrice: li.unitPrice ?? "0",
             taxPercent: li.taxPercent ?? "0",
             discountPercent: li.discountPercent ?? "0",
+            conversionFactor: li.conversionFactor ?? undefined,
+            variantId: li.variantId ?? undefined,
+            // A line that holds a batch is batch-tracked; the item list below fills in the rest.
+            trackBatches: !!li.batchId,
+            ...savedBatchFields(invoice.type === "purchase" ? "in" : "out", li),
           }))
         );
       }
@@ -443,6 +547,14 @@ export default function InvoiceEditScreen() {
     setShowItemPicker(true);
   }, []);
 
+  const handleBatchIn = useCallback((index: number, patch: BatchInValue) => {
+    setLineItems((prev) => prev.map((li, i) => (i === index ? { ...li, batchIn: { ...li.batchIn, ...patch } } : li)));
+  }, []);
+
+  const handleBatchOut = useCallback((index: number, patch: BatchOutValue) => {
+    setLineItems((prev) => prev.map((li, i) => (i === index ? { ...li, batchOut: { ...li.batchOut, ...patch } } : li)));
+  }, []);
+
   const handleItemSelected = useCallback(
     (item: {
       id: string;
@@ -450,6 +562,8 @@ export default function InvoiceEditScreen() {
       salePrice?: string | null;
       purchasePrice?: string | null;
       taxPercent: string;
+      trackBatches?: boolean | null;
+      trackExpiry?: boolean | null;
     }) => {
       const invoiceType = invoice?.type ?? "sale";
       const price =
@@ -464,6 +578,14 @@ export default function InvoiceEditScreen() {
           itemName: item.name,
           unitPrice: price,
           taxPercent: item.taxPercent,
+          // A different item starts without a batch (and without the old one's unit).
+          trackBatches: !!item.trackBatches,
+          trackExpiry: !!item.trackBatches && !!item.trackExpiry,
+          conversionFactor: undefined,
+          variantId: undefined,
+          batchIn: undefined,
+          batchOut: undefined,
+          savedBatch: undefined,
         };
         return next;
       });
@@ -475,19 +597,35 @@ export default function InvoiceEditScreen() {
     setLineItems((prev) => [newLineItem(), ...prev]); // prepend — new item at top
   }, []);
 
-  const handleUpdate = useCallback(() => {
+  const handleUpdate = useCallback(async () => {
     if (!selectedParty) {
       Alert.alert("Validation", "Please select a party.");
       return;
     }
 
-    const validItems = lineItems.filter(
+    const validItems = tracked.filter(
       (li) => li.itemName.trim().length > 0 && parseFloat(li.quantity) > 0
     );
 
     if (validItems.length === 0) {
       Alert.alert("Validation", "Add at least one item.");
       return;
+    }
+
+    // Batch checks (tracked items, plan permitting) before anything is sent.
+    if (batches.allowed) {
+      const day = toDateOnly(invoiceDate);
+      const batchError =
+        invoice?.type === "purchase"
+          ? inwardLinesError(validItems)
+          : await outwardLinesError(validItems, day, async (input) => {
+              const res = await utils.batch.list.fetch(input, { staleTime: 15_000 });
+              return res.data as BatchRow[];
+            });
+      if (batchError) {
+        Alert.alert("Batch", batchError);
+        return;
+      }
     }
 
     haptic.success();
@@ -507,9 +645,11 @@ export default function InvoiceEditScreen() {
         unitPrice: li.unitPrice || "0",
         taxPercent: li.taxPercent || "0",
         discountPercent: li.discountPercent || "0",
+        // Without the plan's batches feature nothing batch-related is sent.
+        ...lineBatchPayload(li, invoice?.type === "purchase" ? "in" : "out", batches.allowed),
       })),
     });
-  }, [selectedParty, lineItems, invoiceDate, dueDate, notes, id, updateMutation]);
+  }, [selectedParty, tracked, invoiceDate, dueDate, notes, id, updateMutation, batches.allowed, invoice?.type, utils]);
 
   if (isLoading) {
     return (
@@ -620,7 +760,7 @@ export default function InvoiceEditScreen() {
               <Text style={styles.addLineBtnText}>Add</Text>
             </TouchableOpacity>
           </View>
-          {lineItems.map((li, index) => (
+          {tracked.map((li, index) => (
             <LineItemRow
               key={index}
               item={li}
@@ -628,6 +768,11 @@ export default function InvoiceEditScreen() {
               onChange={handleLineChange}
               onRemove={handleRemoveLine}
               onPickItem={handlePickItemForLine}
+              invoiceType={invoiceType}
+              documentDate={toDateOnly(invoiceDate)}
+              unit={li.itemId ? itemById.get(li.itemId)?.unit : undefined}
+              onBatchIn={handleBatchIn}
+              onBatchOut={handleBatchOut}
             />
           ))}
 

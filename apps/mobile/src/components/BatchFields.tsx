@@ -17,10 +17,12 @@ import {
   outwardBatchError,
   sortBatchesFefo,
   toDateOnly,
+  withSavedBatch,
   batchOutListInput,
   type BatchInValue,
   type BatchOutValue,
   type BatchRow,
+  type SavedBatch,
 } from "../lib/batches";
 
 /** "exp 12 Oct 2026", "expired 3 Sep 2026" or "no expiry". */
@@ -53,8 +55,10 @@ interface BatchInFieldsProps {
 }
 
 /** Batch number, expiry and manufacturing date for a line that brings batch-tracked stock in. */
-export function BatchInFields({ itemId, variantId, trackExpiry, value, onChange }: BatchInFieldsProps) {
+export function BatchInFields({ itemId, variantId, trackExpiry, value, onChange: onPatch }: BatchInFieldsProps) {
   const s = useS();
+  // Any change to the batch fields makes it a typed-in batch again, not the saved one.
+  const onChange = (patch: BatchInValue) => onPatch({ batchId: undefined, ...patch });
   const colors = useColors();
   const { data } = trpc.batch.list.useQuery(
     { itemId, variantId: variantId ?? null, includeEmpty: true },
@@ -172,15 +176,17 @@ interface BatchOutPickerProps {
   unit?: string | null;
   value: BatchOutValue;
   onChange: (patch: BatchOutValue) => void;
+  /** Editing: the batch this line already holds stock in. */
+  savedBatch?: SavedBatch;
 }
 
 /** Pick which batch a line sells from; "Earliest expiry first" lets the server split it (FEFO). */
-export function BatchOutPicker({ itemId, variantId, date, needed, unit, value, onChange }: BatchOutPickerProps) {
+export function BatchOutPicker({ itemId, variantId, date, needed, unit, value, onChange, savedBatch }: BatchOutPickerProps) {
   const s = useS();
   const colors = useColors();
   const [open, setOpen] = useState(false);
   const { data, isLoading } = trpc.batch.list.useQuery(batchOutListInput(itemId, variantId, date), { staleTime: 15_000 });
-  const batches = useMemo(() => sortBatchesFefo((data?.data ?? []) as BatchRow[]), [data]);
+  const batches = useMemo(() => sortBatchesFefo(withSavedBatch((data?.data ?? []) as BatchRow[], savedBatch)), [data, savedBatch]);
   const picked = batches.find((b) => b.id === value.batchId);
   const preview = useMemo(() => fefoPreview(batches, needed), [batches, needed]);
   const hasExpired = batches.some((b) => b.expired);
@@ -318,6 +324,8 @@ interface BatchLineFieldsProps {
   unit?: string | null;
   batchIn?: BatchInValue;
   batchOut?: BatchOutValue;
+  /** Editing an outward line: the batch it already holds stock in. */
+  savedBatch?: SavedBatch;
   onBatchIn: (patch: BatchInValue) => void;
   onBatchOut: (patch: BatchOutValue) => void;
 }
@@ -346,7 +354,7 @@ export function BatchLineFields(p: BatchLineFieldsProps) {
   return p.direction === "in" ? (
     <BatchInFields itemId={p.itemId} variantId={p.variantId} trackExpiry={p.trackExpiry} value={p.batchIn ?? {}} onChange={p.onBatchIn} />
   ) : (
-    <BatchOutPicker itemId={p.itemId} variantId={p.variantId} date={p.date} needed={p.needed} unit={p.unit} value={p.batchOut ?? {}} onChange={p.onBatchOut} />
+    <BatchOutPicker itemId={p.itemId} variantId={p.variantId} date={p.date} needed={p.needed} unit={p.unit} value={p.batchOut ?? {}} onChange={p.onBatchOut} savedBatch={p.savedBatch} />
   );
 }
 
