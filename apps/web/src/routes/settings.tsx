@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { SettingsNav } from "@/components/settings/SettingsNav";
 import { BusinessTab, BusinessForm } from "@/components/settings/BusinessTab";
 import { DocumentsTab } from "@/components/settings/DocumentsTab";
+import { PaymentRemindersTab } from "@/components/settings/PaymentRemindersTab";
 import { TeamTab } from "@/components/settings/TeamTab";
 import { SalesTargetsTab } from "@/components/settings/SalesTargetsTab";
 import { PeriodLocksTab } from "@/components/settings/PeriodLocksTab";
@@ -14,6 +15,7 @@ import { AccountTab } from "@/components/settings/AccountTab";
 import { BillingTab } from "@/components/settings/BillingTab";
 import { StoreTab } from "@/components/settings/StoreTab";
 import { POSTab } from "@/components/settings/POSTab";
+import { OnlinePaymentsTab } from "@/components/settings/OnlinePaymentsTab";
 import { BarcodesTab } from "@/components/settings/BarcodesTab";
 import { ShippingTab } from "@/components/settings/ShippingTab";
 import { useTwoFactorRequirement } from "@/hooks/useTwoFactorRequirement";
@@ -265,6 +267,7 @@ function SettingsPage() {
         <div className="flex-1 min-w-0">
           {shownTab === "business" && <BusinessTab biz={biz} />}
           {shownTab === "documents" && <DocumentsTab biz={biz} />}
+          {shownTab === "reminders" && <PaymentRemindersTab biz={biz} />}
           {shownTab === "shipping" && biz && <ShippingTab biz={biz} />}
           {shownTab === "team" && <TeamTab />}
           {shownTab === "targets" && <SalesTargetsTab />}
@@ -273,6 +276,7 @@ function SettingsPage() {
           {shownTab === "account" && <AccountTab initialPane={twoFactor.blocked ? "security" : linkedPane} />}
           {shownTab === "billing" && isOwner && <BillingTab />}
           {shownTab === "store" && <StoreTab />}
+          {shownTab === "payments" && hasRole && <OnlinePaymentsTab />}
           {shownTab === "pos" && biz && <POSTab biz={biz} />}
           {shownTab === "barcodes" && <BarcodesTab />}
         </div>

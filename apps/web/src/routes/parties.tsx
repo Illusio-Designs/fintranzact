@@ -553,6 +553,9 @@ function PartyDetailPanel({ partyId, onClose }: { partyId: string; onClose: () =
                 <p className="text-xs text-text-tertiary">
                   Opening: {formatCurrency(party.openingBalance)}
                 </p>
+                {party.doNotRemind && (
+                  <p className="text-xs font-medium text-amber-600">Do not remind</p>
+                )}
                 {(party.creditPeriodDays || party.creditLimit) && (
                   <div className="pt-1 border-t border-border-light space-y-0.5">
                     {party.creditPeriodDays && (
@@ -1291,6 +1294,7 @@ type EditableParty = {
   gstRegistrationType?: string | null;
   constitution?: string | null;
   isMsme?: boolean | null;
+  doNotRemind?: boolean | null;
   udyamNumber?: string | null;
   msmeCategory?: string | null;
   tdsSection?: string | null;
@@ -1336,6 +1340,7 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
   const [autoConstitution, setAutoConstitution] = useState<PartyConstitution | "">("");
   const [gstinBlur, setGstinBlur] = useState(0);
   const [isMsme, setIsMsme] = useState(e0?.isMsme ?? false);
+  const [doNotRemind, setDoNotRemind] = useState(e0?.doNotRemind ?? false);
   const [udyamNumber, setUdyamNumber] = useState(e0?.udyamNumber ?? "");
   const [msmeCategory, setMsmeCategory] = useState<MsmeCategory | "">((e0?.msmeCategory as MsmeCategory) ?? "");
   const [tdsSection, setTdsSection] = useState(e0?.tdsSection ?? "");
@@ -1526,6 +1531,7 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
       gstinStatus: gstinStatus ?? undefined,
       gstinVerifiedAt: gstinVerifiedAt ?? undefined,
       isMsme,
+      doNotRemind,
       udyamNumber: isMsme ? udyamNumber || undefined : undefined,
       msmeCategory: isMsme ? msmeCategory || undefined : undefined,
       tdsSection: tdsSection || undefined,
@@ -1866,7 +1872,7 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
 
           <Disclosure
             label="Credit Terms"
-            count={countFilled(creditPeriodDays, creditLimit)}
+            count={countFilled(creditPeriodDays, creditLimit) + (doNotRemind ? 1 : 0)}
           >
             <div className="grid grid-cols-2 gap-4">
               <InputField
@@ -1891,6 +1897,22 @@ function AddPartyModal({ open, onClose, existing }: { open: boolean; onClose: ()
               <div className="mt-4 max-w-[50%]">
                 <PriceLevelSelect value={priceLevelId} onChange={setPriceLevelId} />
               </div>
+            )}
+            {partyType === "customer" && (
+              <label className="mt-4 flex items-start gap-2 text-sm text-text-primary">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 rounded"
+                  checked={doNotRemind}
+                  onChange={(e) => setDoNotRemind(e.target.checked)}
+                />
+                <span>
+                  Do not remind
+                  <span className="block text-xs text-text-tertiary">
+                    No payment reminders are sent to this customer, automatically or by hand.
+                  </span>
+                </span>
+              </label>
             )}
           </Disclosure>
 

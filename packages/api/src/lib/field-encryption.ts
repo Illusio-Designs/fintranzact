@@ -195,3 +195,43 @@ export function decryptTotpSecret(stored: string): string {
   }
   throw new Error("ENCRYPTION_KEY is not configured; cannot decrypt a two-factor secret");
 }
+
+// ── Payment-gateway secrets (FAIL-CLOSED) ───────────────────────────────────
+
+/**
+ * Encrypt a third-party API secret (a business's own Razorpay keys and webhook
+ * secret). Same fail-closed rule as 2FA secrets: with no ENCRYPTION_KEY it
+ * throws instead of storing plaintext (encryptField would silently do that).
+ */
+export function encryptGatewaySecret(secret: string): string {
+  if (!secret) throw new Error("Secret is empty");
+  if (configuredKeyHex()) {
+    const out = encryptField(secret);
+    if (!VERSIONED_CIPHERTEXT_RE.test(out)) throw new Error("Secret was not encrypted");
+    return out;
+  }
+  if (process.env.NODE_ENV === "test") {
+    process.env.ENCRYPTION_KEY = TEST_ONLY_KEY_HEX;
+    try {
+      return encryptField(secret);
+    } finally {
+      delete process.env.ENCRYPTION_KEY;
+    }
+  }
+  throw new Error("ENCRYPTION_KEY is not configured; refusing to store a payment-gateway secret in plaintext");
+}
+
+/** Decrypt a stored gateway secret. Throws on a missing key or a value that is not ciphertext. */
+export function decryptGatewaySecret(stored: string): string {
+  if (!VERSIONED_CIPHERTEXT_RE.test(stored)) throw new Error("Stored gateway secret is not encrypted");
+  if (configuredKeyHex()) return decryptField(stored);
+  if (process.env.NODE_ENV === "test") {
+    process.env.ENCRYPTION_KEY = TEST_ONLY_KEY_HEX;
+    try {
+      return decryptField(stored);
+    } finally {
+      delete process.env.ENCRYPTION_KEY;
+    }
+  }
+  throw new Error("ENCRYPTION_KEY is not configured; cannot decrypt a gateway secret");
+}

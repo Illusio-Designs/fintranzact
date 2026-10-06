@@ -5,9 +5,11 @@ import {
   Building03Icon,
   CashierIcon,
   CreditCardIcon,
+  Wallet01Icon,
   Database01Icon,
   DeliveryTruck01Icon,
   File01Icon,
+  Notification01Icon,
   SquareLock02Icon,
   Store01Icon,
   Target02Icon,
@@ -28,6 +30,7 @@ interface SettingsTab {
 const SETTINGS_TABS: SettingsTab[] = [
   { value: "business", label: "Business", icon: <Icon icon={Building03Icon} size={18} /> },
   { value: "documents", label: "Documents", icon: <Icon icon={File01Icon} size={18} /> },
+  { value: "reminders", label: "Payment reminders", icon: <Icon icon={Notification01Icon} size={18} />, adminOnly: true },
   { value: "shipping", label: "Shipping", icon: <Icon icon={DeliveryTruck01Icon} size={18} /> },
   { value: "team", label: "Team", icon: <Icon icon={UserGroupIcon} size={18} /> },
   { value: "targets", label: "Sales Targets", icon: <Icon icon={Target02Icon} size={18} /> },
@@ -36,6 +39,7 @@ const SETTINGS_TABS: SettingsTab[] = [
   { value: "account", label: "Account", icon: <Icon icon={UserIcon} size={18} /> },
   { value: "billing", label: "Billing", icon: <Icon icon={CreditCardIcon} size={18} />, ownerOnly: true },
   { value: "store", label: "Online Store", icon: <Icon icon={Store01Icon} size={18} /> },
+  { value: "payments", label: "Online payments", icon: <Icon icon={Wallet01Icon} size={18} />, adminOnly: true },
   { value: "pos", label: "Point-of-Sale", icon: <Icon icon={CashierIcon} size={18} />, adminOnly: true },
   { value: "barcodes", label: "Barcodes", icon: <Icon icon={BarCode02Icon} size={18} />, adminOnly: true },
 ];

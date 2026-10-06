@@ -177,6 +177,9 @@ export const businesses = pgTable("businesses", {
   // untouched pages keep following the default template and business details.
   storeReturnWindowDays: integer("store_return_window_days").default(7).notNull(),
   storePolicies: jsonb("store_policies").$type<Partial<Record<"terms" | "refund" | "shipping" | "contact" | "privacy", { content: string; updatedAt: string }>>>(),
+  // Payment reminder settings (see @fintranzact/shared payment-reminders.ts).
+  // Null = the defaults, which have reminders switched off.
+  paymentReminderSettings: jsonb("payment_reminder_settings").$type<Record<string, unknown>>(),
   // Point-of-Sale mode. When enabled: a /pos fullscreen register route is
   // reachable and the "Switch to POS" entry button appears on invoice
   // create. Off by default; toggle lives on Settings → POS.
@@ -362,6 +365,8 @@ export const parties = pgTable("parties", {
   gstinStatus: text("gstin_status"), // active | cancelled | suspended | inactive (from the last lookup)
   gstinVerifiedAt: timestamp("gstin_verified_at", { withTimezone: true }),
   // MSME (Udyam) — drives the 45-day payment rule for micro/small suppliers.
+  // Customer asked not to be reminded: no automatic or manual payment reminders.
+  doNotRemind: boolean("do_not_remind").default(false).notNull(),
   isMsme: boolean("is_msme").default(false).notNull(),
   udyamNumber: text("udyam_number"),
   msmeCategory: text("msme_category"), // micro | small | medium
@@ -1037,6 +1042,35 @@ export const taxDeductions = pgTable("tax_deductions", {
   index("tax_deductions_challan_idx").on(t.challanId),
 ]);
 
+// History of payment reminders sent (or prepared) for an invoice. One row per
+// (invoice, channel, slot_key): the scheduler claims a slot by inserting its
+// row BEFORE sending, so a restart or a second instance never sends it twice.
+//   channel  - email | sms | whatsapp
+//   kind     - before_due | on_due | after_due | manual
+//   slot_key - "before", "due", "after_<n>" for the schedule; "manual:<uuid>" for a hand-sent one
+//   trigger  - auto (scheduler) | manual (a person pressed Send)
+//   status   - sending | sent | failed | link_opened (WhatsApp link handed over)
+//   recipient - masked address, never the full email or number
+export const paymentReminders = pgTable("payment_reminders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  invoiceId: uuid("invoice_id").notNull().references(() => invoices.id, { onDelete: "cascade" }),
+  channel: text("channel").notNull(),
+  kind: text("kind").notNull(),
+  slotKey: text("slot_key").notNull(),
+  trigger: text("trigger").notNull(),
+  status: text("status").notNull(),
+  recipient: text("recipient"),
+  error: text("error"),
+  // No FK to users (control schema); null for the scheduler.
+  sentByUserId: uuid("sent_by_user_id"),
+  sentByName: text("sent_by_name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("payment_reminders_slot_idx").on(t.invoiceId, t.channel, t.slotKey),
+  index("payment_reminders_invoice_idx").on(t.businessId, t.invoiceId, t.createdAt),
+]);
+
 // Which TDS/TCS due-date reminder emails have gone out, so the scheduler sends
 // each one once. item_key names the item (e.g. "deposit:tds:2026-27:2026-09");
 // day_offset is 7 (within a week of the due date), 0 (due today) or -1 (overdue).
@@ -1181,6 +1215,71 @@ export const paymentGatewayConfigsRelations = relations(paymentGatewayConfigs, (
   bankAccount: one(bankAccounts, { fields: [paymentGatewayConfigs.bankAccountId], references: [bankAccounts.id] }),
   settlementAccount: one(bankAccounts, { fields: [paymentGatewayConfigs.settlementAccountId], references: [bankAccounts.id] }),
 }));
+
+// ── Online payments (the business's own Razorpay account) ─────
+// Each business pastes ITS OWN Razorpay API keys; customer money goes straight
+// to that account. Key id, key secret and webhook secret are encrypted at rest
+// (field encryption, ENCRYPTION_KEY) and never returned to a client. The
+// webhook URL carries "<tenantId>.<random token>": the token is stored hashed
+// (lookup) and encrypted (so the owner can see the URL again).
+
+export const razorpayConnections = pgTable("razorpay_connections", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  keyIdEncrypted: text("key_id_encrypted").notNull(),
+  keySecretEncrypted: text("key_secret_encrypted").notNull(),
+  webhookSecretEncrypted: text("webhook_secret_encrypted"),
+  /** Masked key id for display, e.g. "rzp_live_••••AbCd". Safe to return. */
+  keyIdMasked: text("key_id_masked").notNull(),
+  /** "test" or "live", from the key id prefix. */
+  mode: text("mode").notNull(),
+  webhookTokenHash: text("webhook_token_hash").notNull(),
+  webhookTokenEncrypted: text("webhook_token_encrypted").notNull(),
+  lastTestedAt: timestamp("last_tested_at", { withTimezone: true }),
+  lastTestOk: boolean("last_test_ok"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("razorpay_conn_business_idx").on(t.businessId),
+  uniqueIndex("razorpay_conn_token_idx").on(t.webhookTokenHash),
+]);
+
+// A Razorpay payment link created for an invoice's balance due. At most one
+// active (created / partially_paid) link per invoice.
+export const invoicePaymentLinks = pgTable("invoice_payment_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  invoiceId: uuid("invoice_id").notNull().references(() => invoices.id, { onDelete: "cascade" }),
+  razorpayLinkId: text("razorpay_link_id").notNull(),
+  shortUrl: text("short_url").notNull(),
+  amountPaise: integer("amount_paise").notNull(),
+  /** created | partially_paid | paid | cancelled | expired */
+  status: text("status").default("created").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("inv_pay_link_rzp_idx").on(t.businessId, t.razorpayLinkId),
+  index("inv_pay_link_invoice_idx").on(t.invoiceId),
+  uniqueIndex("inv_pay_link_active_idx").on(t.invoiceId).where(sql`status IN ('created', 'partially_paid')`),
+]);
+
+// One row per Razorpay payment recorded against an invoice: the dedupe key
+// (a redelivered webhook never records twice) and the gateway's own figures.
+export const razorpayPayments = pgTable("razorpay_payments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  razorpayPaymentId: text("razorpay_payment_id").notNull(),
+  paymentId: uuid("payment_id").references(() => payments.id, { onDelete: "set null" }),
+  invoiceId: uuid("invoice_id").references(() => invoices.id, { onDelete: "set null" }),
+  razorpayLinkId: text("razorpay_link_id"),
+  amountPaise: integer("amount_paise").notNull(),
+  feePaise: integer("fee_paise"),
+  taxPaise: integer("tax_paise"),
+  method: text("method"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("rzp_payments_unique_idx").on(t.businessId, t.razorpayPaymentId),
+]);
 
 // ── Stock Adjustments ─────────────────────────────────────────
 

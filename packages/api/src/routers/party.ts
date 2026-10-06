@@ -199,6 +199,7 @@ export const partyRouter = router({
           bankIfsc: parties.bankIfsc,
           bankName: parties.bankName,
           source: parties.source,
+          doNotRemind: parties.doNotRemind,
           createdAt: parties.createdAt,
           updatedAt: parties.updatedAt,
           balance: balanceExpr,

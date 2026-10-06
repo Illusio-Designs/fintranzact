@@ -203,6 +203,9 @@ export async function truncateAllTables(): Promise<void> {
   await client`
     TRUNCATE TABLE
       -- Tenant schema (leaf tables first)
+      razorpay_payments,
+      invoice_payment_links,
+      razorpay_connections,
       gstr2b_records,
       gstr2b_uploads,
       eway_bill_vehicle_updates,

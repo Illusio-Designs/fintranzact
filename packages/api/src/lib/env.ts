@@ -10,7 +10,8 @@ interface EnvCheck {
 const checks: EnvCheck[] = [
   { key: "DATABASE_URL", required: true, hint: "PostgreSQL connection string" },
   { key: "CORS_ORIGINS", required: true, hint: "Comma-separated allowed origins (e.g. https://app.fintranzact.com)" },
-  { key: "APP_URL", required: false, hint: "Frontend URL for links in emails (email change, invitations)" },
+  { key: "APP_URL", required: false, hint: "Frontend URL for links in emails (email change, invitations) and where customers return after paying an invoice online" },
+  { key: "API_URL", required: false, hint: "Public origin of this API server, shown in the Razorpay webhook URL businesses add in their own dashboard (defaults to the request host)" },
   {
     key: "ENCRYPTION_KEY",
     required: false,

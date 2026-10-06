@@ -246,6 +246,20 @@
       "when": 1791194270558,
       "tag": "0034_store_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1791234435178,
+      "tag": "0035_razorpay_payment_links",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791237231345,
+      "tag": "0036_payment_reminders",
+      "breakpoints": true
     }
   ]
 }

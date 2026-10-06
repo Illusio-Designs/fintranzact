@@ -44,6 +44,7 @@ export const HELP_NAV: HelpNavSection[] = [
       { label: "Credit & Debit Notes", slug: "documents/credit-and-debit-notes" },
       { label: "Sales & Purchase Returns", slug: "documents/returns" },
       { label: "Share Links", slug: "documents/share-links" },
+      { label: "Payment Reminders", slug: "documents/payment-reminders" },
     ],
   },
   {
@@ -112,6 +113,7 @@ export const HELP_NAV: HelpNavSection[] = [
     items: [
       { label: "Settings", slug: "settings" },
       { label: "Backup & Restore", slug: "settings/backup-restore" },
+      { label: "Accept online payments on invoices", slug: "settings/online-payments" },
       { label: "Plans & Billing", slug: "settings/plans" },
       { label: "Your free trial: what you get, reminders and what happens at the end", slug: "settings/free-trial" },
       { label: "Two-factor authentication: set up, backup codes, trusted devices", slug: "settings/two-factor-authentication" },
