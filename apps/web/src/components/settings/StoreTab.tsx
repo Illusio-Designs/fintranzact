@@ -8,6 +8,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Cancel01Icon, Loading03Icon, SquareLock02Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { PhoneInput } from "./PhoneInput";
 import { StorePoliciesCard } from "./StorePoliciesCard";
+import { StorePaymentsCard } from "./StorePaymentsCard";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -634,6 +635,7 @@ export function StoreTab() {
   return (
     <div>
       <StoreSettingsCard />
+      <StorePaymentsCard />
       <StoreItemsCard />
       {storeIsLive && <StorePreviewCard slug={settings.storeSlug!} />}
       <StorePoliciesCard storeBaseUrl={settings?.storeSlug ? buildStoreUrl(settings.storeSlug) : null} />

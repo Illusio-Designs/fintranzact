@@ -1,9 +1,10 @@
 import { cloneElement, isValidElement, useEffect, useId, useRef, useState } from "react";
-import type { CartItem, StoreConfig, OrderResult } from "../types";
+import type { CartItem, StoreConfig, OrderResult, PaymentMethod } from "../types";
 import { cartItemKey } from "../types";
 import { placeOrder } from "../api";
 import { cartTotals } from "../pricing";
 import { PolicyLinks } from "./PolicyLinks";
+import { PaymentChoice } from "./PaymentChoice";
 
 interface CheckoutProps {
   cart: CartItem[];
@@ -57,6 +58,11 @@ export function Checkout({
   const [submitting, setSubmitting] = useState(false);
   const [apiError, setApiError] = useState("");
   const [summaryOpen, setSummaryOpen] = useState(false);
+
+  // The ways to pay the store offers (decided by the server). An older API says nothing: Cash on Delivery only.
+  const payOptions = business.payments ?? { online: false, cod: true };
+  const [method, setMethod] = useState<PaymentMethod>(payOptions.online ? "online" : "cod");
+  const payingOnline = method === "online" && payOptions.online;
 
   // Fresh Turnstile token for order submission — Cloudflare tokens are single-use
   const orderTokenRef = useRef<string>("");
@@ -172,8 +178,12 @@ export function Checkout({
           ...(c.selectedVariantId ? { variantId: c.selectedVariantId } : {}),
         })),
         turnstileToken: orderTokenRef.current,
+        paymentMethod: payingOnline ? "online" : "cod",
       });
       onSuccess(result);
+      // Online: on to Razorpay's hosted page (UPI, cards, net banking); it returns to the order page.
+      // Without a page (Razorpay hiccup) the confirmation shows "Pay now" instead.
+      if (result.paymentMethod === "online" && result.paymentUrl) window.location.assign(result.paymentUrl);
     } catch (err) {
       setApiError(
         err instanceof Error ? err.message : "Failed to place order"
@@ -293,23 +303,36 @@ export function Checkout({
                   );
                 })}
               </div>
+              <div className="space-y-1.5 pt-2.5 border-t text-sm" style={{ borderColor: "var(--store-border-light)" }}>
+                <div className="flex justify-between" style={{ color: "var(--store-text-secondary)" }}>
+                  <span>Subtotal</span>
+                  <span className="tabular-nums" data-testid="checkout-subtotal">
+                    {symbol}
+                    {subtotal.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between" style={{ color: "var(--store-text-secondary)" }}>
+                  <span>GST</span>
+                  <span className="tabular-nums" data-testid="checkout-tax">
+                    {symbol}
+                    {tax.toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between" style={{ color: "var(--store-text-secondary)" }}>
+                  <span>Delivery</span>
+                  <span data-testid="checkout-delivery">No charge added here</span>
+                </div>
+              </div>
               <div
                 className="flex justify-between items-center text-sm font-bold pt-2.5 border-t"
                 style={{ borderColor: "var(--store-border-light)" }}
               >
-                <span style={{ color: "var(--store-text)" }}>Total</span>
+                <span style={{ color: "var(--store-text)" }}>Total{payingOnline ? " to pay" : ""}</span>
                 <span style={{ color: accent }} data-testid="checkout-total">
                   {symbol}
                   {total.toFixed(2)}
                 </span>
               </div>
-              {tax > 0 && (
-                <p className="text-xs text-right" style={{ color: "var(--store-muted)" }} data-testid="checkout-tax">
-                  incl. GST {symbol}
-                  {tax.toFixed(2)} on {symbol}
-                  {subtotal.toFixed(2)}
-                </p>
-              )}
             </div>
           </div>
         </div>
@@ -438,6 +461,8 @@ export function Checkout({
               </div>
             )}
 
+            <PaymentChoice options={payOptions} value={method} onChange={setMethod} accent={accent} />
+
             {/* Turnstile widget — renders a fresh token for order submission */}
             <div ref={turnstileRef} />
 
@@ -462,11 +487,11 @@ export function Checkout({
             >
               {submitting ? (
                 <span className="flex items-center gap-2.5">
-                  <Spinner /> Placing order...
+                  <Spinner /> {payingOnline ? "Taking you to payment..." : "Placing order..."}
                 </span>
               ) : (
                 <span className="flex items-center gap-2">
-                  Place Order &middot; {symbol}
+                  {payingOnline ? "Pay online" : "Place Order"} &middot; {symbol}
                   {total.toFixed(2)}
                 </span>
               )}

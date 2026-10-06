@@ -192,6 +192,13 @@ test.describe("J12 online store", () => {
     await store.getByLabel("Pincode").fill("400028");
     await store.getByLabel("Order Notes").fill("Ring the bell twice");
     await expect(store.getByTestId("checkout-total")).toHaveText(rupees(2184));
+    // Totals are laid out before paying: subtotal, GST, delivery, total.
+    await expect(store.getByTestId("checkout-subtotal")).toHaveText(rupees(2050));
+    await expect(store.getByTestId("checkout-tax")).toHaveText(rupees(134));
+    await expect(store.getByTestId("checkout-delivery")).toBeVisible();
+    // This store has not switched on online payment, so Cash on Delivery is the one way to pay.
+    await expect(store.getByTestId("payment-choice")).toContainText("Cash on Delivery");
+    await expect(store.getByTestId("payment-choice")).not.toContainText("Pay online");
     await expectNoHorizontalScroll(store, "store checkout");
     await store.getByRole("button", { name: `Place Order · ${rupees(2184)}` }).click();
     await expect(store.getByRole("heading", { name: "Order Placed!" })).toBeVisible();
@@ -244,6 +251,7 @@ test.describe("J12 online store", () => {
     await expect(detail1.getByRole("row").filter({ hasText: mango.name })).toContainText(inr(1680));
     await expect(detail1.getByRole("row").filter({ hasText: cashew.name })).toContainText(inr(504));
     await expect(detail1.getByTestId("store-order-address")).toHaveText("Flat 12, Shanti Kunj, Dadar West, Mumbai 400028");
+    await expect(detail1.getByTestId("store-order-payment")).toContainText("Cash on Delivery");
     await expect(detail1).toContainText("Ring the bell twice");
     await expectNoHorizontalScroll(page, "store order detail");
     await detail1.getByRole("button", { name: "Confirm Order" }).click();

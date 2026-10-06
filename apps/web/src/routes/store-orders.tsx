@@ -14,6 +14,8 @@ import { Icon } from "@/components/ui/Icon";
 import { ShoppingBag01Icon } from "@hugeicons/core-free-icons";
 import { RowActions, tidyMenu } from "@/components/ui/Menu";
 import { usePageSize } from "@/hooks/usePageSize";
+import { useCan } from "@/lib/permissions";
+import { StoreOrderPayment, hasRefundableMoney, type StoreOrderPaymentData } from "@/components/StoreOrderPayment";
 
 export const Route = createFileRoute("/store-orders")({
   component: StoreOrdersPage,
@@ -61,6 +63,14 @@ interface OrderDetail {
   lineItems: LineItem[];
   invoiceId: string | null;
   invoice: { invoiceNumber: string } | null;
+  paymentMethod: string;
+  paymentStatus: string;
+  paidAt: Date | string | null;
+  refundedAmount: string;
+  /** Money from the order's online payment that can still be refunded. */
+  refundable: string;
+  razorpayPayments: StoreOrderPaymentData["razorpayPayments"];
+  refunds: StoreOrderPaymentData["refunds"];
 }
 
 interface OrderRow {
@@ -71,6 +81,8 @@ interface OrderRow {
   itemCount: number;
   totalAmount: string;
   status: OrderStatus;
+  paymentMethod?: string;
+  paymentStatus?: string;
   createdAt: Date;
 }
 
@@ -236,6 +248,9 @@ interface OrderDetailPanelProps {
 function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  // An order paid online must say what happens to the money before it can be cancelled.
+  const [cancelRefund, setCancelRefund] = useState<"full" | "none" | "">("");
+  const canRefund = useCan("Store", "manage");
 
   const utils = trpc.useUtils();
 
@@ -268,9 +283,10 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
     onSuccess: () => {
       utils.store.listOrders.invalidate();
       if (orderId) utils.store.getOrder.invalidate({ id: orderId });
-      toast.success("Order cancelled");
+      toast.success(cancelRefund === "full" ? "Order cancelled and refunded" : "Order cancelled");
       setCancelOpen(false);
       setCancelReason("");
+      setCancelRefund("");
       onUpdated();
     },
     onError: (err) => toast.error("Failed to cancel order", err.message),
@@ -279,6 +295,8 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
   if (!orderId) return null;
 
   const o = order as OrderDetail | null | undefined;
+  const moneyToDecide = !!o && hasRefundableMoney(o);
+  const cancelBlocked = moneyToDecide && cancelRefund === "";
   const isMutating =
     confirmOrder.isPending || updateStatus.isPending || cancelOrder.isPending;
 
@@ -411,6 +429,9 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
               </div>
             </div>
 
+            {/* Payment: method, status, Razorpay reference, refunds */}
+            <StoreOrderPayment order={o} onChanged={onUpdated} />
+
             {/* Line items */}
             <div>
               <p className="text-2xs font-medium text-text-tertiary uppercase tracking-wide mb-2">
@@ -517,6 +538,44 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
             <p className="text-sm text-text-secondary mt-1">
               Cancel order {o?.orderNumber ?? ""}? This action cannot be undone.
             </p>
+            {moneyToDecide && o && (
+              <fieldset className="mt-3 space-y-2" data-testid="cancel-refund-choice">
+                <legend className="text-xs font-medium text-text-secondary mb-1">
+                  This order was paid online ({formatCurrency(o.refundable)} can be refunded)
+                </legend>
+                <label className={cn("flex items-start gap-2 text-sm", !canRefund && "opacity-50")}>
+                  <input
+                    type="radio"
+                    name="cancel-refund"
+                    className="mt-1"
+                    checked={cancelRefund === "full"}
+                    disabled={!canRefund}
+                    onChange={() => setCancelRefund("full")}
+                  />
+                  <span>
+                    Refund {formatCurrency(o.refundable)} to the customer through Razorpay
+                    <span className="block text-xs text-text-tertiary">
+                      {canRefund ? "A credit note is recorded and the stock goes back." : "Only an owner or admin can refund."}
+                    </span>
+                  </span>
+                </label>
+                {Number(o.refundedAmount) <= 0 && (
+                  <label className="flex items-start gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="cancel-refund"
+                      className="mt-1"
+                      checked={cancelRefund === "none"}
+                      onChange={() => setCancelRefund("none")}
+                    />
+                    <span>
+                      Cancel and keep the payment
+                      <span className="block text-xs text-text-tertiary">You refund the customer yourself, outside Fintranzact.</span>
+                    </span>
+                  </label>
+                )}
+              </fieldset>
+            )}
             <div className="mt-3">
               <label htmlFor="cancel-order-reason" className="block text-xs font-medium text-text-secondary mb-1">
                 Reason (optional)
@@ -533,14 +592,14 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
             <div className="flex justify-end gap-2 mt-4">
               <button
                 className="btn-ghost"
-                onClick={() => { setCancelOpen(false); setCancelReason(""); }}
+                onClick={() => { setCancelOpen(false); setCancelReason(""); setCancelRefund(""); }}
               >
                 Keep Order
               </button>
               <button
                 className="btn-danger"
-                disabled={cancelOrder.isPending}
-                onClick={() => orderId && cancelOrder.mutate({ orderId, reason: cancelReason.trim() || undefined })}
+                disabled={cancelOrder.isPending || cancelBlocked}
+                onClick={() => orderId && cancelOrder.mutate({ orderId, reason: cancelReason.trim() || undefined, ...(cancelRefund ? { refund: cancelRefund } : {}) })}
               >
                 {cancelOrder.isPending ? "Cancelling…" : "Cancel Order"}
               </button>
@@ -688,6 +747,11 @@ function StoreOrdersPage() {
                       </td>
                       <td className="whitespace-nowrap">
                         <OrderStatusBadge status={order.status} />
+                        {order.paymentMethod === "online" && (
+                          <span className="ml-1.5 text-2xs text-text-tertiary" data-testid="order-payment-chip">
+                            {order.paymentStatus === "unpaid" ? "awaiting payment" : order.paymentStatus === "paid" ? "paid online" : "refunded"}
+                          </span>
+                        )}
                       </td>
                       <td className="text-text-secondary text-xs whitespace-nowrap">
                         {formatDate(order.createdAt)}
@@ -725,7 +789,11 @@ function StoreOrdersPage() {
                             order.status !== "delivered" && order.status !== "cancelled" && {
                               label: "Cancel order",
                               danger: true,
-                              onSelect: () => setInlineCancelId(order.id),
+                              // An order paid online is cancelled from its panel, where the refund is chosen.
+                              onSelect: () =>
+                                order.paymentStatus && order.paymentStatus !== "unpaid"
+                                  ? setSelectedId(order.id)
+                                  : setInlineCancelId(order.id),
                             },
                           ])}
                         />

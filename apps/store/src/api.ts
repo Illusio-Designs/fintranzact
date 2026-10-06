@@ -1,4 +1,4 @@
-import type { StoreConfig, OrderResult, StorePolicies } from "./types";
+import type { StoreConfig, OrderResult, StorePolicies, PaymentMethod, PublicOrder } from "./types";
 
 const API_URL = import.meta.env.API_URL || "";
 
@@ -44,6 +44,8 @@ export async function placeOrder(
       variantId?: string;
     }>;
     turnstileToken?: string;
+    /** How the shopper chose to pay; the server checks it against what the store offers. */
+    paymentMethod?: PaymentMethod;
   }
 ): Promise<OrderResult> {
   // `credentials: "omit"` — never attach cookies. `X-Requested-With` is
@@ -63,4 +65,23 @@ export async function placeOrder(
     throw new Error(err.error || "Order failed");
   }
   return res.json();
+}
+
+/** The public status page of one order: totals, payment state, whether it can still be paid online. */
+export async function fetchOrder(slug: string, orderId: string): Promise<PublicOrder> {
+  const res = await fetch(`${STORE_PREFIX}/${slug}/order/${orderId}`, { credentials: "omit" });
+  if (!res.ok) throw new Error(res.status === 404 ? "We could not find this order." : "Could not load your order. Please try again.");
+  return res.json();
+}
+
+/** A (new or reused) Razorpay payment page for an unpaid online order: "Pay now" / "Pay again". */
+export async function payOrder(slug: string, orderId: string): Promise<string> {
+  const res = await fetch(`${STORE_PREFIX}/${slug}/order/${orderId}/pay`, {
+    method: "POST",
+    credentials: "omit",
+    headers: { "X-Requested-With": "fintranzact" },
+  });
+  const body = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+  if (!res.ok || !body.url) throw new Error(body.error || "Online payment is unavailable right now. Please try again in a moment.");
+  return body.url;
 }

@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import type { OrderResult, StoreConfig } from "../types";
+import { PayNowButton } from "./PayNowButton";
 
 interface OrderConfirmationProps {
+  slug: string;
   result: OrderResult;
   config: StoreConfig;
   onContinueShopping: () => void;
 }
 
 export function OrderConfirmation({
+  slug,
   result,
   config,
   onContinueShopping,
@@ -15,6 +18,9 @@ export function OrderConfirmation({
   const { business } = config;
   const symbol = business.currency === "INR" ? "\u20B9" : business.currency;
   const accent = business.accentColor || "var(--store-accent)";
+
+  // An online order that is not paid yet: the order is saved, and paying is the next step.
+  const awaitingPayment = result.paymentMethod === "online" && result.paymentStatus !== "paid";
 
   const whatsappUrl = business.whatsappNumber
     ? buildWhatsAppUrl(
@@ -78,13 +84,15 @@ export function OrderConfirmation({
           className="text-2xl font-bold mb-1"
           style={{ color: "var(--store-text)", letterSpacing: "-0.03em" }}
         >
-          Order Placed!
+          {awaitingPayment ? "Order saved" : "Order Placed!"}
         </h2>
         <p
           className="text-sm mb-6"
           style={{ color: "var(--store-muted)" }}
         >
-          Your order has been received successfully
+          {awaitingPayment
+            ? "Complete the payment to confirm your order"
+            : "Your order has been received successfully"}
         </p>
 
         {/* Order details */}
@@ -132,18 +140,36 @@ export function OrderConfirmation({
         </div>
 
         {/* Message */}
-        <p
-          className="text-sm leading-relaxed mb-6"
-          style={{ color: "var(--store-text-secondary)" }}
-        >
-          <span className="font-semibold" style={{ color: "var(--store-text)" }}>
-            {business.name}
-          </span>{" "}
-          will confirm your order shortly.{" "}
-          {business.whatsappNumber
-            ? "You can reach out on WhatsApp for updates."
-            : "They will be in touch soon."}
-        </p>
+        {awaitingPayment ? (
+          <div className="mb-6 space-y-3" data-testid="awaiting-payment">
+            <p className="text-sm leading-relaxed" style={{ color: "var(--store-text-secondary)" }}>
+              {result.paymentError
+                ? `${result.paymentError} Your order is saved, so you will not lose it.`
+                : "Your order is saved and waiting for payment. If you were not taken to the payment page, use the button below."}
+            </p>
+            <PayNowButton slug={slug} orderId={result.orderId} accent={accent} label="Pay now" />
+            <a
+              className="block text-sm font-medium underline"
+              style={{ color: accent }}
+              href={`/${slug}/order/${result.orderId}`}
+            >
+              View this order
+            </a>
+          </div>
+        ) : (
+          <p
+            className="text-sm leading-relaxed mb-6"
+            style={{ color: "var(--store-text-secondary)" }}
+          >
+            <span className="font-semibold" style={{ color: "var(--store-text)" }}>
+              {business.name}
+            </span>{" "}
+            will confirm your order shortly.{" "}
+            {business.whatsappNumber
+              ? "You can reach out on WhatsApp for updates."
+              : "They will be in touch soon."}
+          </p>
+        )}
 
         {/* Actions */}
         <div className="space-y-3">

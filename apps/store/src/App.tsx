@@ -8,6 +8,7 @@ import { Cart } from "./components/Cart";
 import { Checkout } from "./components/Checkout";
 import { PhoneVerify } from "./components/PhoneVerify";
 import { OrderConfirmation } from "./components/OrderConfirmation";
+import { OrderStatus } from "./components/OrderStatus";
 import { cartTotals } from "./pricing";
 import { Footer } from "./components/Footer";
 import { PolicyPage } from "./components/PolicyPage";
@@ -65,8 +66,11 @@ function lightenHex(hex: string, amount: number): string {
 
 type View = "browse" | "cart" | "phone-verify" | "checkout" | "confirmed";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
- * /<slug>/policies/<kind> is a policy page; everything else is the store.
+ * /<slug>/policies/<kind> is a policy page; /<slug>/order/<id> is an order's
+ * status page (where Razorpay sends shoppers back to); everything else is the store.
  * The path never changes within a page load (policy links are plain anchors).
  */
 export function App() {
@@ -239,10 +243,17 @@ function StoreApp() {
     );
   }
 
+  // ── Order status page (/<slug>/order/<id>): pay again, payment state ──
+  const orderParts = window.location.pathname.split("/").filter(Boolean);
+  if (orderParts[1] === "order" && UUID_RE.test(orderParts[2] ?? "")) {
+    return <OrderStatus slug={slug} orderId={orderParts[2]!} config={catalog} />;
+  }
+
   // ── Order Confirmation ──
   if (view === "confirmed" && orderResult) {
     return (
       <OrderConfirmation
+        slug={slug}
         result={orderResult}
         config={catalog}
         onContinueShopping={handleContinueShopping}
