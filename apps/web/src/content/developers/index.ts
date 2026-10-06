@@ -32,6 +32,7 @@ import { posEndpoints } from "./pos";
 import { shareEndpoints } from "./share";
 import { onlinePaymentsEndpoints } from "./onlinePayments";
 import { reminderEndpoints } from "./reminder";
+import { payrollEndpoints } from "./payroll";
 import { tdsEndpoints } from "./tds";
 import { periodEndpoints } from "./period";
 import { systemEndpoints } from "./system";
@@ -117,6 +118,11 @@ export const allSections: EndpointSection[] = [
     id: "accounting",
     title: "Accounting",
     groups: [accountEndpoints, journalEndpoints, tdsEndpoints, periodEndpoints],
+  },
+  {
+    id: "payroll",
+    title: "Payroll (add-on)",
+    groups: [payrollEndpoints],
   },
   {
     id: "analytics",

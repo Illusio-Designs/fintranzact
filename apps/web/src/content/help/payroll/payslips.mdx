@@ -1,0 +1,48 @@
+---
+title: Payslips and the bank file
+description: "Download or email each employee's payslip PDF, how payslips stay final after approval, and the downloadable bank payment file for NEFT or RTGS transfers."
+sidebar:
+  order: 6
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+
+<ForDesktop>
+
+## Payslips
+
+Every employee in a run has a payslip. On the run page choose **Payslip** next to the employee to download the PDF.
+
+- Before approval the payslip is a **draft**, marked as such, so you can check what an employee will receive.
+- When the run is approved, a payslip is created for each employee and **never changes again**, even if you edit the employee or the salary template afterwards.
+
+A payslip is an A4 page with your business name and address, the month, the employee's details, the days in the month, **paid days** and **loss of pay days**, the **earnings** and **deductions**, the **net pay in figures and in words**, and a note that it is computer generated. The employee's PAN, UAN and bank account are shown **partly hidden**.
+
+### Email a payslip
+
+Once the run is approved, choose **Email** next to an employee. The payslip PDF is sent to the email address on the employee's page, from your business name, and replies go to your business email. The run page remembers that it was sent and offers **Email again**. An employee without an email address cannot be emailed; add one first.
+
+Payslips cannot be shared by a public link. Salary data is private, so use the download or the email.
+
+## The bank payment file
+
+When a run is approved, **Bank payment file** downloads a CSV with one row per employee who has net pay:
+
+| Column | Content |
+|---|---|
+| Sr No | Row number |
+| Employee Code | The employee's code |
+| Beneficiary Name | The name as per bank |
+| Account Number | The employee's bank account |
+| IFSC | The bank branch code |
+| Amount (INR) | The net pay |
+| Payment Mode | NEFT, or RTGS from ₹2,00,000 |
+| Narration | For example "Salary August 2026" |
+
+**This is a general NEFT and RTGS style file, not any particular bank's upload format.** Banks ask for different columns and layouts: check what yours needs and rearrange the columns before you upload it. Employees with no bank account or IFSC are left out, and the message after download lists them.
+
+The file contains full bank account numbers, so only owners, admins and accountants can download it. Keep it private and delete it once the payments are made.
+
+After you make the transfers, return to the run and choose **Mark as paid** (see [Running payroll](/help/payroll/running-payroll)).
+
+</ForDesktop>

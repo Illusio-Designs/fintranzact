@@ -1,0 +1,60 @@
+---
+title: Attendance and leave
+description: "Mark daily attendance, set weekly offs, shifts and holidays by state and branch, manage leave types and balances, and see how paid days and loss of pay feed payroll."
+sidebar:
+  order: 4
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+
+<ForDesktop>
+
+Attendance and leave decide how many days each employee is paid for. Open **Payroll → Attendance** and **Payroll → Leave**.
+
+## How days are counted
+
+For each month, every day inside an employee's employment (from the joining date to the last working day) is counted like this:
+
+| Day | Paid? |
+|---|---|
+| Present | Paid |
+| Absent | **Loss of pay (LOP)** |
+| Half day | Half paid, half LOP |
+| Weekly off | Paid |
+| Holiday | Paid |
+| Paid leave | Paid |
+| Unpaid leave | **LOP** |
+
+**Paid days = employed days - LOP days.** For a full month that is the days in the month minus the LOP days. An employee who joined on the 16th of a 31-day month has 16 employed days, and all 16 are paid unless some are marked absent. Days before the joining date and after the last working day are not part of that month.
+
+Each earning is then paid in proportion: monthly amount x paid days / days in the month, rounded to the paisa. Zero paid days means zero pay.
+
+## The monthly grid
+
+**Attendance → Monthly attendance** shows every employee for the month with one cell per day. Faded cells follow the calendar (weekly offs and holidays) and need no marking. Select a cell to mark that day as present, absent, half day, week off, holiday or on leave, with optional check-in and check-out times and **overtime hours** on a day worked.
+
+- **Mark everyone present** marks the whole month for everyone in one step. Days already marked are kept.
+- **Bulk mark** marks a status for chosen employees over a range of dates.
+- The **Paid** and **LOP** columns show what payroll will use.
+
+When a payroll run locks the month, the grid is locked until the run is reopened (before approval).
+
+## Weekly offs, shifts and holidays
+
+- **Weekly offs and shifts** (Attendance → Weekly offs and shifts): choose the weekly off days for everyone, the standard hours in a day and the overtime rate. A **shift** has its own hours and weekly offs and can be given to employees.
+- **Holiday calendar**: add a holiday for **everyone** (national), for **one state** or for **one branch**. A state holiday applies to employees whose state of work matches, and a branch holiday to employees at that branch. **Copy from last year** carries the dates over; edit festivals that move.
+
+## Overtime
+
+Overtime hours are entered on the days worked. The pay is **hours x the ordinary hourly wage x the overtime rate**. The ordinary hourly wage is the full-month Basic + DA + retaining allowance divided by the days in the month and by the standard hours in a day, and the rate is 2 by default (twice the ordinary wage). Overtime rules differ by state and employment; **confirm the rate with your CA each year**.
+
+## Leave
+
+**Leave → Leave types** has the usual types: **CL** (casual), **SL** (sick), **EL** (earned or privilege) and **LOP** (loss of pay). Choose **Add CL, SL, EL and LOP** to start, and edit or add your own. A type can be paid or unpaid, granted yearly or monthly, carried forward up to a maximum, and encashable.
+
+- **Grant this month's leave** adds the monthly and yearly grants. It is safe to press twice: a grant is made once per employee, leave type and period.
+- A **leave application** records the dates (weekly offs and holidays inside them do not use leave; the first or last day can be a half day). Approving it uses the **balance first** and turns any days beyond the balance into **loss of pay**, then marks the days in attendance. Cancelling an approved application gives the balance back and clears those days.
+- **Close leave year** carries each balance into the next year up to the type's maximum and lets the rest lapse. Closing again changes nothing. The leave year starts in April by default; change it in Weekly offs and shifts.
+- **Encash** takes days off an encashable balance. The rupee amount you enter is added as an earning to that employee's next payroll run.
+
+</ForDesktop>

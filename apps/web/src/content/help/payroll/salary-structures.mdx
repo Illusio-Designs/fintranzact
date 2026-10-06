@@ -1,0 +1,60 @@
+---
+title: Salary structures
+description: "Set up salary components and templates, turn an annual CTC into monthly amounts, use the 50 percent wage rule check, and give each employee a salary from a date."
+sidebar:
+  order: 3
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+
+<ForDesktop>
+
+Open **Payroll → Salary structures**. A salary is built from **components** that you collect into **templates**, and each employee is given a template with their own **annual CTC**.
+
+## Components
+
+A component is one line of a salary. There are three kinds:
+
+| Kind | Meaning |
+|---|---|
+| **Earning** | Paid to the employee: Basic, DA, retaining allowance, HRA, conveyance, special allowance, bonus, incentive, other |
+| **Deduction** | Held back from the employee: manual deduction, advance recovery, other |
+| **Employer contribution** | Part of the cost to the company, not paid to the employee |
+
+Choose **Add standard components** to start with Basic, DA, retaining allowance, HRA, conveyance, special allowance, bonus, incentive, advance recovery and other deduction. You can add your own with **+ Component**.
+
+Two settings matter on each component:
+
+- **Pays by paid days.** On, the amount is reduced when the employee has loss of pay. Off, it is paid in full whenever the employee has at least one paid day (a fixed bonus, for example).
+- **Counts as wages.** Basic, DA and retaining allowance are wages for the 50 percent check below.
+
+PF, ESI, professional tax and income tax are not components yet; see [Payroll](/help/payroll).
+
+## Templates and the monthly amounts from annual CTC
+
+A template lists components and says how each gets its monthly amount:
+
+| How it is worked out | Use it for |
+|---|---|
+| **Fixed monthly amount** | A set rupee amount a month, for example conveyance |
+| **% of monthly CTC** | Basic as 50 percent of the CTC |
+| **% of Basic** | HRA as 40 percent of Basic |
+| **Balance of CTC** | The rest of the monthly CTC after every other line, usually special allowance. There can be only one |
+
+The monthly CTC is the annual CTC divided by 12. With a CTC of ₹6,00,000, Basic at 50 percent and HRA at 40 percent of Basic, a month is Basic ₹25,000, HRA ₹10,000 and special allowance ₹15,000, adding up to ₹50,000. The template editor shows this preview as you type, using any CTC you enter. A template that cannot work (for example the lines add up to more than the monthly CTC) cannot be saved, and the message says why.
+
+Amounts that do not divide evenly are rounded to the nearest paisa, half rounded up, once per amount.
+
+### The 50 percent wage rule check
+
+Under the Labour Codes, "wages" (Basic, DA and retaining allowance) should be at least 50 percent of the total remuneration. The preview shows the percentage and a **warning** when wages are below half. It is a warning only: it never stops you saving a template or running payroll. Ask your CA what applies to your business.
+
+## Give an employee a salary
+
+In **Employee salaries** choose **Set salary** (or **Revise**) next to the employee. Pick the template, enter the **annual CTC** and the date it is **effective from**. The monthly breakdown is shown before you save.
+
+- A payroll run uses the **latest salary effective by the last day of the month**. A revision therefore applies from the start of the month its date falls in.
+- The monthly amounts are saved with the employee's salary. Changing a template or a component later does **not** change anyone's saved salary: assign again to apply the change.
+- An employee with no salary yet is left out of the run, with a warning telling you who.
+
+</ForDesktop>

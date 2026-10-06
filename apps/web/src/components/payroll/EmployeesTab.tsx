@@ -45,6 +45,7 @@ export function EmployeesTab() {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [exiting, setExiting] = useState<{ id: string; name: string } | null>(null);
+  const [lists, setLists] = useState(false);
   const list = trpc.payrollEmployee.list.useQuery({ status, search: search || undefined, page: 1, limit: 200 });
   const capacity = trpc.payrollEmployee.capacity.useQuery();
   const rows = list.data?.data ?? [];
@@ -83,6 +84,7 @@ export function EmployeesTab() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          <button className="btn-secondary" onClick={() => setLists(true)}>Departments and designations</button>
           <button className="btn-primary" onClick={() => setEditing("new")} disabled={atCap} title={atCap ? `The Full Access Trial includes up to ${cap} employees.` : undefined}>
             + Add employee
           </button>
@@ -158,6 +160,7 @@ export function EmployeesTab() {
 
       {editing && <EmployeeForm id={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={refresh} />}
       {exiting && <ExitDialog employee={exiting} onClose={() => setExiting(null)} onDone={refresh} />}
+      {lists && <ListsDialog onClose={() => setLists(false)} />}
     </div>
   );
 }
@@ -401,5 +404,68 @@ function ExitDialog({ employee, onClose, onDone }: { employee: { id: string; nam
         </div>
       </div>
     </Modal>
+  );
+}
+
+/** Departments and designations: add one, hide or show one (a hidden one stays on employees who have it). */
+function ListsDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <Modal open onClose={onClose} title="Departments and designations" className="max-w-2xl">
+      <div className="grid gap-5 sm:grid-cols-2">
+        <NameList kind="department" title="Departments" />
+        <NameList kind="designation" title="Designations" />
+      </div>
+      <div className="mt-4 flex justify-end">
+        <button className="btn-secondary" onClick={onClose}>Done</button>
+      </div>
+    </Modal>
+  );
+}
+
+function NameList({ kind, title }: { kind: "department" | "designation"; title: string }) {
+  const utils = trpc.useUtils();
+  const [name, setName] = useState("");
+  const dept = trpc.payrollEmployee.departmentList.useQuery(undefined, { enabled: kind === "department" });
+  const desig = trpc.payrollEmployee.designationList.useQuery(undefined, { enabled: kind === "designation" });
+  const rows = (kind === "department" ? dept.data : desig.data) ?? [];
+  const refresh = () => {
+    void utils.payrollEmployee.departmentList.invalidate();
+    void utils.payrollEmployee.designationList.invalidate();
+  };
+  const createDept = trpc.payrollEmployee.departmentCreate.useMutation({ onSuccess: () => { setName(""); refresh(); }, onError: onError("Could not add the department") });
+  const createDesig = trpc.payrollEmployee.designationCreate.useMutation({ onSuccess: () => { setName(""); refresh(); }, onError: onError("Could not add the designation") });
+  const updateDept = trpc.payrollEmployee.departmentUpdate.useMutation({ onSuccess: refresh, onError: onError("Could not change the department") });
+  const updateDesig = trpc.payrollEmployee.designationUpdate.useMutation({ onSuccess: refresh, onError: onError("Could not change the designation") });
+  const add = () => {
+    if (!name.trim()) return;
+    if (kind === "department") createDept.mutate({ name: name.trim() });
+    else createDesig.mutate({ name: name.trim() });
+  };
+  const toggle = (r: { id: string; name: string; isActive: boolean }) => {
+    const patch = { id: r.id, name: r.name, isActive: !r.isActive };
+    if (kind === "department") updateDept.mutate(patch);
+    else updateDesig.mutate(patch);
+  };
+  return (
+    <section aria-label={title}>
+      <h3 className="mb-2 text-sm font-semibold text-text-primary">{title}</h3>
+      <ul className="mb-3 max-h-48 space-y-1 overflow-y-auto text-sm">
+        {rows.length === 0 && <li className="text-text-tertiary">None yet.</li>}
+        {rows.map((r) => (
+          <li key={r.id} className="flex items-center justify-between gap-2 rounded-lg bg-surface-1 px-3 py-1.5">
+            <span className={r.isActive ? "text-text-primary" : "text-text-tertiary line-through"}>
+              {r.name} <span className="text-xs text-text-tertiary">({r.employeeCount})</span>
+            </span>
+            <button type="button" className="text-xs text-brand-700 hover:underline dark:text-brand-300" onClick={() => toggle(r)}>
+              {r.isActive ? "Hide" : "Show"}
+            </button>
+          </li>
+        ))}
+      </ul>
+      <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); add(); }}>
+        <input className="input flex-1" aria-label={`New ${kind} name`} value={name} onChange={(e) => setName(e.target.value)} placeholder={kind === "department" ? "Operations" : "Executive"} />
+        <button type="submit" className="btn-primary btn-sm" disabled={!name.trim()}>Add</button>
+      </form>
+    </section>
   );
 }

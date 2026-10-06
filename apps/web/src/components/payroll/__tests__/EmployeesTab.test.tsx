@@ -6,6 +6,8 @@ const h = vi.hoisted(() => ({
   update: vi.fn(),
   exit: vi.fn(),
   reactivate: vi.fn(),
+  deptCreate: vi.fn(),
+  desigUpdate: vi.fn(),
   invalidate: vi.fn(),
   list: { data: undefined as unknown },
   capacity: { data: { active: 2, cap: null as number | null } },
@@ -15,15 +17,19 @@ const h = vi.hoisted(() => ({
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => ({
-      payrollEmployee: { list: { invalidate: h.invalidate }, capacity: { invalidate: h.invalidate } },
+      payrollEmployee: { list: { invalidate: h.invalidate }, capacity: { invalidate: h.invalidate }, departmentList: { invalidate: h.invalidate }, designationList: { invalidate: h.invalidate } },
       payrollSalary: { overview: { invalidate: h.invalidate } },
     }),
     payrollEmployee: {
       list: { useQuery: () => ({ data: h.list.data, isLoading: !h.list.data }) },
       capacity: { useQuery: () => ({ data: h.capacity.data }) },
       get: { useQuery: (_i: unknown, o?: { enabled?: boolean }) => ({ data: o?.enabled === false ? undefined : h.detail.data }) },
-      departmentList: { useQuery: () => ({ data: [{ id: "11111111-1111-4111-8111-111111111111", name: "Operations", isActive: true }] }) },
-      designationList: { useQuery: () => ({ data: [{ id: "22222222-2222-4222-8222-222222222222", name: "Executive", isActive: true }] }) },
+      departmentList: { useQuery: () => ({ data: [{ id: "11111111-1111-4111-8111-111111111111", name: "Operations", isActive: true, employeeCount: 2 }] }) },
+      designationList: { useQuery: () => ({ data: [{ id: "22222222-2222-4222-8222-222222222222", name: "Executive", isActive: true, employeeCount: 1 }] }) },
+      departmentCreate: { useMutation: () => ({ mutate: h.deptCreate, isPending: false }) },
+      designationCreate: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      departmentUpdate: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
+      designationUpdate: { useMutation: () => ({ mutate: h.desigUpdate, isPending: false }) },
       shiftList: { useQuery: () => ({ data: [] }) },
       create: { useMutation: () => ({ mutate: h.create, isPending: false }) },
       update: { useMutation: () => ({ mutate: h.update, isPending: false }) },
@@ -52,7 +58,7 @@ const detail = (over: Record<string, unknown> = {}) => ({
 
 describe("EmployeesTab", () => {
   beforeEach(() => {
-    for (const f of [h.create, h.update, h.exit, h.reactivate, h.invalidate]) f.mockReset();
+    for (const f of [h.create, h.update, h.exit, h.reactivate, h.deptCreate, h.desigUpdate, h.invalidate]) f.mockReset();
     h.list.data = { data: [row(), row({ id: "e2", employeeCode: "E002", name: "Ravi Nair", panMasked: null, hasBankDetails: false, bankAccountMasked: null })], total: 2, page: 1, limit: 200 };
     h.capacity.data = { active: 2, cap: null };
     h.detail.data = detail();
@@ -153,6 +159,18 @@ describe("EmployeesTab", () => {
     expect(screen.getByText(/Left 20 Aug 2026/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Reactivate" }));
     expect(h.reactivate).toHaveBeenCalledWith({ id: "e1" });
+  });
+
+  it("adds a department and hides a designation", () => {
+    render(<EmployeesTab />);
+    fireEvent.click(screen.getByRole("button", { name: "Departments and designations" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Operations")).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText("New department name"), { target: { value: "Accounts" } });
+    fireEvent.click(within(within(dialog).getByRole("region", { name: "Departments" })).getByRole("button", { name: "Add" }));
+    expect(h.deptCreate).toHaveBeenCalledWith({ name: "Accounts" });
+    fireEvent.click(within(within(dialog).getByRole("region", { name: "Designations" })).getByRole("button", { name: "Hide" }));
+    expect(h.desigUpdate).toHaveBeenCalledWith({ id: "22222222-2222-4222-8222-222222222222", name: "Executive", isActive: false });
   });
 
   it("explains an empty list", () => {
