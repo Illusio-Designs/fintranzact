@@ -5,6 +5,10 @@ export interface StoreConfig {
     accentColor?: string;
     minOrderAmount?: string;
     deliveryNote?: string;
+    /** Flat delivery fee in rupees, before GST ("0.00" or absent = no delivery charge). Display only: the server prices the order. */
+    deliveryFee?: string;
+    /** Order subtotal at or above which delivery is free (null/absent = no threshold). */
+    freeDeliveryAbove?: string | null;
     whatsappNumber?: string;
     currency: string;
     phone?: string;
@@ -73,6 +77,8 @@ export interface OrderResult {
   orderNumber: string;
   totalAmount: string;
   subtotal?: string;
+  /** Delivery charge before GST ("0.00" when none). */
+  deliveryCharge?: string;
   taxAmount?: string;
   message?: string;
   paymentMethod?: PaymentMethod;
@@ -93,6 +99,9 @@ export interface PublicOrder {
   paymentStatus: string;
   currency: string;
   subtotal: string;
+  /** Delivery charge before GST ("0.00" when none). */
+  deliveryCharge?: string;
+  /** All GST on the order, including the GST on the delivery charge. */
   taxAmount: string;
   totalAmount: string;
   refundedAmount: string;

@@ -114,8 +114,12 @@ export function OrderStatus({ slug, orderId, config }: OrderStatusProps) {
 
             <div className="space-y-1.5 border-t pt-3 text-sm" style={{ borderColor: "var(--store-border-light)" }}>
               <Row label="Subtotal" value={money(order.subtotal)} />
+              <Row
+                label="Delivery"
+                value={parseFloat(order.deliveryCharge ?? "0") > 0 ? money(order.deliveryCharge!) : "Free delivery"}
+                testId="order-delivery"
+              />
               <Row label="GST" value={money(order.taxAmount)} />
-              <Row label="Delivery" value="No charge added here" />
               <div className="flex justify-between font-bold pt-1.5" style={{ color: "var(--store-text)" }}>
                 <span>Total</span>
                 <span className="tabular-nums" data-testid="order-total">
@@ -146,11 +150,11 @@ export function OrderStatus({ slug, orderId, config }: OrderStatusProps) {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, testId }: { label: string; value: string; testId?: string }) {
   return (
     <div className="flex justify-between" style={{ color: "var(--store-text-secondary)" }}>
       <span>{label}</span>
-      <span className="tabular-nums">{value}</span>
+      <span className="tabular-nums" data-testid={testId}>{value}</span>
     </div>
   );
 }

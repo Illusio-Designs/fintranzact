@@ -10,7 +10,7 @@
  */
 
 import { eq, and } from "drizzle-orm";
-import { businesses, storeOrders, type TenantDatabase } from "@fintranzact/db";
+import { businesses, invoices, storeOrders, type TenantDatabase } from "@fintranzact/db";
 import { emailService, safeDisplayName, type BuiltEmail, type ReminderEmail } from "../email.js";
 import { logger } from "../logger.js";
 import { storeOrderUrl } from "./urls.js";
@@ -28,6 +28,8 @@ export interface StoreMailInput {
   orderNumber: string;
   /** The order total as a money string. */
   total: string;
+  /** Order summary for the confirmation mail: items subtotal, delivery charge, GST (all money strings). */
+  summary?: { subtotal: string; deliveryCharge: string; tax: string };
   /** Refund mail: the amount refunded. */
   amount?: string;
   /** Placed mail: how the shopper chose to pay. */
@@ -71,6 +73,11 @@ export function buildStoreOrderEmail(p: StoreMailInput): BuiltEmail {
       linkLabel = "View your order";
       break;
   }
+  // The order summary: subtotal, delivery, GST and total, the same breakdown as the order page.
+  if (p.summary && (p.kind === "placed" || p.kind === "paid")) {
+    const delivery = Number(p.summary.deliveryCharge) > 0 ? rupees(p.summary.deliveryCharge) : "Free";
+    lines.push("", `Subtotal: ${rupees(p.summary.subtotal)}`, `Delivery: ${delivery}`, `GST: ${rupees(p.summary.tax)}`, `Total: ${rupees(p.total)}`);
+  }
   const footer = `You are receiving this because you placed an order with ${p.businessName}. Reply to this email to reach them.`;
   const text = [...lines, ...(p.orderUrl && linkLabel ? ["", `${linkLabel}: ${p.orderUrl}`] : []), "", "--", footer].join("\n");
 
@@ -110,6 +117,7 @@ export async function sendStoreOrderEmail(
         customerName: storeOrders.customerName,
         orderNumber: storeOrders.orderNumber,
         total: storeOrders.totalAmount,
+        invoiceId: storeOrders.invoiceId,
         method: storeOrders.paymentMethod,
         businessName: businesses.name,
         businessEmail: businesses.email,
@@ -120,12 +128,22 @@ export async function sendStoreOrderEmail(
       .where(and(eq(storeOrders.id, orderId), eq(storeOrders.businessId, businessId)))
       .limit(1);
     if (!row?.email) return false;
+    let summary: StoreMailInput["summary"];
+    if (row.invoiceId) {
+      const [inv] = await db
+        .select({ subtotal: invoices.subtotal, deliveryCharge: invoices.additionalCharges, tax: invoices.taxAmount })
+        .from(invoices)
+        .where(and(eq(invoices.id, row.invoiceId), eq(invoices.businessId, businessId)))
+        .limit(1);
+      if (inv) summary = inv;
+    }
     const built = buildStoreOrderEmail({
       kind,
       businessName: row.businessName,
       customerName: row.customerName,
       orderNumber: row.orderNumber,
       total: row.total,
+      summary,
       amount: extra.amount,
       method: row.method === "online" ? "online" : "cod",
       orderUrl: row.slug ? storeOrderUrl(row.slug, orderId) : null,

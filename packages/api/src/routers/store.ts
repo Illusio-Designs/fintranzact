@@ -2,11 +2,14 @@ import { eq, and, ilike, sql, desc, gte, lte, inArray, or, isNull } from "drizzl
 import { z } from "zod";
 import { businesses, items, itemVariants, storeOrders, storeOrderRefunds, invoices, invoiceItems, razorpayPayments, invoicePaymentLinks } from "@fintranzact/db";
 import {
+  chargeSupplyOf,
   money,
   paginationSchema,
   STORE_POLICY_KINDS,
   STORE_POLICY_MAX_LENGTH,
   STORE_RETURN_WINDOW_MAX_DAYS,
+  STORE_DELIVERY_FEE_MAX,
+  STORE_FREE_DELIVERY_ABOVE_MAX,
   sanitizePolicyInput,
 } from "@fintranzact/shared";
 import { buildEditorPolicies } from "../lib/store-policies.js";
@@ -35,6 +38,13 @@ const updateStoreSettingsSchema = z.object({
   storeAccentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().nullable(),
   storeMinOrderAmount: z.string().regex(/^\d+(\.\d{1,2})?$/).optional().nullable(),
   storeDeliveryNote: z.string().max(500).optional().nullable(),
+  // Delivery charge: a flat fee in rupees (before GST, 0 = none) and an optional free-delivery threshold.
+  storeDeliveryFee: z.string().regex(/^\d+(\.\d{1,2})?$/, "Enter the fee in rupees, like 49 or 49.50")
+    .refine((v) => Number(v) <= STORE_DELIVERY_FEE_MAX, `The delivery fee can be at most ${STORE_DELIVERY_FEE_MAX}`)
+    .optional(),
+  storeFreeDeliveryAbove: z.string().regex(/^\d+(\.\d{1,2})?$/, "Enter the amount in rupees, like 500")
+    .refine((v) => Number(v) <= STORE_FREE_DELIVERY_ABOVE_MAX, `The free-delivery amount can be at most ${STORE_FREE_DELIVERY_ABOVE_MAX}`)
+    .optional().nullable(),
   storeWhatsappNumber: z.string().max(15).optional().nullable(),
   storeAllowNegativeStock: z.boolean().optional(),
   storeOrderPrefix: z.string().min(1).max(10).optional(),
@@ -59,6 +69,8 @@ const policyBusinessColumns = {
   state: businesses.state,
   pincode: businesses.pincode,
   storeReturnWindowDays: businesses.storeReturnWindowDays,
+  storeDeliveryFee: businesses.storeDeliveryFee,
+  storeFreeDeliveryAbove: businesses.storeFreeDeliveryAbove,
   storePolicies: businesses.storePolicies,
   storeSlug: businesses.storeSlug,
 };
@@ -126,6 +138,8 @@ export const storeRouter = router({
       storeAccentColor: businesses.storeAccentColor,
       storeMinOrderAmount: businesses.storeMinOrderAmount,
       storeDeliveryNote: businesses.storeDeliveryNote,
+      storeDeliveryFee: businesses.storeDeliveryFee,
+      storeFreeDeliveryAbove: businesses.storeFreeDeliveryAbove,
       storeWhatsappNumber: businesses.storeWhatsappNumber,
       storeAllowNegativeStock: businesses.storeAllowNegativeStock,
       storeOrderPrefix: businesses.storeOrderPrefix,
@@ -220,6 +234,8 @@ export const storeRouter = router({
           storeAccentColor: businesses.storeAccentColor,
           storeMinOrderAmount: businesses.storeMinOrderAmount,
           storeDeliveryNote: businesses.storeDeliveryNote,
+          storeDeliveryFee: businesses.storeDeliveryFee,
+          storeFreeDeliveryAbove: businesses.storeFreeDeliveryAbove,
           storeWhatsappNumber: businesses.storeWhatsappNumber,
           storeAllowNegativeStock: businesses.storeAllowNegativeStock,
           storeOrderPrefix: businesses.storeOrderPrefix,
@@ -563,7 +579,10 @@ export const storeRouter = router({
         if (rows.length > 0) refundable = paiseToMoney((await refundableForOrder(ctx.db, ctx.businessId, order.invoiceId)).remainingPaise);
       }
 
-      return { ...order, invoice, lineItems, razorpayPayments: razorpayPaymentRows, refunds, refundable };
+      // The delivery charge on the invoice (value, the GST on it and the rate it was taxed at); zero for none.
+      const delivery = invoice ? chargeSupplyOf(invoice, lineItems) : { taxableValue: "0.00", taxAmount: "0.00", rate: "0.00" };
+
+      return { ...order, invoice, lineItems, delivery, razorpayPayments: razorpayPaymentRows, refunds, refundable };
     }),
 
   confirmOrder: memberProcedure

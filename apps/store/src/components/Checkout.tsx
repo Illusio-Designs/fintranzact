@@ -2,7 +2,7 @@ import { cloneElement, isValidElement, useEffect, useId, useRef, useState } from
 import type { CartItem, StoreConfig, OrderResult, PaymentMethod } from "../types";
 import { cartItemKey } from "../types";
 import { placeOrder } from "../api";
-import { cartTotals } from "../pricing";
+import { cartTotals, deliveryConfigOf, deliveryHint, deliveryLabel } from "../pricing";
 import { PolicyLinks } from "./PolicyLinks";
 import { PaymentChoice } from "./PaymentChoice";
 
@@ -131,7 +131,7 @@ export function Checkout({
   }, []);
 
   // What the order is charged at, GST included (see pricing.ts).
-  const { subtotal, tax, total } = cartTotals(cart);
+  const { subtotal, tax, total, delivery } = cartTotals(cart, deliveryConfigOf(business));
   const totalItems = cart.reduce((s, c) => s + c.quantity, 0);
 
   function set(field: keyof FormValues, value: string) {
@@ -312,15 +312,20 @@ export function Checkout({
                   </span>
                 </div>
                 <div className="flex justify-between" style={{ color: "var(--store-text-secondary)" }}>
+                  <span>Delivery</span>
+                  <span className="tabular-nums" data-testid="checkout-delivery">{deliveryLabel(delivery, symbol)}</span>
+                </div>
+                {deliveryHint(delivery, symbol) && (
+                  <p className="text-xs" style={{ color: "var(--store-muted)" }} data-testid="checkout-delivery-hint">
+                    {deliveryHint(delivery, symbol)}
+                  </p>
+                )}
+                <div className="flex justify-between" style={{ color: "var(--store-text-secondary)" }}>
                   <span>GST</span>
                   <span className="tabular-nums" data-testid="checkout-tax">
                     {symbol}
                     {tax.toFixed(2)}
                   </span>
-                </div>
-                <div className="flex justify-between" style={{ color: "var(--store-text-secondary)" }}>
-                  <span>Delivery</span>
-                  <span data-testid="checkout-delivery">No charge added here</span>
                 </div>
               </div>
               <div

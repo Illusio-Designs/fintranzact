@@ -164,6 +164,11 @@ export const businesses = pgTable("businesses", {
   storeAccentColor: text("store_accent_color"),
   storeMinOrderAmount: numeric("store_min_order_amount", { precision: 15, scale: 2 }),
   storeDeliveryNote: text("store_delivery_note"),
+  // Delivery charge at checkout: a flat fee in rupees (before GST; 0 = free delivery or pickup only)
+  // and an optional order subtotal at or above which it is free. Worked out on the server when an
+  // order is placed and put on the order's invoice as an additional charge.
+  storeDeliveryFee: numeric("store_delivery_fee", { precision: 15, scale: 2 }).default("0").notNull(),
+  storeFreeDeliveryAbove: numeric("store_free_delivery_above", { precision: 15, scale: 2 }),
   storeWhatsappNumber: text("store_whatsapp_number"),
   storeAllowNegativeStock: boolean("store_allow_negative_stock").default(false).notNull(),
   // Checkout payment choices. Online payments need the business's own Razorpay

@@ -45,6 +45,9 @@ export interface PublicStoreOrder {
   paymentStatus: string;
   currency: string;
   subtotal: string;
+  /** Delivery charge before GST ("0.00" when there is none). */
+  deliveryCharge: string;
+  /** All GST on the order, including the GST on the delivery charge. */
   taxAmount: string;
   totalAmount: string;
   refundedAmount: string;
@@ -68,18 +71,20 @@ export async function getPublicStoreOrder(db: TenantDatabase, businessId: string
 
   let subtotal = order.totalAmount;
   let taxAmount = "0.00";
+  let deliveryCharge = "0.00";
   let lines: PublicStoreOrder["lines"] = [];
   let balance: string | null = null;
   let payable = false;
   if (order.invoiceId) {
     const [inv] = await db
-      .select({ subtotal: invoices.subtotal, taxAmount: invoices.taxAmount })
+      .select({ subtotal: invoices.subtotal, taxAmount: invoices.taxAmount, additionalCharges: invoices.additionalCharges })
       .from(invoices)
       .where(and(eq(invoices.id, order.invoiceId), eq(invoices.businessId, businessId)))
       .limit(1);
     if (inv) {
       subtotal = inv.subtotal;
       taxAmount = inv.taxAmount;
+      deliveryCharge = inv.additionalCharges;
     }
     lines = (await db
       .select({ name: invoiceItems.itemName, quantity: invoiceItems.quantity, total: invoiceItems.totalAmount })
@@ -103,6 +108,7 @@ export async function getPublicStoreOrder(db: TenantDatabase, businessId: string
     paymentStatus: order.paymentStatus,
     currency: biz?.currency ?? "INR",
     subtotal,
+    deliveryCharge,
     taxAmount,
     totalAmount: order.totalAmount,
     refundedAmount: order.refundedAmount,

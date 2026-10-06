@@ -29,6 +29,7 @@ import {
   bankAccounts,
   bankTransactions,
   expenses,
+  invoiceItems,
   invoicePaymentLinks,
   invoices,
   items,
@@ -732,6 +733,159 @@ describe("no platform keys, no secrets in logs or responses", () => {
 });
 
 // ── The books stay consistent ─────────────────────────────────────────────────
+
+// ── Delivery charge ───────────────────────────────────────────────────────────
+
+describe("delivery charge", () => {
+  let fiveId: string;
+  const setDelivery = (fee: string, freeAbove: string | null = null) =>
+    owner().store.updateSettings({ storeDeliveryFee: fee, storeFreeDeliveryAbove: freeAbove });
+  // 100 at 18% GST + 49 delivery taxed at the principal rate (18%, intra-state): 100 + 18 + 49 + 8.82 = 175.82.
+  const WITH_FEE = { total: "175.82", tax: "26.82", fee: "49.00" };
+
+  async function payInFull(orderId: string, amountPaise: number) {
+    const order = await orderRow(orderId);
+    const [link] = await linkRows(order.invoiceId!);
+    paySeq += 1;
+    const paymentId = `pay_Store${paySeq}`;
+    expect((await deliver(paidEvent({ linkId: link!.razorpayLinkId, paymentId, amount: amountPaise }))).status).toBe(200);
+    return { orderId, invoiceId: order.invoiceId!, paymentId };
+  }
+
+  beforeAll(async () => {
+    fiveId = (await createItem(db(), world.business1.id, {
+      name: "Store Gadget", storeEnabled: true, storePrice: "200.00", salePrice: "200.00", taxPercent: "5.00", stockQuantity: "50.000",
+    })).id;
+  });
+  afterAll(async () => {
+    await setDelivery("0", null);
+  });
+
+  it("is a store setting: fee, free-delivery threshold and the existing note, validated, admin only, shown in the catalog", async () => {
+    expect(await owner().store.getSettings()).toMatchObject({ storeDeliveryFee: "0.00", storeFreeDeliveryAbove: null });
+    expect(await owner().store.updateSettings({ storeDeliveryFee: "49", storeFreeDeliveryAbove: "500", storeDeliveryNote: "Delivery in 3-5 working days" }))
+      .toMatchObject({ storeDeliveryFee: "49.00", storeFreeDeliveryAbove: "500.00", storeDeliveryNote: "Delivery in 3-5 working days" });
+    for (const bad of ["-1", "10000.01", "1e3", "12.345", "abc", ""]) {
+      await expect(owner().store.updateSettings({ storeDeliveryFee: bad })).rejects.toThrow();
+    }
+    await expect(owner().store.updateSettings({ storeFreeDeliveryAbove: "10000000.01" })).rejects.toThrow();
+    await expectCode(seller().store.updateSettings({ storeDeliveryFee: "1" }), "FORBIDDEN");
+    const cat = (await (await http(`/store/${SLUG}/catalog.json`)).json()) as any;
+    expect(cat.business).toMatchObject({ deliveryFee: "49.00", freeDeliveryAbove: "500.00", deliveryNote: "Delivery in 3-5 working days" });
+    // Clearing the threshold with null; an update that leaves them out keeps them.
+    expect(await owner().store.updateSettings({ storeFreeDeliveryAbove: null })).toMatchObject({ storeDeliveryFee: "49.00", storeFreeDeliveryAbove: null });
+    await setDelivery("0", null);
+  });
+
+  it("adds the charge to the order total, invoice (as an itemised additional charge with GST), payment link and order page; the client cannot name it", async () => {
+    await setDelivery("49");
+    calls = [];
+    const { res, json } = await placeOrder({ deliveryCharge: "0", deliveryFee: "0", additionalCharges: "0", charges: [] });
+    expect(res.status).toBe(201);
+    expect(json).toMatchObject({ subtotal: "100.00", deliveryCharge: WITH_FEE.fee, taxAmount: WITH_FEE.tax, totalAmount: WITH_FEE.total });
+    expect(calls.filter((c) => c.path === "/payment_links")[0]!.body!.amount).toBe(17582);
+
+    const order = await orderRow(json.orderId);
+    expect(order.totalAmount).toBe(WITH_FEE.total);
+    const [inv] = await db().select().from(invoices).where(eq(invoices.id, order.invoiceId!));
+    expect(inv).toMatchObject({ subtotal: "100.00", additionalCharges: "49.00", taxAmount: "26.82", totalAmount: "175.82", amountPaid: "0.00" });
+    expect(inv!.charges).toEqual([{ label: "Delivery charge", amount: "49.00" }]);
+    // The lines carry only the goods; the charge's GST (8.82) is on top of the line GST (18.00).
+    const lines = await db().select().from(invoiceItems).where(eq(invoiceItems.invoiceId, inv!.id));
+    expect(lines.map((l) => l.totalAmount)).toEqual(["118.00"]);
+
+    const view = (await (await http(`/store/${SLUG}/order/${json.orderId}`)).json()) as any;
+    expect(view).toMatchObject({ subtotal: "100.00", deliveryCharge: "49.00", taxAmount: "26.82", totalAmount: "175.82", balance: "175.82" });
+
+    const detail = await owner().store.getOrder({ id: json.orderId });
+    expect(detail.delivery).toEqual({ taxableValue: "49.00", taxAmount: "8.82", rate: "18.00" });
+  });
+
+  it("the payment link and the webhook settle the whole invoice, delivery included", async () => {
+    await setDelivery("49");
+    const { json } = await placeOrder();
+    const paid = await payInFull(json.orderId, 17582);
+    expect(await orderRow(paid.orderId)).toMatchObject({ paymentStatus: "paid" });
+    expect((await db().select().from(invoices).where(eq(invoices.id, paid.invoiceId)))[0]).toMatchObject({ status: "paid", amountPaid: "175.82" });
+    // Pay again on a paid order is refused: nothing is left.
+    const again = await http(`/store/${SLUG}/order/${json.orderId}/pay`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+    expect(again.status).toBe(409);
+  });
+
+  it("is free at exactly the threshold and charged below it, judged on the server from the order's subtotal", async () => {
+    await setDelivery("49", "100");
+    const atThreshold = await placeOrder();
+    expect(atThreshold.json).toMatchObject({ deliveryCharge: "0.00", totalAmount: "118.00" });
+    expect((await db().select().from(invoices).where(eq(invoices.id, (await orderRow(atThreshold.json.orderId)).invoiceId!)))[0]!.charges).toBeNull();
+    await setDelivery("49", "100.01");
+    const below = await placeOrder();
+    expect(below.json).toMatchObject({ deliveryCharge: "49.00", totalAmount: "175.82" });
+    // More items push the order over the threshold.
+    await setDelivery("49", "200");
+    const over = await placeOrder({ items: [{ itemId, quantity: 2 }] });
+    expect(over.json).toMatchObject({ deliveryCharge: "0.00", totalAmount: "236.00" });
+  });
+
+  it("a zero fee adds nothing; the minimum order amount is judged on the goods, not on the delivery", async () => {
+    await setDelivery("0", null);
+    expect((await placeOrder()).json).toMatchObject({ deliveryCharge: "0.00", totalAmount: "118.00" });
+    await setDelivery("49");
+    await owner().store.updateSettings({ storeMinOrderAmount: "150.00" });
+    const refused = await placeOrder();
+    expect(refused.res.status).toBe(400);
+    expect(refused.json.error).toContain("Minimum order amount");
+    await owner().store.updateSettings({ storeMinOrderAmount: null });
+  });
+
+  it("with mixed GST rates the charge takes the highest line rate (the invoice charge mechanism), and a full refund reverses every rupee exactly", async () => {
+    await setDelivery("49");
+    // 100 @18% + 200 @5%: lines 118 + 210 = 328; delivery 49 + 8.82 GST at 18%; total 385.82; GST 18 + 10 + 8.82 = 36.82.
+    const { json } = await placeOrder({ items: [{ itemId, quantity: 1 }, { itemId: fiveId, quantity: 1 }] });
+    expect(json).toMatchObject({ subtotal: "300.00", deliveryCharge: "49.00", taxAmount: "36.82", totalAmount: "385.82" });
+    const paid = await payInFull(json.orderId, 38582);
+
+    const full = await owner().store.refundOrder({ orderId: paid.orderId, idempotencyKey: "key-delivery-full" });
+    expect(full).toMatchObject({ amount: "385.82", paymentStatus: "refunded" });
+    const [note] = await db().select().from(invoices).where(eq(invoices.id, full.creditNoteId));
+    // The credit note reverses the delivery charge with its GST: same total and same tax as the sale.
+    expect(note).toMatchObject({ documentType: "credit_note", totalAmount: "385.82", taxAmount: "36.82" });
+    const noteLines = await db().select().from(invoiceItems).where(eq(invoiceItems.invoiceId, note!.id));
+    expect(noteLines.map((l) => `${Number(l.taxPercent)}:${l.totalAmount}`).sort()).toEqual(["18:175.82", "5:210.00"]);
+    expect((await db().select().from(invoices).where(eq(invoices.id, paid.invoiceId)))[0]!.status).toBe("adjusted");
+  });
+
+  it("partial refunds of an order with a delivery charge stay exact: each credit note is exactly the refund, together exactly the total", async () => {
+    await setDelivery("49");
+    const { json } = await placeOrder();
+    const paid = await payInFull(json.orderId, 17582);
+    const a = await owner().store.refundOrder({ orderId: paid.orderId, amount: "58.82", idempotencyKey: "key-delivery-part-1" });
+    const b = await owner().store.refundOrder({ orderId: paid.orderId, amount: "33.33", idempotencyKey: "key-delivery-part-2" });
+    const c = await owner().store.refundOrder({ orderId: paid.orderId, idempotencyKey: "key-delivery-part-3" });
+    expect([a.amount, b.amount, c.amount]).toEqual(["58.82", "33.33", "83.67"]);
+    expect(c.paymentStatus).toBe("refunded");
+    const notes = await db().select().from(invoices).where(eq(invoices.referenceDocumentId, paid.invoiceId));
+    expect(notes.map((n) => n.totalAmount).sort()).toEqual(["33.33", "58.82", "83.67"]);
+    expect(notes.reduce((t, n) => t + parseFloat(n.taxAmount), 0)).toBeCloseTo(26.82, 1);
+    expect(await orderRow(paid.orderId)).toMatchObject({ paymentStatus: "refunded", refundedAmount: "175.82" });
+  });
+
+  it("the confirmation email shows subtotal, delivery, GST and total", async () => {
+    await setDelivery("49");
+    sentMails.length = 0;
+    await placeOrder();
+    await vi.waitFor(() => expect(sentMails.length).toBeGreaterThan(0));
+    const mail = sentMails[0]!;
+    expect(mail.text).toContain("Subtotal: Rs 100.00");
+    expect(mail.text).toContain("Delivery: Rs 49.00");
+    expect(mail.text).toContain("GST: Rs 26.82");
+    expect(mail.text).toContain("Total: Rs 175.82");
+    await setDelivery("0");
+    sentMails.length = 0;
+    await placeOrder();
+    await vi.waitFor(() => expect(sentMails.length).toBeGreaterThan(0));
+    expect(sentMails[0]!.text).toContain("Delivery: Free");
+  });
+});
 
 describe("data audit", () => {
   it("finds nothing wrong after payments, refunds and cancellations", async () => {

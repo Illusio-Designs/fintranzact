@@ -33,7 +33,7 @@ import {
   storeOrders,
   type TenantDatabase,
 } from "@fintranzact/db";
-import { calcInvoiceTotals, createInvoiceSchema, money } from "@fintranzact/shared";
+import { calcInvoiceTotals, chargeSupplyOf, createInvoiceSchema, money } from "@fintranzact/shared";
 import { createCallerFactory } from "../../trpc.js";
 import { creditNoteRouter } from "../../routers/document.js";
 import { logAudit } from "../audit.js";
@@ -451,17 +451,23 @@ async function createRefundCreditNote(
   p: { orderNumber: string; invoiceId: string; amountPaise: number; reason: string | null },
 ): Promise<{ id: string; invoiceNumber: string }> {
   const [inv] = await ctx.db
-    .select({ partyId: invoices.partyId })
+    .select({ partyId: invoices.partyId, additionalCharges: invoices.additionalCharges, taxAmount: invoices.taxAmount })
     .from(invoices)
     .where(and(eq(invoices.id, p.invoiceId), eq(invoices.businessId, ctx.businessId)))
     .limit(1);
   if (!inv) throw new RefundError("NOT_FOUND", "The order's invoice was not found.");
   const lines = await ctx.db
-    .select({ taxPercent: invoiceItems.taxPercent, total: invoiceItems.totalAmount })
+    .select({ taxPercent: invoiceItems.taxPercent, total: invoiceItems.totalAmount, taxAmount: invoiceItems.taxAmount })
     .from(invoiceItems)
     .where(eq(invoiceItems.invoiceId, p.invoiceId));
   const byRate = new Map<string, number>();
   for (const l of lines) byRate.set(l.taxPercent, (byRate.get(l.taxPercent) ?? 0) + moneyToPaise(l.total));
+  // A delivery charge (an additional charge on the invoice) is part of what was paid and carries its own
+  // GST at the rate the invoice taxed it at: it joins the credit note under that rate, so a refund
+  // reverses the tax exactly as it was charged.
+  const charge = chargeSupplyOf({ additionalCharges: inv.additionalCharges, taxAmount: inv.taxAmount }, lines);
+  const chargeGrossPaise = moneyToPaise(charge.taxableValue) + moneyToPaise(charge.taxAmount);
+  if (chargeGrossPaise > 0) byRate.set(charge.rate, (byRate.get(charge.rate) ?? 0) + chargeGrossPaise);
   const groups = [...byRate.entries()].map(([taxPercent, grossPaise]) => ({ taxPercent, grossPaise }));
   const parts = splitRefundByRate(groups, p.amountPaise);
   if (parts.length === 0) throw new RefundError("PRECONDITION_FAILED", "The order's invoice has no lines to credit.");
