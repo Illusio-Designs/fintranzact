@@ -24,6 +24,21 @@ describe("canAccess", () => {
   });
 });
 
+describe("Payroll (add-on) permissions mirror the API", () => {
+  it("owners and admins may do everything, including approving (manage)", () => {
+    for (const role of ["owner", "admin"]) for (const a of ["read", "create", "update", "delete", "manage"]) expect(canAccess(role, "Payroll", a), `${role} ${a}`).toBe(true);
+  });
+  it("an accountant prepares payroll but cannot approve or delete", () => {
+    for (const a of ["read", "create", "update"]) expect(canAccess("accountant", "Payroll", a), a).toBe(true);
+    for (const a of ["delete", "manage"]) expect(canAccess("accountant", "Payroll", a), a).toBe(false);
+  });
+  it("no other role sees salary data", () => {
+    for (const role of ["seller", "seller_manager", "auditor", "ca_filing"]) {
+      for (const a of ["read", "create", "update", "delete", "manage"]) expect(canAccess(role, "Payroll", a), `${role} ${a}`).toBe(false);
+    }
+  });
+});
+
 describe("accountant access roles (auditor, ca_filing)", () => {
   const READS = [
     "Invoice", "Payment", "Party", "Item", "Expense", "BankAccount", "BankTransaction",

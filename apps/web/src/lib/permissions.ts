@@ -57,6 +57,10 @@ export const ROLE_ABILITIES: Record<string, Set<string>> = {
     "Tds:read",
     "EInvoice:read",
     "EWayBill:read",
+    // Payroll (add-on): an accountant prepares payroll; approving it and seeing full identity numbers stay with owners and admins.
+    "Payroll:read",
+    "Payroll:create",
+    "Payroll:update",
   ]),
   // Accountant access roles (docs/ACCOUNTANT-ACCESS.md): read everything, change nothing.
   auditor: new Set(ACCOUNTANT_READ),

@@ -54,6 +54,7 @@ import {
   ShoppingCart01Icon,
   UnfoldMoreIcon,
   UserIcon,
+  UserGroupIcon,
   Search01Icon,
   Cancel01Icon,
   File01Icon,
@@ -83,7 +84,7 @@ import { BillingBanner } from "@/components/BillingBanner";
 import { TwoFactorBanner } from "@/components/TwoFactorBanner";
 import { useTwoFactorRequirement } from "@/hooks/useTwoFactorRequirement";
 import { useEntitlements } from "@/hooks/useEntitlements";
-import { featureAccess, type PlanFlagKey } from "@fintranzact/shared";
+import { featureAccess, type AddonId, type PlanFlagKey } from "@fintranzact/shared";
 import { PlanBadge } from "@/components/billing/PlanBadge";
 import { shouldRedirectToTwoFactorSetup, setupSearch } from "@/lib/two-factor-enforcement";
 import { LandingPage } from "@/components/LandingPage";
@@ -174,6 +175,15 @@ const navSections = [
         label: "Bank Reconciliation",
         icon: CheckListIcon,
         resource: "BankReconciliation",
+        action: "read",
+      },
+      {
+        // The Payroll add-on: shown with an "Add-on" badge while the organisation does not have it.
+        to: "/payroll",
+        addon: "payroll" as AddonId,
+        label: "Payroll",
+        icon: UserGroupIcon,
+        resource: "Payroll",
         action: "read",
       },
     ],
@@ -1638,6 +1648,10 @@ function RootLayout() {
                             {item.label}
                           </span>
                           {(() => {
+                            // An add-on the organisation does not have stays in the menu, marked "Add-on".
+                            if ("addon" in item && item.addon && planStatus && !planStatus.addons?.[item.addon as AddonId]) {
+                              return <PlanBadge plan="Add-on" feature={`${item.label} is an add-on`} className={cn("ml-auto text-[#7f90b5]", navCollapsed && "md:hidden")} />;
+                            }
                             // A feature the plan lacks stays in the menu with its plan name, so it can be discovered.
                             const lock = "feature" in item && item.feature ? featureAccess(planStatus, item.feature as PlanFlagKey) : null;
                             return lock?.badge ? (
