@@ -449,6 +449,13 @@
       "when": 1791267774212,
       "tag": "0063_store_online_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1791291288075,
+      "tag": "0064_store_delivery_charge",
+      "breakpoints": true
     }
   ]
 }

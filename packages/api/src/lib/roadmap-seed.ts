@@ -2526,6 +2526,24 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-06-store-delivery",
+    updates: [
+      {
+        // Built: one flat delivery fee per store with an optional free-delivery
+        // threshold and the delivery note. The server prices it from the order
+        // subtotal; it goes on the invoice as an additional charge (the GST
+        // treatment invoice charges already have) and flows through the order
+        // total, the payment link, refunds and the emails. Not built: charges
+        // by pincode or weight, serviceable pincodes, courier integrations and
+        // the shopper tracking link. The GST treatment of the charge is an open
+        // question for a CA (docs/GST-RETURNS-CA-VERIFICATION.md).
+        title: "Delivery charges and shipping integrations",
+        status: "in_progress",
+        done: ["Free-delivery threshold"],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

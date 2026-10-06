@@ -54,6 +54,8 @@ export interface StorePolicyVariables {
   phone?: string | null;
   email?: string | null;
   returnWindowDays: number;
+  /** The store's delivery charge in words (see describeStoreDelivery); empty when it charges nothing. */
+  deliveryCharges?: string | null;
 }
 
 /** Placeholders usable in policy text, with what each one is filled with. */
@@ -64,6 +66,7 @@ export const STORE_POLICY_PLACEHOLDERS: ReadonlyArray<{ key: keyof StorePolicyVa
   { key: "phone", label: "Phone" },
   { key: "email", label: "Email" },
   { key: "returnWindowDays", label: "Return window (days)" },
+  { key: "deliveryCharges", label: "Delivery charge (from your delivery settings)" },
 ];
 
 // ── Templates ──────────────────────────────────────────────────
@@ -145,6 +148,8 @@ We deliver to the addresses and pincodes we are able to serve. If we cannot deli
 ## Shipping charges
 
 Delivery charges, if any, are shown at checkout before you pay. Any minimum order value for delivery is also shown there.
+
+- Delivery charge: {{deliveryCharges}}
 
 ## Delivery
 
@@ -239,6 +244,7 @@ function variableValue(vars: StorePolicyVariables, key: string): string {
     case "phone": return (vars.phone ?? "").trim();
     case "email": return (vars.email ?? "").trim();
     case "returnWindowDays": return String(vars.returnWindowDays);
+    case "deliveryCharges": return (vars.deliveryCharges ?? "").trim();
     default: return "";
   }
 }

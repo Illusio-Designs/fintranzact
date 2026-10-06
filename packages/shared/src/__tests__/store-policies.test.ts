@@ -48,6 +48,16 @@ describe("policy templates", () => {
     expect(contact).toContain("12 MG Road");
   });
 
+  it("shows the delivery charge on the shipping page only when the store charges one", () => {
+    const withFee = renderPolicyText("shipping", null, { ...FULL, deliveryCharges: "Rs 49 per order, plus GST where applicable" });
+    expect(withFee).toContain("Delivery charge: Rs 49 per order, plus GST where applicable");
+    for (const none of [undefined, null, ""]) {
+      const text = renderPolicyText("shipping", null, { ...FULL, deliveryCharges: none });
+      expect(text).not.toContain("Delivery charge:");
+      expect(text).not.toMatch(/\{\{/);
+    }
+  });
+
   it("drops lines whose value is missing instead of leaving blanks", () => {
     const text = renderPolicyText("contact", null, { businessName: "Tiny Shop", returnWindowDays: 7 });
     expect(text).toContain("Business name: Tiny Shop");

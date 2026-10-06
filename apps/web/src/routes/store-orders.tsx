@@ -16,6 +16,7 @@ import { RowActions, tidyMenu } from "@/components/ui/Menu";
 import { usePageSize } from "@/hooks/usePageSize";
 import { useCan } from "@/lib/permissions";
 import { StoreOrderPayment, hasRefundableMoney, type StoreOrderPaymentData } from "@/components/StoreOrderPayment";
+import { StoreOrderDeliveryRow, type StoreOrderDelivery } from "@/components/StoreOrderDeliveryRow";
 
 export const Route = createFileRoute("/store-orders")({
   component: StoreOrdersPage,
@@ -61,6 +62,8 @@ interface OrderDetail {
   deliveryNotes: string | null;
   cancellationReason: string | null;
   lineItems: LineItem[];
+  /** The delivery charge on the invoice: its value, the GST on it and the rate it was taxed at. */
+  delivery?: StoreOrderDelivery;
   invoiceId: string | null;
   invoice: { invoiceNumber: string } | null;
   paymentMethod: string;
@@ -482,6 +485,7 @@ function OrderDetailPanel({ orderId, onClose, onUpdated }: OrderDetailPanelProps
                     ))}
                   </tbody>
                   <tfoot>
+                    <StoreOrderDeliveryRow delivery={o.delivery} />
                     <tr className="border-t border-border-light bg-surface-2">
                       <td
                         colSpan={3}

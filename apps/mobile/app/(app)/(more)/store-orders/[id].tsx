@@ -216,6 +216,21 @@ export default function StoreOrderDetailScreen() {
                   <Text style={styles.lineItemAmount}>{formatCurrency(li.totalAmount)}</Text>
                 </View>
               ))}
+              {/* Delivery charge: its value plus the GST on it, like the item lines above. */}
+              {data.delivery && parseFloat(data.delivery.taxableValue) > 0 ? (
+                <View style={[styles.lineItem, styles.lineItemTopBorder]} testID="store-order-delivery">
+                  <View style={styles.lineItemLeft}>
+                    <Text style={styles.lineItemDesc}>Delivery charge</Text>
+                    <Text style={styles.lineItemMeta}>
+                      {formatCurrency(data.delivery.taxableValue)}
+                      {parseFloat(data.delivery.taxAmount) > 0 ? ` + ${parseFloat(data.delivery.rate)}% GST` : ""}
+                    </Text>
+                  </View>
+                  <Text style={styles.lineItemAmount}>
+                    {formatCurrency(parseFloat(data.delivery.taxableValue) + parseFloat(data.delivery.taxAmount))}
+                  </Text>
+                </View>
+              ) : null}
             </View>
           </>
         ) : null}
@@ -433,6 +448,7 @@ const useStyles = makeStyles((colors) => ({
     paddingVertical: 12,
   },
   lineItemBorder: { borderBottomWidth: 1, borderBottomColor: colors.border },
+  lineItemTopBorder: { borderTopWidth: 1, borderTopColor: colors.border },
   lineItemLeft: { flex: 1, gap: 2 },
   lineItemDesc: { fontSize: 13, fontWeight: "600", color: colors.textPrimary },
   lineItemNotes: { fontSize: 11, fontStyle: "italic", color: colors.textSecondary, marginTop: 2, lineHeight: 14 },

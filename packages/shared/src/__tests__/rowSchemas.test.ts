@@ -254,3 +254,13 @@ describe("partyRowSchema extra shipping addresses", () => {
     expect(partyRowSchema.parse(party).additionalShippingAddresses).toBeUndefined();
   });
 });
+
+describe("businessRowSchema delivery charge columns", () => {
+  it("accepts an older export without them and a newer one with them", () => {
+    expect(businessRowSchema.parse(withLogoFields({})).storeDeliveryFee).toBeUndefined();
+    const parsed = businessRowSchema.parse(withLogoFields({ storeDeliveryFee: "49.00", storeFreeDeliveryAbove: null }));
+    expect(parsed.storeDeliveryFee).toBe("49.00");
+    expect(parsed.storeFreeDeliveryAbove).toBeNull();
+    expect(businessRowSchema.parse(withLogoFields({ storeDeliveryFee: "0.00", storeFreeDeliveryAbove: "500.00" })).storeFreeDeliveryAbove).toBe("500.00");
+  });
+});

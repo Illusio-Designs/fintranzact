@@ -43,7 +43,7 @@ import { lineBatchDetails } from "./lib/batch-display.js";
 import { validateEnv } from "./lib/env.js";
 import { createCsrfMiddleware } from "./lib/csrf-middleware.js";
 import { assertAllowedStoreOrigin } from "./lib/store-origin.js";
-import { isStorePolicyKind } from "@fintranzact/shared";
+import { isStorePolicyKind, calcStoreDelivery } from "@fintranzact/shared";
 import { buildPublicPolicyPages, renderPolicyPageHtml } from "./lib/store-policies.js";
 import { registerExportRoute } from "./http/exportStream.js";
 import { registerImportRoute } from "./http/importStream.js";
@@ -1462,6 +1462,8 @@ app.get("/store/:slug/catalog.json", async (c) => {
     storeAccentColor: businesses.storeAccentColor,
     storeMinOrderAmount: businesses.storeMinOrderAmount,
     storeDeliveryNote: businesses.storeDeliveryNote,
+    storeDeliveryFee: businesses.storeDeliveryFee,
+    storeFreeDeliveryAbove: businesses.storeFreeDeliveryAbove,
     storeWhatsappNumber: businesses.storeWhatsappNumber,
     storeAllowNegativeStock: businesses.storeAllowNegativeStock,
     currency: businesses.currency,
@@ -1626,6 +1628,10 @@ app.get("/store/:slug/catalog.json", async (c) => {
         accentColor: biz.storeAccentColor,
         minOrderAmount: biz.storeMinOrderAmount,
         deliveryNote: biz.storeDeliveryNote,
+        // The flat delivery fee (rupees, before GST) and the subtotal at or above which it is free.
+        // The server prices the order from its own settings; these are for display only.
+        deliveryFee: biz.storeDeliveryFee,
+        freeDeliveryAbove: biz.storeFreeDeliveryAbove,
         whatsappNumber: biz.storeWhatsappNumber,
         currency: biz.currency,
         phone: biz.phone,
@@ -1671,6 +1677,8 @@ const POLICY_COLUMNS = {
   state: businesses.state,
   pincode: businesses.pincode,
   storeReturnWindowDays: businesses.storeReturnWindowDays,
+  storeDeliveryFee: businesses.storeDeliveryFee,
+  storeFreeDeliveryAbove: businesses.storeFreeDeliveryAbove,
   storePolicies: businesses.storePolicies,
 };
 
@@ -1904,6 +1912,8 @@ app.post("/store/:slug/order", async (c) => {
     name: businesses.name,
     storeEnabled: businesses.storeEnabled,
     storeMinOrderAmount: businesses.storeMinOrderAmount,
+    storeDeliveryFee: businesses.storeDeliveryFee,
+    storeFreeDeliveryAbove: businesses.storeFreeDeliveryAbove,
     invoicePrefix: businesses.invoicePrefix,
     nextInvoiceNumber: businesses.nextInvoiceNumber,
     storeOrderPrefix: businesses.storeOrderPrefix,
@@ -2042,7 +2052,7 @@ app.post("/store/:slug/order", async (c) => {
   // Customer — no state, so the place of supply is the store's own: intra-state,
   // CGST and SGST each rounded at half the rate (re-checked against the
   // walk-in party below).
-  const totalsFor = (intraState: boolean) => calcInvoiceTotals({
+  const totalsFor = (intraState: boolean, charges?: Array<{ amount: string }>) => calcInvoiceTotals({
     lineItems: lineItemInputs.map((li) => ({
       quantity: li.quantity,
       unitPrice: li.unitPrice,
@@ -2050,14 +2060,27 @@ app.post("/store/:slug/order", async (c) => {
       discountPercent: li.discountPercent,
       taxInclusive: li.taxInclusive,
     })),
+    charges,
     intraState,
   });
-  let totals = totalsFor(true);
+  const goodsTotals = totalsFor(true);
 
-  // Check minimum order amount
+  // Delivery charge: worked out here from the store's settings and the order's subtotal, never taken
+  // from the request. It goes on the invoice as an additional charge, which takes GST the way every
+  // invoice charge does (at the principal supply's rate: see chargeTaxRateFor), so the invoice stays
+  // valid and the order total, payment link, refunds and emails all follow it.
+  const delivery = calcStoreDelivery({
+    fee: biz.storeDeliveryFee,
+    freeAbove: biz.storeFreeDeliveryAbove,
+    subtotal: goodsTotals.subtotal,
+  });
+  const deliveryCharges = delivery.charge === "0.00" ? undefined : [{ amount: delivery.charge }];
+  let totals = totalsFor(true, deliveryCharges);
+
+  // Check minimum order amount (on the goods: delivery does not count towards it)
   if (biz.storeMinOrderAmount) {
     const minAmount = parseFloat(biz.storeMinOrderAmount);
-    const orderTotal = parseFloat(totals.total);
+    const orderTotal = parseFloat(goodsTotals.total);
     if (orderTotal < minAmount) {
       return c.json({
         error: `Minimum order amount is ${biz.currency} ${biz.storeMinOrderAmount}`,
@@ -2119,7 +2142,7 @@ app.post("/store/:slug/order", async (c) => {
       }
 
       const intraState = await documentIsIntraState(tx, resolved.businessId, walkinPartyId);
-      if (!intraState) totals = totalsFor(false);
+      if (!intraState) totals = totalsFor(false, deliveryCharges);
 
       // Create unfulfilled invoice (online store order awaiting fulfillment)
       const [invoice] = await tx.insert(invoices).values({
@@ -2133,7 +2156,9 @@ app.post("/store/:slug/order", async (c) => {
         subtotal: totals.subtotal,
         taxAmount: totals.taxTotal,
         discountAmount: "0",
-        additionalCharges: "0",
+        additionalCharges: totals.chargesTotal,
+        // The itemised charge, labelled the way the invoice screens show charges.
+        charges: deliveryCharges ? [{ label: "Delivery charge", amount: delivery.charge }] : null,
         roundOff: "0",
         totalAmount: totals.total,
         amountPaid: "0",
@@ -2252,6 +2277,7 @@ app.post("/store/:slug/order", async (c) => {
       orderNumber: result.order.orderNumber,
       totalAmount: result.order.totalAmount,
       subtotal: totals.subtotal,
+      deliveryCharge: totals.chargesTotal,
       taxAmount: totals.taxTotal,
       paymentMethod,
       paymentStatus: "unpaid",

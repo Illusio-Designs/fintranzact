@@ -1,6 +1,6 @@
 import type { CartItem, StoreConfig } from "../types";
 import { cartItemKey } from "../types";
-import { cartTotals } from "../pricing";
+import { cartTotals, deliveryConfigOf, deliveryHint, deliveryLabel, type DeliveryQuote } from "../pricing";
 
 interface CartProps {
   cart: CartItem[];
@@ -30,12 +30,13 @@ export function Cart({
 
   // GST included: the minimum order and the total are what the order is
   // charged at (see pricing.ts).
-  const { subtotal, tax, total } = cartTotals(cart);
+  // The minimum order is judged on the goods; delivery is added on top.
+  const { subtotal, tax, total, goodsTotal, delivery } = cartTotals(cart, deliveryConfigOf(business));
 
   const minOrder = business.minOrderAmount
     ? parseFloat(business.minOrderAmount)
     : 0;
-  const belowMin = minOrder > 0 && total < minOrder;
+  const belowMin = minOrder > 0 && goodsTotal < minOrder;
 
   if (inline) {
     // Desktop sidebar: full-height inline panel, no backdrop
@@ -82,6 +83,8 @@ export function Cart({
             subtotal={subtotal}
             tax={tax}
             total={total}
+            goodsTotal={goodsTotal}
+            delivery={delivery}
             symbol={symbol}
             minOrder={minOrder}
             belowMin={belowMin}
@@ -172,6 +175,8 @@ export function Cart({
             subtotal={subtotal}
             tax={tax}
             total={total}
+            goodsTotal={goodsTotal}
+            delivery={delivery}
             symbol={symbol}
             minOrder={minOrder}
             belowMin={belowMin}
@@ -264,6 +269,8 @@ function CartFooter({
   subtotal,
   tax,
   total,
+  goodsTotal,
+  delivery,
   symbol,
   minOrder,
   belowMin,
@@ -274,6 +281,8 @@ function CartFooter({
   subtotal: number;
   tax: number;
   total: number;
+  goodsTotal: number;
+  delivery: DeliveryQuote;
   symbol: string;
   minOrder: number;
   belowMin: boolean;
@@ -312,13 +321,14 @@ function CartFooter({
           <span className="font-medium">
             Minimum order: {symbol}
             {minOrder.toFixed(0)} &mdash; add {symbol}
-            {Math.ceil(minOrder - total)} more
+            {Math.ceil(minOrder - goodsTotal)} more
           </span>
         </div>
       )}
 
       {/* Subtotal, GST and the total charged */}
-      {tax > 0 && (
+      {(tax > 0 || delivery.reason !== "none") && (
+        <>
         <dl className="space-y-1 text-sm" style={{ color: "var(--store-text-secondary)" }}>
           <div className="flex justify-between">
             <dt>Subtotal</dt>
@@ -327,6 +337,14 @@ function CartFooter({
               {subtotal.toFixed(2)}
             </dd>
           </div>
+          {delivery.reason !== "none" && (
+            <div className="flex justify-between">
+              <dt>Delivery</dt>
+              <dd className="tabular-nums" data-testid="cart-delivery">
+                {deliveryLabel(delivery, symbol)}
+              </dd>
+            </div>
+          )}
           <div className="flex justify-between">
             <dt>GST</dt>
             <dd className="tabular-nums" data-testid="cart-tax">
@@ -335,6 +353,12 @@ function CartFooter({
             </dd>
           </div>
         </dl>
+        {deliveryHint(delivery, symbol) && (
+          <p className="text-xs" style={{ color: "var(--store-muted)" }} data-testid="cart-delivery-hint">
+            {deliveryHint(delivery, symbol)}
+          </p>
+        )}
+        </>
       )}
       <div className="flex justify-between items-center">
         <span

@@ -1,0 +1,54 @@
+---
+title: Delivery charges in your store
+description: "Charge a flat delivery fee at checkout, make delivery free above an order value, and see how the charge appears on the order, the invoice, the payment link and refunds."
+sidebar:
+  order: 4
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+
+<ForDesktop>
+
+If you ship orders, you can add a **delivery charge** to your store's checkout. Shoppers see it before they pay, and it is added to the order, to the invoice and to the amount they pay online. If you deliver free or the order is for pickup, leave it at 0.
+
+## Set it up
+
+1. Go to **Settings → Online Store** and find **Delivery charge**.
+2. Enter the **Delivery fee** in rupees, **before GST**. For example, 49 means ₹49 plus any GST. The most you can enter is ₹10,000.
+3. Optionally enter **Free delivery on orders of**: the order subtotal, before GST, at or above which delivery is free. Leave it empty to always charge the fee.
+4. Optionally write a **Delivery Note**, such as "Delivery in 3-5 working days". It appears in the cart and at checkout.
+5. The **What shoppers see** preview shows how the delivery line will read. Click **Save delivery settings**.
+
+A fee of 0 means free delivery. It is the default, so stores that never set this up behave as before.
+
+## How the charge is worked out
+
+Fintranzact works the charge out itself when the order is placed, from your settings and the order's subtotal. A shopper's browser can show it but can never change it.
+
+- With a fee and no threshold, every order pays the fee.
+- With a threshold, an order whose subtotal is **exactly** the threshold or more is free. One paisa less pays the fee.
+- The subtotal is the value of the items before GST, the figure checkout labels **Subtotal**. The store's **Min Order Amount** is judged on the items only, so delivery never helps an order reach the minimum.
+
+## What the shopper sees
+
+- In the cart and at checkout: **Subtotal**, **Delivery** (the charge, or "Free delivery"), **GST** and the **Total**.
+- When a threshold is set and not yet reached: "Add ₹X more for free delivery".
+- The same breakdown on the order page and in the order confirmation email.
+
+## GST on the delivery charge
+
+On the invoice, the delivery charge is an **additional charge**, handled exactly like the additional charges you add to any invoice. It is part of the value of the supply, so it takes GST at the **highest GST rate among the items in the order** (and no GST if every item is nil-rated or exempt). Shoppers see that GST inside the **GST** line of the order summary.
+
+This is the treatment Fintranzact already uses for charges on invoices. Delivery billed with goods can be treated differently depending on your situation, so **please have your CA confirm it for your business** before you rely on it.
+
+## Online payments and refunds
+
+- The Razorpay payment link is for the whole invoice balance, so it includes the delivery charge and its GST. Nothing else needs setting up.
+- A full refund includes the delivery charge. A partial refund works as before. The credit note reverses the GST on the delivery charge at the rate it was charged, and the refund amounts add up to the penny.
+- On the order in **Store Orders**, a **Delivery charge** line shows the charge and its GST, and the invoice shows it as an additional charge.
+
+## Shipping policy page
+
+Your **Shipping & Delivery** page can mention the charge automatically: its **Delivery charge** line is filled from these settings, for example "Rs 49 per order, plus GST where applicable, free on orders of Rs 500 or more". If you do not charge for delivery, that line is left out. If you have edited the page yourself, add the placeholder `{{deliveryCharges}}` where you want it. See [Store policy pages](/help/online-store/store-policy-pages).
+
+</ForDesktop>

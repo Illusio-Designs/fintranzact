@@ -145,6 +145,9 @@ export const businessRowSchema = z.object({
   // Added with online payments at store checkout; older exports lack them.
   storeOnlinePaymentsEnabled: z.boolean().optional(),
   storeCodEnabled: z.boolean().optional(),
+  // Added with the store delivery charge; older exports lack them.
+  storeDeliveryFee: money2.optional(),
+  storeFreeDeliveryAbove: money2Nullable.optional(),
   createdAt: isoDatetime,
   updatedAt: isoDatetime,
 });

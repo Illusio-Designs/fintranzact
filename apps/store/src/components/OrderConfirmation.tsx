@@ -121,6 +121,26 @@ export function OrderConfirmation({
             className="h-px"
             style={{ background: "var(--store-border-light)" }}
           />
+          {result.subtotal !== undefined && (
+            <div className="space-y-1.5 text-sm" style={{ color: "var(--store-text-secondary)" }} data-testid="order-breakdown">
+              <div className="flex justify-between">
+                <span>Subtotal</span>
+                <span className="tabular-nums">{symbol}{parseFloat(result.subtotal).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Delivery</span>
+                <span className="tabular-nums" data-testid="order-delivery">
+                  {parseFloat(result.deliveryCharge ?? "0") > 0 ? `${symbol}${parseFloat(result.deliveryCharge!).toFixed(2)}` : "Free delivery"}
+                </span>
+              </div>
+              {result.taxAmount !== undefined && (
+                <div className="flex justify-between">
+                  <span>GST</span>
+                  <span className="tabular-nums">{symbol}{parseFloat(result.taxAmount).toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex justify-between items-center">
             <span
               className="text-xs font-medium uppercase tracking-wider"
