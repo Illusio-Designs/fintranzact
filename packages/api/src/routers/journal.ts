@@ -1,7 +1,7 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, or, sql, desc } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { journalEntries, journalEntryLines, chartOfAccounts, journalEntryTemplates } from "@fintranzact/db";
+import { journalEntries, journalEntryLines, chartOfAccounts, journalEntryTemplates, payrollRuns } from "@fintranzact/db";
 import { escapeLike } from "../lib/escape-like.js";
 import {
   createJournalEntrySchema,
@@ -290,6 +290,16 @@ export const journalRouter = router({
 
       // Voiding posts a reversal on the same date, so a locked date can't be voided.
       await assertPeriodOpen(ctx.db, ctx.businessId, [existing.entryDate]);
+
+      // An entry a payroll run posted belongs to the run: it is final with the run's payslips.
+      const [payrollOwner] = await ctx.db
+        .select({ id: payrollRuns.id })
+        .from(payrollRuns)
+        .where(and(eq(payrollRuns.businessId, ctx.businessId), or(eq(payrollRuns.accrualJournalEntryId, existing.id), eq(payrollRuns.paymentJournalEntryId, existing.id))))
+        .limit(1);
+      if (payrollOwner) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "This entry was posted by a payroll run and cannot be voided here. Payroll entries are final once the run is approved." });
+      }
 
       if (existing.isVoided) {
         throw new TRPCError({

@@ -33,7 +33,9 @@ import {
   payments,
   expenses,
   bankAccounts,
+  billingSubscriptions,
 } from "@fintranzact/db";
+import { invalidateEntitlements } from "../../lib/entitlements-cache.js";
 import { getControlDb, getTenantTestDb, type TenantTestDb } from "./test-db.js";
 
 // ── Type helpers ───────────────────────────────────────────────────────────────
@@ -139,6 +141,30 @@ export async function createSession(
     .returning();
 
   return row!;
+}
+
+/**
+ * Gives an organisation an active add-on subscription (what a platform admin
+ * grant or a purchase leaves behind), and drops the cached entitlements so it
+ * applies at once. `status` "cancelled" leaves a closed row (an add-on that ended).
+ */
+export async function grantAddon(
+  tenantId: string,
+  addon: "ai_assistant" | "ai_plus" | "payroll" | "store_pro",
+  status: "active" | "cancelled" = "active",
+): Promise<void> {
+  await getControlDb().insert(billingSubscriptions).values({
+    tenantId,
+    kind: "addon",
+    addon,
+    cycle: "monthly",
+    status,
+    provider: "demo",
+    basePaise: 0,
+    currentPeriodStart: new Date(),
+    currentPeriodEnd: new Date(Date.now() + 30 * 86_400_000),
+  });
+  invalidateEntitlements(tenantId);
 }
 
 /**

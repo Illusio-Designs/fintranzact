@@ -12,6 +12,7 @@ export type Resource =
   | "Store" | "SalesTarget" | "RecurringInvoice"
   | "Account" | "ITC" | "Tds" | "PeriodLock"
   | "BankReconciliation" | "EInvoice" | "EWayBill"
+  | "Payroll"
   | "all";
 
 export type AppAbility = PureAbility<[Action, Resource]>;
@@ -188,6 +189,14 @@ export function defineAbilityFor(ctx: PermissionContext): AppAbility {
       can("read", "Store");
       // Recurring invoices: read only
       can("read", "RecurringInvoice");
+      // Payroll (add-on): an accountant prepares payroll (employees, attendance,
+      // leave, calculating a run, posting to the books, marking it paid) but
+      // cannot approve it, delete payroll setup, or see full identity and bank
+      // numbers: approval, delete and the unmasked view need "manage", which
+      // only owners and admins hold. No other role can see salary data.
+      can("create", "Payroll");
+      can("read", "Payroll");
+      can("update", "Payroll");
       break;
 
     case "auditor":
