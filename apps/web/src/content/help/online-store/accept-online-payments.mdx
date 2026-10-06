@@ -1,0 +1,107 @@
+---
+title: Accept online payments in your store
+description: "Let shoppers pay at checkout with UPI, cards or net banking on your own Razorpay account, keep Cash on Delivery if you like, and refund a paid order from Fintranzact."
+sidebar:
+  order: 3
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+
+<ForDesktop>
+
+With online payments switched on, a shopper can choose **Pay online** at your store's checkout and pay by UPI, card or net banking on Razorpay's secure page. The money goes **straight to your own Razorpay account and bank**. Fintranzact never holds it, and Fintranzact's own Razorpay account is never used for it.
+
+You do not connect Razorpay a second time. The store uses the same connection you set up for invoice payments, under **Settings → Online payments**.
+
+## Set it up
+
+1. Connect your Razorpay account and add the webhook, as described in [Accept online payments on invoices](/help/settings/online-payments). Do not skip the **webhook secret**: without it, Fintranzact cannot be told that a shopper has paid.
+2. Go to **Settings → Online Store** and find **Payments at checkout**.
+3. The card shows whether Razorpay is connected and in test or live mode. If it is not, use **Connect Razorpay** to go to **Online payments**.
+4. Switch on **Pay online**. The switch stays off until Razorpay is connected and the webhook secret is saved.
+5. Decide about **Cash on Delivery**. It is on by default. Switch it off if you only want prepaid orders. A store always keeps at least one way to pay.
+
+Try it first with a `rzp_test_` key: place an order on your own store and pay with Razorpay's test payment details. Switch to a `rzp_live_` key when you are happy.
+
+## What the shopper sees
+
+- At checkout, a choice between **Pay online** and **Cash on Delivery**. Only the ways you have switched on are shown; with one way, it is stated instead of asked.
+- The order laid out before paying: **subtotal, GST and total**. The store does not add a delivery charge at checkout, so the delivery line says so; your delivery note still appears under the form.
+- **Pay online** sends them to Razorpay's page for the whole order amount. The amount is always worked out by Fintranzact from the order itself, never from the shopper's browser.
+- After paying, Razorpay sends them back to their order page, which confirms the payment as soon as Razorpay has told Fintranzact (usually within seconds).
+
+If the payment page cannot be made at that moment, the order is still saved. The order page has a **Pay now** button, and it also appears in the order email.
+
+## Order and payment emails
+
+If the shopper gave an email address at checkout, Fintranzact emails them, from your business name (replies come to your business email):
+
+| When | Email |
+|---|---|
+| The order is placed | Order received. For an online order, it says the order is waiting for payment and links to the order page. |
+| The payment arrives | Payment received. |
+| A payment attempt fails | Payment not completed, with a **Pay again** link. Sent at most once every six hours per order. |
+| You refund the order | Refund issued, with the amount. |
+
+For the links in these emails to work, the storefront address must be configured on the server (`STORE_URL`). If you use Fintranzact's hosted store, it already is.
+
+## When a payment is not completed
+
+A failed or abandoned payment leaves the order **unpaid**. Nothing is recorded in your books. The shopper can open their order page, or the link in the email, and press **Pay again**: they get the same payment page while it is still valid, and a new one if the old one expired. A cancelled order cannot be paid.
+
+Note that an unpaid online order has already taken its stock. If the shopper never pays, cancel the order from **Store Orders** and the stock goes back.
+
+## What happens when a shopper pays
+
+When Razorpay reports the payment, Fintranzact, in one step:
+
+- records the payment against the order's invoice for the amount actually paid, with Razorpay's payment ID as the reference and the right payment mode (UPI, card, net banking and so on);
+- books the gateway charge, if you keep a Razorpay **payment gateway** account (see [Payment Gateways](/help/banking/payment-gateways));
+- marks the invoice **Paid** and the order's payment **Paid**;
+- emails the shopper.
+
+It does this once per Razorpay payment, so a repeated notification never records anything twice. The order itself stays **Pending** until you confirm it, as usual.
+
+Open the order in **Store Orders** to see the **Payment** block: how the shopper paid, the status, the Razorpay payment ID, the gateway fee, and any refunds.
+
+## Refund an order
+
+Open a paid order in **Store Orders** and choose **Refund…**. Only an **owner or admin** can refund.
+
+1. Leave the amount blank to refund everything that is left, or type a smaller amount for a **partial refund**.
+2. Add a reason if you like and choose **Review refund**, then confirm.
+
+Fintranzact asks Razorpay to refund the payment from your own account, then records a **credit note** against the order's invoice, so the sale and its GST are reduced by the refunded amount. The refund is recorded as paid out, the money-out entry goes on your Razorpay gateway account, and the shopper is emailed. You can refund in several steps, up to what the shopper paid.
+
+Pressing the button twice, or retrying after a dropped connection, never refunds twice. If Razorpay refuses the refund, nothing changes in your books and you can try again.
+
+### Cancelling a paid order
+
+When you cancel an order that was paid online, Fintranzact asks what to do with the money:
+
+- **Refund to the customer through Razorpay.** The whole amount left is refunded, a credit note is recorded and the stock the order took goes back. The invoice stays, showing as adjusted by the credit note.
+- **Cancel and keep the payment.** The order and its invoice are cancelled as before, and the money stays with you. Refund the customer yourself, outside Fintranzact.
+
+An order that was already partly refunded must be cancelled with a refund of the rest.
+
+Razorpay keeps its own fee on a refunded payment. Fintranzact does not reverse the gateway charge it already recorded.
+
+## Cash on Delivery
+
+Cash on Delivery orders work as they always did: they are saved unpaid and you record the cash against the invoice when it is collected. The **Payment** block shows them as Cash on Delivery.
+
+## Read-only organisations
+
+If your organisation is read-only (for example the trial ended), the store stops taking new orders, so nobody can start a new payment, and you cannot connect keys or refund. A payment a shopper has **already made** is still recorded when Razorpay reports it.
+
+## Troubleshooting
+
+| Problem | What to check |
+|---|---|
+| **Pay online** will not switch on | Razorpay is not connected, or the webhook secret is missing. Fix it in **Settings → Online payments**. |
+| Shopper paid but the order shows unpaid | The webhook is not set up with the exact URL, the six events and the same secret saved in Fintranzact. Check **Settings → Online payments**. A payment that cannot be booked (for example the invoice was cancelled) leaves a note in the **Audit log**. |
+| Shopper is not sent back to the store after paying | The storefront address (`STORE_URL`) is not configured on the server. The payment itself still works. |
+| *Razorpay did not refund this payment* | Razorpay's reason is shown. Common causes: the amount is more than is available, or the payment is too old for your account to refund. Nothing was refunded. |
+| The refund button is missing | Only an owner or admin can refund, and only an order paid online with money still to refund. |
+
+</ForDesktop>

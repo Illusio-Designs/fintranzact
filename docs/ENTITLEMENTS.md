@@ -145,6 +145,20 @@ Not a plan flag: every plan has it. Each business pastes ITS OWN Razorpay keys (
 | `POST /api/share/:token/pay` | `public-neutral`: a read-only or suspended organisation answers the same neutral 404 and makes no new link; the share page does not offer Pay now (`onlinePayment.available` is false) |
 | `POST /webhooks/razorpay/business/:token` | `exempt-webhook`: a payment the customer has **already made** is recorded even while read-only (otherwise real money would go unbooked); a suspended organisation's token does not resolve (generic 401). Signature-verified with that business's own webhook secret, never open |
 
+### Online payments at store checkout
+
+Follows the `onlineStore` flag like the rest of the store, and reuses the business's own Razorpay connection above (the platform's `RAZORPAY_KEY_ID` never collects shopper money). No new plan flag. The decisions:
+
+| Surface | Policy |
+|---|---|
+| `store.updateSettings` with `storeOnlinePaymentsEnabled` / `storeCodEnabled` | gated like every settings change: needs the `onlineStore` plan (`enforceOnlineStore`), refused while read-only; `storeOnlinePaymentsEnabled: true` also needs the Razorpay connection with its webhook secret |
+| `store.getOrder`, `store.listOrders` (payment state, Razorpay reference) | readable like the rest of the store admin (`read:Store`) |
+| `store.refundOrder` | gated: **read-only blocks refunding** (it calls Razorpay and writes a credit note); owner/admin only (`manage:Store`) |
+| `store.cancelOrder` with `refund` | the same normal gate as cancelling; `refund: "full"` needs `manage:Store` |
+| `POST /store/:slug/order` (with `paymentMethod`) | unchanged `public-neutral` store order: `onlineStore` enforced (`storeServesTenant`); a read-only or suspended organisation answers the neutral 404 and takes no new order or payment |
+| `GET /store/:slug/order/:orderId`, `POST /store/:slug/order/:orderId/pay` | `public-neutral`: the same neutral 404 for a halted, read-only or suspended organisation, a store that is off, an unknown order and another business's order; **no new payment link is made** for a read-only organisation. Rate limited per IP (and 6 a minute per order); the POST passes the store Origin allow-list |
+| `POST /webhooks/razorpay/business/:token` (store orders) | `exempt-webhook`, unchanged: a payment the shopper has **already made** is recorded and the order marked paid even while read-only; a suspended organisation's token does not resolve |
+
 ### Clients
 
 `billing.status` carries `plan`, `features`, `featureRequiredPlans` and `topPlanName`; the shared `featureAccess(status, flag)` turns them into `{ allowed, featureName, requiredPlan, badge, message }` (allowed while the status loads, so nothing flashes locked). Web: nav items for gated pages show a small plan badge (text, with an `aria-label`) instead of hiding; gated pages show `FeatureNotice` ("Not on your plan", "See plans") above the list so existing data stays visible, and their create buttons are disabled with a `title` reason (`useFeature(flag).lockedProps`); batch fields on documents and stock explain why they are off. Mobile has the same notice and a disabled add button on the recurring invoices screens. Both shared error handlers turn a server `feature_not_in_plan` into the same prompt with "See plans" (owners go to Billing, everyone else to the public pricing page). The desktop app is the web app.

@@ -113,6 +113,15 @@ test.describe("J12 online store", () => {
       store_delivery_note: "Free delivery in Mumbai",
     });
 
+    // Payments at checkout: Razorpay is not connected, so Pay online cannot be switched on;
+    // Cash on Delivery is on by default. (Connecting Razorpay needs a real account, so no payment is made here.)
+    const payments = page.getByTestId("store-payments-card");
+    await expect(payments).toContainText("Razorpay is not connected");
+    await expect(payments.getByRole("switch", { name: "Accept online payments at checkout" })).toBeDisabled();
+    await expect(payments.getByRole("switch", { name: "Offer Cash on Delivery" })).toHaveAttribute("aria-checked", "true");
+    await expect(payments.getByRole("link", { name: "Connect Razorpay" })).toBeVisible();
+    await expectNoHorizontalScroll(page, "settings / store payments");
+
     // Items on the store.
     await expect(page.getByText(/^0 of \d+ items on your store$/)).toBeVisible();
     await page.getByRole("button", { name: "Manage Items" }).click();

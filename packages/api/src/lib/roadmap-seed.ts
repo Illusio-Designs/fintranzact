@@ -2486,6 +2486,46 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-06-store-payments",
+    updates: [
+      {
+        // Built: shoppers pay at store checkout through the business's OWN
+        // Razorpay account (decision: its own API keys, not Razorpay Route;
+        // the platform's RAZORPAY_KEY_ID never touches shopper money). The
+        // connection from invoice payment links is reused and surfaced in
+        // Settings -> Online Store with two switches (Pay online, Cash on
+        // Delivery). Checkout makes a hosted Razorpay payment link on the
+        // order's invoice for the amount worked out from the database; the
+        // business webhook (signature verified, deduped by Razorpay payment
+        // id) records the payment and gateway charge and marks the order and
+        // invoice paid; an unpaid order keeps a Pay again link; paid orders
+        // can be refunded through Razorpay in full or in part with a credit
+        // note, idempotently, owner/admin only; shoppers get order, payment
+        // received, payment failed and refund emails.
+        // Tested: unit tests and integration tests against a real Postgres
+        // with Razorpay's HTTP mocked, web component tests; the storefront
+        // type-checks and builds. Still unverified: real Razorpay was never
+        // called (no test or live keys), no browser run of the storefront or
+        // the e2e journey, no real email sent. Not built: a delivery charge
+        // at checkout (the order has items and GST only), so the status stays
+        // in progress until a live test payment and refund have been made.
+        title: "Online payments at store checkout",
+        status: "in_progress",
+        done: [
+          "Decide: Razorpay Route vs per-merchant keys",
+          "Store payment settings (connect Razorpay, keys encrypted)",
+          "Checkout with UPI, card and netbanking",
+          "Cash on Delivery on/off per store",
+          "Webhook: verify signature, mark order and draft invoice paid",
+          "Record payment with gateway charges",
+          "Retry link for failed payments",
+          "Refunds on cancel (full/partial) with credit note",
+          "Order and payment emails to the shopper",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

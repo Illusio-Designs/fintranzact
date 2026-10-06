@@ -133,7 +133,7 @@ async function call<T>(creds: RazorpayCredentials, method: "GET" | "POST", path:
       headers: {
         Authorization: "Basic " + Buffer.from(`${creds.keyId}:${creds.keySecret}`).toString("base64"),
         "Content-Type": "application/json",
-        ...(extraHeaders ?? {}),
+        ...extraHeaders,
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
