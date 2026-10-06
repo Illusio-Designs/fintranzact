@@ -34,3 +34,6 @@ export * from "./gst-filing-wizard.js";
 export * from "./store-policies.js";
 export * from "./store-delivery.js";
 export * from "./payment-reminders.js";
+export * from "./payroll-calendar.js";
+export * from "./payroll-calc.js";
+export * from "./payroll.js";
