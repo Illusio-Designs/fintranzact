@@ -132,6 +132,16 @@ function idKind(router: string, name: string): string | undefined {
   if (router === "itc") return "itcEntry";
   if (router === "ewayBill") return "ewayBill";
   if (router === "platform") return undefined;
+  if (router === "payrollEmployee") {
+    if (name.startsWith("department")) return "payrollDepartment";
+    if (name.startsWith("designation")) return "payrollDesignation";
+    if (name.startsWith("shift")) return "payrollShift";
+    return "employee";
+  }
+  if (router === "payrollSalary") return name.startsWith("component") ? "salaryComponent" : "salaryTemplate";
+  if (router === "payrollAttendance") return name.startsWith("holiday") ? "payrollHoliday" : undefined;
+  if (router === "payrollLeave") return name.startsWith("type") ? "leaveType" : "leaveApplication";
+  if (router === "payrollRun") return "payrollRun";
   const byRouter: Record<string, string> = {
     account: "account", bankAccount: "bankAccount", batch: "batch", business: "business", expense: "expense",
     item: "item", journal: "journal", party: "party", payment: "payment", priceLevel: "priceLevel",
@@ -178,6 +188,17 @@ const FIELD_KIND: Record<string, string> = {
   businessMemberId: "businessMember",
   shipmentId: "shipment",
   destinationWarehouseId: "warehouse2",
+  // Payroll
+  employeeId: "employee",
+  employeeIds: "employee",
+  managerId: "employee",
+  departmentId: "payrollDepartment",
+  designationId: "payrollDesignation",
+  shiftId: "payrollShift",
+  leaveTypeId: "leaveType",
+  componentId: "salaryComponent",
+  runId: "payrollRun",
+  adjustmentId: "payrollAdjustment",
 };
 
 /**
@@ -190,7 +211,7 @@ export function kindFor(proc: Pick<ProcInfo, "router" | "name">, key: string, pa
   // `id` inside a nested object (e.g. a shipping-method list) is not a record.
   if (key === "id" || key === "ids") return path.length === 0 || path[0] === key ? idKind(router, name) : undefined;
   if (key === "parentId") return router === "account" ? "account" : "stockGroup";
-  if (key === "templateId") return router === "journal" ? "journalTemplate" : "bankTemplate";
+  if (key === "templateId") return router === "journal" ? "journalTemplate" : router === "payrollSalary" ? "salaryTemplate" : "bankTemplate";
   if (key === "orderId") return router === "store" ? "storeOrder" : "salesOrder";
   if (key === "sourceId" || key === "targetId") {
     if (router === "party" || router === "item") return router;

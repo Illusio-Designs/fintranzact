@@ -23,7 +23,8 @@ import {
 } from "@fintranzact/db";
 import { createTenant, createUser, addMember, createBusiness, createBankAccount, grantAddon, type TestUser, type TestTenant, type TestBusiness } from "../helpers/fixtures.js";
 import { createTestCaller } from "../helpers/create-test-caller.js";
-import { getTenantTestDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
+import { getTenantTestDb, getTestClient, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
+import { runAudit, formatReport } from "../../lib/data-audit/runner.js";
 import { seedChartOfAccounts } from "../../lib/coa-seed.js";
 import { entitlementDataOf } from "../../lib/entitlement-error.js";
 import { invalidateEntitlements } from "../../lib/entitlements.js";
@@ -628,6 +629,25 @@ describe("period locks and posting", () => {
     }
     const runs = await db().select().from(payrollRuns).where(eq(payrollRuns.businessId, biz.id));
     expect(runs.filter((r) => r.status === "paid")).toHaveLength(2);
+  });
+});
+
+describe("the data audit", () => {
+  it("finds nothing wrong in the payroll this suite built", async () => {
+    const report = await runAudit(getTestClient(), { businessIds: [biz.id] });
+    const payrollTables = new Set(["employees", "salary_components", "employee_salary_assignments", "attendance_records", "leave_ledger", "leave_applications", "payroll_runs", "payroll_run_lines", "payslips"]);
+    const mine = report.results.filter((r) => payrollTables.has(r.rule.table));
+    expect(mine.map((r) => `${r.rule.id}: ${r.samples.map((x) => x.detail).join("; ")}`)).toEqual([]);
+    expect(report.failures.filter((f) => payrollTables.has(f.rule.table)).map((f) => `${f.rule.id}: ${f.error}`)).toEqual([]);
+    void formatReport;
+  });
+
+  it("catches a run whose totals no longer match its lines", async () => {
+    const run = (await db().select().from(payrollRuns).where(and(eq(payrollRuns.businessId, biz.id), eq(payrollRuns.month, "2026-08"))))[0]!;
+    await db().update(payrollRuns).set({ netTotal: "1.00" }).where(eq(payrollRuns.id, run.id));
+    const report = await runAudit(getTestClient(), { businessIds: [biz.id] });
+    expect(report.results.map((r) => r.rule.id)).toContain("payroll_runs.totals-match-lines");
+    await db().update(payrollRuns).set({ netTotal: run.netTotal }).where(eq(payrollRuns.id, run.id));
   });
 });
 

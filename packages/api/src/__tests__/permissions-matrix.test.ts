@@ -17,6 +17,7 @@ const RESOURCES: Exclude<Resource, "all">[] = [
   "Store", "SalesTarget", "RecurringInvoice",
   "Account", "ITC", "Tds", "PeriodLock",
   "BankReconciliation", "EInvoice", "EWayBill",
+  "Payroll",
 ];
 
 type Grants = Partial<Record<Exclude<Resource, "all">, string>>;
@@ -82,6 +83,8 @@ const EXPECTED: Record<string, Grants> = {
     Business: "r",
     Store: "r",
     RecurringInvoice: "r",
+    // Payroll (add-on): prepares payroll, never approves it or sees unmasked identity numbers (manage).
+    Payroll: "cru",
   },
   // Read-only accountant: reads, never writes.
   auditor: READ_ONLY_GRANTS(),

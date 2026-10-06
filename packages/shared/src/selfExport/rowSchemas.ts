@@ -962,6 +962,321 @@ export const tds26asEntryRowSchema = z.object({
   createdAt: isoDatetime,
 });
 
+// ── Payroll (add-on) ──────────────────────────────────────────────────────────
+// Added with Payroll Phase 1. Every column of these tables is new, so an older
+// export simply has no rows for them. Identity and bank numbers (pan, aadhaar,
+// uan, esicNumber, bankAccountNumber, bankIfsc) are optional columns: they are
+// in the file only because the owner exports the whole business, and the
+// import accepts files without them.
+
+const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const dateStringNullable = dateString.nullable();
+const numericString = z.string().regex(/^-?\d+(\.\d{1,4})?$/);
+
+export const payrollSettingsRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  defaultWeeklyOffDays: z.array(z.number().int()),
+  standardHoursPerDay: numericString,
+  overtimeMultiplier: numericString,
+  leaveYearStartMonth: z.number().int(),
+  updatedAt: isoDatetime,
+});
+
+const nameRow = {
+  id: uuid,
+  businessId: uuid,
+  name: z.string(),
+  isActive: z.boolean(),
+  createdAt: isoDatetime,
+};
+export const payrollDepartmentRowSchema = z.object(nameRow);
+export const payrollDesignationRowSchema = z.object(nameRow);
+
+export const payrollShiftRowSchema = z.object({
+  ...nameRow,
+  startTime: z.string(),
+  endTime: z.string(),
+  weeklyOffDays: z.array(z.number().int()),
+  standardHours: numericString,
+});
+
+export const employeeRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  employeeCode: z.string(),
+  name: z.string(),
+  dateOfBirth: dateStringNullable,
+  gender: z.string().nullable(),
+  fatherOrSpouseName: z.string().nullable(),
+  address: z.string().nullable(),
+  phone: z.string().nullable(),
+  email: z.string().nullable(),
+  photoDataUrl: z.string().nullable(),
+  // Sensitive identity and bank numbers: optional so a file without them still imports.
+  pan: z.string().nullable().optional(),
+  aadhaar: z.string().nullable().optional(),
+  uan: z.string().nullable().optional(),
+  esicNumber: z.string().nullable().optional(),
+  dateOfJoining: dateString,
+  departmentId: uuidNullable,
+  designationId: uuidNullable,
+  branch: z.string().nullable(),
+  workState: z.string().nullable(),
+  managerId: uuidNullable,
+  shiftId: uuidNullable,
+  employmentType: z.string(),
+  taxRegime: z.string(),
+  bankAccountNumber: z.string().nullable().optional(),
+  bankIfsc: z.string().nullable().optional(),
+  bankAccountName: z.string().nullable(),
+  bankName: z.string().nullable(),
+  status: z.string(),
+  lastWorkingDay: dateStringNullable,
+  exitReason: z.string().nullable(),
+  exitNote: z.string().nullable(),
+  fnfNote: z.string().nullable(),
+  fnfPayrollRunId: uuidNullable,
+  createdByUserId: uuidNullable,
+  createdAt: isoDatetime,
+  updatedAt: isoDatetime,
+});
+
+export const salaryComponentRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  code: z.string(),
+  name: z.string(),
+  type: z.string(),
+  category: z.string(),
+  prorate: z.boolean(),
+  isWage: z.boolean(),
+  statutoryKind: z.string().nullable(),
+  sortOrder: z.number().int(),
+  isActive: z.boolean(),
+  createdAt: isoDatetime,
+  updatedAt: isoDatetime,
+});
+
+export const salaryTemplateRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  name: z.string(),
+  description: z.string().nullable(),
+  sampleAnnualCtc: money2,
+  isActive: z.boolean(),
+  createdAt: isoDatetime,
+  updatedAt: isoDatetime,
+});
+
+export const salaryTemplateLineRowSchema = z.object({
+  id: uuid,
+  templateId: uuid,
+  componentId: uuid,
+  calcType: z.string(),
+  value: money2,
+  sortOrder: z.number().int(),
+});
+
+export const employeeSalaryAssignmentRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  employeeId: uuid,
+  templateId: uuidNullable,
+  annualCtc: money2,
+  monthlyCtc: money2,
+  effectiveFrom: dateString,
+  breakdown: z.unknown(),
+  createdByUserId: uuidNullable,
+  createdAt: isoDatetime,
+});
+
+export const attendanceRecordRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  employeeId: uuid,
+  date: dateString,
+  status: z.string(),
+  leaveTypeId: uuidNullable,
+  checkIn: z.string().nullable(),
+  checkOut: z.string().nullable(),
+  overtimeHours: numericString,
+  note: z.string().nullable(),
+  source: z.string(),
+  markedByUserId: uuidNullable,
+  updatedAt: isoDatetime,
+});
+
+export const payrollHolidayRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  date: dateString,
+  name: z.string(),
+  scope: z.string(),
+  stateCode: z.string().nullable(),
+  branch: z.string().nullable(),
+  createdAt: isoDatetime,
+});
+
+export const leaveTypeRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  code: z.string(),
+  name: z.string(),
+  isPaid: z.boolean(),
+  accrualType: z.string(),
+  accrualDays: numericString,
+  carryForward: z.boolean(),
+  carryForwardMax: numericString,
+  encashable: z.boolean(),
+  isActive: z.boolean(),
+  createdAt: isoDatetime,
+});
+
+export const leaveLedgerRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  employeeId: uuid,
+  leaveTypeId: uuid,
+  leaveYear: z.number().int(),
+  entryDate: dateString,
+  kind: z.string(),
+  days: numericString,
+  periodKey: z.string().nullable(),
+  applicationId: uuidNullable,
+  note: z.string().nullable(),
+  createdByUserId: uuidNullable,
+  createdAt: isoDatetime,
+});
+
+export const leaveApplicationRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  employeeId: uuid,
+  leaveTypeId: uuid,
+  fromDate: dateString,
+  toDate: dateString,
+  halfDayStart: z.boolean(),
+  halfDayEnd: z.boolean(),
+  days: numericString,
+  paidDays: numericString,
+  lopDays: numericString,
+  reason: z.string().nullable(),
+  status: z.string(),
+  decidedByUserId: uuidNullable,
+  decidedByName: z.string().nullable(),
+  decidedAt: isoDatetimeNullable,
+  decisionNote: z.string().nullable(),
+  createdByUserId: uuidNullable,
+  createdAt: isoDatetime,
+});
+
+export const leaveEncashmentRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  employeeId: uuid,
+  leaveTypeId: uuid,
+  days: numericString,
+  amount: money2,
+  note: z.string().nullable(),
+  payrollRunId: uuidNullable,
+  createdByUserId: uuidNullable,
+  createdAt: isoDatetime,
+});
+
+export const payrollRunRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  month: z.string(),
+  status: z.string(),
+  daysInMonth: z.number().int(),
+  employeeCount: z.number().int(),
+  grossTotal: money2,
+  deductionsTotal: money2,
+  employerTotal: money2,
+  netTotal: money2,
+  warnings: z.unknown(),
+  notes: z.string().nullable(),
+  attendanceLockedAt: isoDatetimeNullable,
+  attendanceLockedByUserId: uuidNullable,
+  calculatedAt: isoDatetimeNullable,
+  calculatedByUserId: uuidNullable,
+  calculatedByName: z.string().nullable(),
+  submittedAt: isoDatetimeNullable,
+  submittedByUserId: uuidNullable,
+  approvedAt: isoDatetimeNullable,
+  approvedByUserId: uuidNullable,
+  approvedByName: z.string().nullable(),
+  postedAt: isoDatetimeNullable,
+  postedByUserId: uuidNullable,
+  accrualJournalEntryId: uuidNullable,
+  paidAt: isoDatetimeNullable,
+  paidOn: dateStringNullable,
+  paidByUserId: uuidNullable,
+  paidFromBankAccountId: uuidNullable,
+  paidReference: z.string().nullable(),
+  paymentJournalEntryId: uuidNullable,
+  createdByUserId: uuidNullable,
+  createdByName: z.string().nullable(),
+  createdAt: isoDatetime,
+  updatedAt: isoDatetime,
+});
+
+export const payrollRunLineRowSchema = z.object({
+  id: uuid,
+  runId: uuid,
+  businessId: uuid,
+  employeeId: uuid,
+  employeeCode: z.string(),
+  employeeName: z.string(),
+  department: z.string().nullable(),
+  designation: z.string().nullable(),
+  daysInMonth: z.number().int(),
+  employedDays: z.number().int(),
+  paidDays: numericString,
+  lopDays: numericString,
+  overtimeHours: numericString,
+  components: z.unknown(),
+  grossEarnings: money2,
+  totalDeductions: money2,
+  employerContributions: money2,
+  netPay: money2,
+  warnings: z.unknown(),
+  isFinalSettlement: z.boolean(),
+  // Frozen at approval for the bank file (sensitive): optional.
+  bankAccountNumber: z.string().nullable().optional(),
+  bankIfsc: z.string().nullable().optional(),
+  bankAccountName: z.string().nullable().optional(),
+  createdAt: isoDatetime,
+});
+
+export const payrollRunAdjustmentRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  runId: uuid,
+  employeeId: uuid,
+  name: z.string(),
+  type: z.string(),
+  amount: money2,
+  note: z.string().nullable(),
+  createdByUserId: uuidNullable,
+  createdAt: isoDatetime,
+});
+
+export const payslipRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  runId: uuid,
+  lineId: uuid,
+  employeeId: uuid,
+  month: z.string(),
+  number: z.string(),
+  snapshot: z.unknown(),
+  emailedAt: isoDatetimeNullable,
+  emailedTo: z.string().nullable(),
+  createdAt: isoDatetime,
+});
+
 // ── Registry map ──────────────────────────────────────────────────────────────
 
 export const ROW_SCHEMAS: Record<string, z.ZodTypeAny> = {
@@ -1010,4 +1325,23 @@ export const ROW_SCHEMAS: Record<string, z.ZodTypeAny> = {
   audit_log: auditLogRowSchema,
   gstr2b_uploads: gstr2bUploadRowSchema,
   gstr2b_records: gstr2bRecordRowSchema,
+  payroll_settings: payrollSettingsRowSchema,
+  payroll_departments: payrollDepartmentRowSchema,
+  payroll_designations: payrollDesignationRowSchema,
+  payroll_shifts: payrollShiftRowSchema,
+  employees: employeeRowSchema,
+  salary_components: salaryComponentRowSchema,
+  salary_templates: salaryTemplateRowSchema,
+  salary_template_lines: salaryTemplateLineRowSchema,
+  employee_salary_assignments: employeeSalaryAssignmentRowSchema,
+  attendance_records: attendanceRecordRowSchema,
+  payroll_holidays: payrollHolidayRowSchema,
+  leave_types: leaveTypeRowSchema,
+  leave_ledger: leaveLedgerRowSchema,
+  leave_applications: leaveApplicationRowSchema,
+  leave_encashments: leaveEncashmentRowSchema,
+  payroll_runs: payrollRunRowSchema,
+  payroll_run_lines: payrollRunLineRowSchema,
+  payroll_run_adjustments: payrollRunAdjustmentRowSchema,
+  payslips: payslipRowSchema,
 };
