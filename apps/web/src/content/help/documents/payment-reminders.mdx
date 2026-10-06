@@ -75,9 +75,19 @@ Put a placeholder in double braces and it is filled in for each invoice:
 | `{{dueDate}}` | The due date, for example 10-10-2026 |
 | `{{dueText}}` | "is due on 10-10-2026", "is due today" or "was due on 10-10-2026 (4 days overdue)", so one message reads right before and after the due date |
 | `{{businessName}}` | Your business name |
-| `{{paymentLink}}` | A payment link for the invoice, when the invoice has one. When it does not, the placeholder is empty, and a line such as `Pay online: {{paymentLink}}` is left out altogether |
+| `{{paymentLink}}` | The Razorpay payment link for the invoice's balance due, when your business has connected Razorpay. When it has not, the placeholder is empty, and a line such as `Pay online: {{paymentLink}}` is left out altogether |
 
 Customer names and other values are always inserted as plain text; nothing a customer's name contains can change how the email looks.
+
+### Payment links in reminders
+
+When your business has connected its own Razorpay account (**Settings → Online payments**), every reminder that is actually sent carries a payment link for the invoice's **current balance due**:
+
+- If the invoice already has an active payment link for the same balance, that same link is used.
+- If the balance has changed since (for example a part payment came in), a new link for the new balance is made and the old one is cancelled, exactly as when you create a link on the invoice.
+- The link is made at the moment the reminder is sent, by the schedule or by **Send reminder now**. Looking at the invoice, the WhatsApp message preview and the Settings preview never create a link: the WhatsApp message shows the invoice's current link if it has one, and the Settings preview shows an example link, marked as an example.
+- Without a Razorpay connection, on a draft, cancelled or paid invoice, when the balance is under ₹1, or when Razorpay cannot be reached, the reminder goes out without a link and the `Pay online:` line is left out. A link that cannot be made never stops a reminder from being sent.
+- A read-only organisation sends no reminders and makes no links.
 
 ## Send a reminder now
 

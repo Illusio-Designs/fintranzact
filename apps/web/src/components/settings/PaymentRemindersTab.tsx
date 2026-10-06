@@ -249,6 +249,9 @@ export function PaymentRemindersTab({ biz }: { biz?: { name?: string | null; leg
             </div>
           );
         })}
+        <p className="text-xs text-text-tertiary">
+          The payment link in the preview is an example. When a reminder is sent for an invoice of a business with Razorpay connected (Settings, Online payments), it carries the real link for the balance due; otherwise that line is left out.
+        </p>
         {!data.smsAvailable && (
           <p className="text-xs text-text-tertiary">
             When SMS goes through MSG91, the words customers receive are your DLT-approved template; the SMS wording above is the preview and the history text.

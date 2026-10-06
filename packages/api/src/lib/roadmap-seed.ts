@@ -2486,6 +2486,24 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-06-small-fixes",
+    updates: [
+      {
+        // Reminders now carry the business's Razorpay payment link for the
+        // current balance due ({{paymentLink}}): the active link is reused
+        // for an unchanged balance, one is made only when a reminder is sent
+        // (previews never create one), and a failure never blocks the
+        // reminder. Tested against a real Postgres with a mocked Razorpay
+        // HTTP layer. The checklist has no separate line for it (the Razorpay
+        // payment link line covers the invoice and share page), so nothing
+        // is ticked here.
+        title: "Payment reminders, Razorpay payment links and UPI QR on invoices",
+        status: "in_progress",
+        done: [],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

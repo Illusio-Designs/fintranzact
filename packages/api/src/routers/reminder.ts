@@ -43,7 +43,7 @@ export const reminderRouter = router({
   /** One invoice's reminder history and what can be sent for it now. */
   getForInvoice: viewerProcedure.input(invoiceInput).query(async ({ ctx, input }) => {
     requireCan(ctx.ability, "read", "Invoice");
-    return getInvoiceReminderInfo(ctx.db, ctx.businessId, input.invoiceId);
+    return getInvoiceReminderInfo(ctx.db, ctx.businessId, input.invoiceId, { deps: { tenantId: ctx.tenantId } });
   }),
 
   /** Send a reminder now (email or SMS), or record opening the WhatsApp link. */
@@ -56,6 +56,7 @@ export const reminderRouter = router({
         invoiceId: input.invoiceId,
         channel: input.channel,
         user: { id: ctx.user.id, name: ctx.user.name ?? ctx.user.email },
+        deps: { tenantId: ctx.tenantId },
       });
       logAudit(ctx.db, {
         businessId: ctx.businessId,
