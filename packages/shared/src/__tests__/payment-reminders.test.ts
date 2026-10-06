@@ -95,6 +95,15 @@ describe("renderReminderTemplate", () => {
     }
   });
 
+  it("the sample payment link is clearly an example, and a real link replaces the line, no link drops it", () => {
+    const sample = sampleReminderVariables("Acme Co", ist10(2026, 10, 5));
+    expect(sample.paymentLink).toContain("example");
+    const t = "Pay online: {{paymentLink}}\nThanks";
+    expect(renderReminderTemplate(t, sample)).toContain("Pay online: https://rzp.io/");
+    expect(renderReminderTemplate(t, { ...sample, paymentLink: "https://rzp.io/i/abc" })).toBe("Pay online: https://rzp.io/i/abc\nThanks");
+    expect(renderReminderTemplate(t, { ...sample, paymentLink: "" })).toBe("Thanks");
+  });
+
   it("dueText reads right before, on and after the due date", () => {
     expect(reminderDueText(due, ist10(2026, 10, 7))).toBe("is due on 10-10-2026");
     expect(reminderDueText(due, ist10(2026, 10, 10))).toBe("is due today");

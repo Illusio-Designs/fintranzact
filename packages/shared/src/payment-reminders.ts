@@ -200,6 +200,9 @@ export function buildReminderVariables(input: {
   };
 }
 
+/** What the settings preview shows for {{paymentLink}}: clearly an example, never a real link. */
+export const SAMPLE_PAYMENT_LINK = "https://rzp.io/… (example: created when the reminder is sent)";
+
 /** Sample values for the settings preview. */
 export function sampleReminderVariables(businessName: string, now: Date = new Date()): ReminderVariables {
   return buildReminderVariables({
@@ -208,7 +211,8 @@ export function sampleReminderVariables(businessName: string, now: Date = new Da
     balanceDue: 11800,
     dueDate: new Date(now.getTime() + 3 * DAY_MS),
     businessName,
-    paymentLink: null,
+    // An example only: the real link is made when a reminder is sent, if Razorpay is connected.
+    paymentLink: SAMPLE_PAYMENT_LINK,
     now,
   });
 }

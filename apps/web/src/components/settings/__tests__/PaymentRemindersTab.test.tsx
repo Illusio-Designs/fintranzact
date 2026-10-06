@@ -54,8 +54,8 @@ describe("PaymentRemindersTab", () => {
     expect(email.textContent).toContain("INV-0042");
     expect(email.textContent).toContain("Sharma Electronics");
     expect(email.textContent).not.toContain("{{");
-    // No payment link in the sample, so the "Pay online" line is left out of the preview.
-    expect(email.textContent).not.toContain("Pay online");
+    // The sample carries an example payment link, clearly marked as an example (never a real link).
+    expect(email.textContent).toContain("Pay online: https://rzp.io/… (example: created when the reminder is sent)");
     expect(screen.getByTestId("preview-sms").textContent).not.toContain("{{");
   });
 
