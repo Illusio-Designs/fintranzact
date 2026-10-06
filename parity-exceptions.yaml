@@ -37,6 +37,10 @@ exceptions:
       - payrollEmployee.get
       - payrollEmployee.list
       - payrollEmployee.reactivate
+      - payrollEmployee.departmentCreate
+      - payrollEmployee.departmentUpdate
+      - payrollEmployee.designationCreate
+      - payrollEmployee.designationUpdate
       - payrollEmployee.shiftCreate
       - payrollEmployee.shiftList
       - payrollEmployee.update
@@ -570,6 +574,10 @@ exceptions:
       - payrollEmployee.get
       - payrollEmployee.list
       - payrollEmployee.reactivate
+      - payrollEmployee.departmentCreate
+      - payrollEmployee.departmentUpdate
+      - payrollEmployee.designationCreate
+      - payrollEmployee.designationUpdate
       - payrollEmployee.shiftCreate
       - payrollEmployee.shiftList
       - payrollEmployee.update
@@ -976,6 +984,10 @@ exceptions:
       - payrollEmployee.get
       - payrollEmployee.list
       - payrollEmployee.reactivate
+      - payrollEmployee.departmentCreate
+      - payrollEmployee.departmentUpdate
+      - payrollEmployee.designationCreate
+      - payrollEmployee.designationUpdate
       - payrollEmployee.shiftCreate
       - payrollEmployee.shiftList
       - payrollEmployee.update
