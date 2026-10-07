@@ -16,9 +16,10 @@
  *                   the billing owner's own Finvera invoices.
  *  write-gated      Creates or edits business data. Refused while read-only or
  *                   suspended with HTTP 403 { error, entitlement } via
- *                   refuseIfReadOnly. (No such session-authenticated route
- *                   exists today; the only REST writes are signed-token or
- *                   public.)
+ *                   refuseIfReadOnly. The one session-authenticated route that
+ *                   uses it is the AI assistant's streaming answer (it saves chat
+ *                   history and the usage ledger, and add-ons are off while
+ *                   read-only); the other REST writes are signed-token or public.
  *  signed-token     Authenticated by a signed export/import token. Export is
  *                   allowed in read-only mode (needs the plan's dataExport
  *                   flag; suspended organisations get a 404). Import is a
@@ -103,6 +104,12 @@ export const REST_ENTITLEMENT_POLICY: Readonly<Record<string, RestEntitlementPol
   // secret. Recorded even in read-only mode (the customer has already paid); suspended: 401.
   "POST /webhooks/razorpay/business/:token": "exempt-webhook",
   "GET /api/billing/invoices/:paymentId/pdf": "exempt-download",
+
+  // The AI assistant's streaming answer. A signed-in POST that reads the business through the user's own
+  // tRPC caller and writes only the chat history and the usage ledger. Add-ons are off while an organisation is
+  // read-only, so it is refused for read-only and suspended organisations (refuseIfReadOnly) with the standard
+  // 403 { error, entitlement } body; the add-on, quota and owner switches are enforced by ai.begin.
+  "POST /api/ai/stream": "write-gated",
 
   // tRPC mount
   "ALL /api/trpc/*": "trpc-gated",

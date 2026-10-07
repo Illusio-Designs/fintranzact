@@ -92,6 +92,9 @@ export async function buildSweepWorld(): Promise<SweepWorld> {
   // own permission checks (the add-on gate itself is covered by integration/payroll.test.ts).
   await grantAddon(tenantA.id, "payroll");
   await grantAddon(tenantB.id, "payroll");
+  // The AI assistant is an add-on too (gate and quota are covered by integration/ai-assistant.test.ts).
+  await grantAddon(tenantA.id, "ai_assistant");
+  await grantAddon(tenantB.id, "ai_assistant");
 
   const mk = async (role: string, email: string) => {
     const u = await createUser({ email, name: `Sweep ${role}` });

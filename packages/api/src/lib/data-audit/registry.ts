@@ -13,6 +13,7 @@ import { moneyTables } from "./rules/money.js";
 import { inventoryTables } from "./rules/inventory.js";
 import { miscTables } from "./rules/misc.js";
 import { payrollTables } from "./rules/payroll.js";
+import { aiTables } from "./rules/ai.js";
 
 export const TABLE_COVERAGE: TableCoverage[] = [
   ...masterTables,
@@ -21,6 +22,7 @@ export const TABLE_COVERAGE: TableCoverage[] = [
   ...inventoryTables,
   ...miscTables,
   ...payrollTables,
+  ...aiTables,
 ];
 
 export const ALL_RULES: AuditRule[] = TABLE_COVERAGE.flatMap((t) => t.rules);
