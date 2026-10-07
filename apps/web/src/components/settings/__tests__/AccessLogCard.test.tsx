@@ -37,6 +37,8 @@ vi.mock("@/lib/trpc", () => {
   };
 });
 vi.mock("@/hooks/useToast", () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn() } }));
+// The AI assistant switches have their own tests (AiAssistantSettingsCard.test.tsx).
+vi.mock("../AiAssistantSettingsCard", () => ({ AiAssistantSettingsCard: () => null }));
 
 import { AccessLogCard } from "../AccessLogCard";
 import { TeamTab } from "../TeamTab";

@@ -137,6 +137,8 @@ export function registerAiStreamRoute(app: Hono, opts: AiStreamOptions = {}): vo
     const models = resolveAiModels();
     const choice = chooseAiModel(parsed.message, models, { historyTurns: begun.history.length });
 
+    // Proxies must not buffer the stream (nginx honours this header).
+    c.header("X-Accel-Buffering", "no");
     return streamSSE(c, async (stream) => {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(new Error("timeout")), AI_STREAM_TIMEOUT_MS);

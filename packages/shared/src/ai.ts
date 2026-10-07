@@ -196,11 +196,21 @@ export function estimateAiCostPaise(prices: AiPriceTable, model: string, usage: 
 
 // ── Answer cards ─────────────────────────────────────────────────────────────
 
+/** Replace control characters (and, with `angle`, angle brackets) by spaces, without a control-character regex. */
+export function stripControlChars(text: string, angle = false): string {
+  let out = "";
+  for (const ch of text) {
+    const code = ch.codePointAt(0)!;
+    out += code < 0x20 || code === 0x7f || (angle && (ch === "<" || ch === ">")) ? " " : ch;
+  }
+  return out;
+}
+
 /** Strip control characters and cap the length: card text comes from the model and is shown as plain text only. */
 function clean(max: number) {
   return z
     .union([z.string(), z.number()])
-    .transform((v) => String(v).replace(/[\u0000-\u001f\u007f<>]/g, " ").replace(/\s+/g, " ").trim())
+    .transform((v) => stripControlChars(String(v), true).replace(/\s+/g, " ").trim())
     .pipe(z.string().max(max));
 }
 

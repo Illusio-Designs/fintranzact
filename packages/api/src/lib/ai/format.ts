@@ -1,5 +1,7 @@
 /** Small formatting and size helpers for what the assistant's tools return. */
 
+import { stripControlChars } from "@fintranzact/shared";
+
 const INR = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /** ₹ with Indian (lakh / crore) grouping: 1234567.5 -> "₹12,34,567.50". */
@@ -21,7 +23,7 @@ export function round2(n: number): number {
 /** Plain text for the model: control characters and newlines flattened, length capped. Names and notes in the books are untrusted. */
 export function clip(value: unknown, max = 80): string {
   const s = value === null || value === undefined ? "" : String(value);
-  const flat = s.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim();
+  const flat = stripControlChars(s).replace(/\s+/g, " ").trim();
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 

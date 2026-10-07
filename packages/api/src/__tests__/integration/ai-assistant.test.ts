@@ -31,7 +31,7 @@ import {
 } from "../helpers/fixtures.js";
 import { createTestCaller } from "../helpers/create-test-caller.js";
 import { getControlDb, getTenantTestDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
-import { scripted, type Round } from "../helpers/ai-fake-client.js";
+import { scripted } from "../helpers/ai-fake-client.js";
 import { entitlementDataOf } from "../../lib/entitlement-error.js";
 import { invalidateEntitlements } from "../../lib/entitlements.js";
 import { registerAiStreamRoute } from "../../http/aiStream.js";

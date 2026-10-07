@@ -187,6 +187,7 @@ describe("parseAiCards", () => {
     const r = parseAiCards([{ type: "table", columns: ["<b>Name</b>"], rows: [["a\u0000<img src=x onerror=alert(1)>"]] }]);
     const t = r.cards[0] as { columns: string[]; rows: string[][] };
     expect(t.columns[0]).not.toMatch(/[<>]/);
-    expect(t.rows[0]![0]).not.toMatch(/[<>\u0000]/);
+    expect(t.rows[0]![0]).not.toMatch(/[<>]/);
+    expect([...t.rows[0]![0]!].some((ch) => ch.charCodeAt(0) < 0x20)).toBe(false);
   });
 });
