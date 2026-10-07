@@ -24,6 +24,9 @@ vi.mock("../SalaryTab", () => ({ SalaryTab: () => <div data-testid="tab-salary" 
 vi.mock("../AttendanceTab", () => ({ AttendanceTab: () => <div data-testid="tab-attendance" /> }));
 vi.mock("../LeaveTab", () => ({ LeaveTab: () => <div data-testid="tab-leave" /> }));
 vi.mock("../RunsTab", () => ({ RunsTab: () => <div data-testid="tab-runs" /> }));
+vi.mock("../StatutoryTab", () => ({ StatutoryTab: () => <div data-testid="tab-statutory" /> }));
+vi.mock("../DuesTab", () => ({ DuesTab: () => <div data-testid="tab-dues" /> }));
+vi.mock("../FilingsTab", () => ({ FilingsTab: () => <div data-testid="tab-filings" /> }));
 
 import { PayrollPage } from "../PayrollPage";
 
@@ -66,16 +69,26 @@ describe("PayrollPage", () => {
     expect(screen.getByTestId("payroll-addon-notice")).toHaveTextContent("Ask an owner");
   });
 
-  it("with the add-on shows the five sections and the chosen tab", () => {
+  it("with the add-on shows the eight sections and the chosen tab", () => {
     statusData.current = status({ addons: { ai_assistant: false, ai_plus: false, payroll: true, store_pro: false } });
     const onTabChange = vi.fn();
     render(<PayrollPage tab="salary" onTabChange={onTabChange} />);
     const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
-    expect(tabs).toEqual(["Employees", "Salary structures", "Attendance", "Leave", "Payroll runs"]);
+    expect(tabs).toEqual(["Employees", "Salary structures", "Attendance", "Leave", "Payroll runs", "Statutory settings", "Statutory dues", "Filings and registers"]);
     expect(screen.getByTestId("tab-salary")).toBeInTheDocument();
     expect(screen.queryByTestId("payroll-addon-notice")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Payroll runs" }));
     expect(onTabChange).toHaveBeenCalledWith("runs");
+  });
+
+  it("the statutory sections open from their tabs", () => {
+    statusData.current = status({ addons: { ai_assistant: false, ai_plus: false, payroll: true, store_pro: false } });
+    const { rerender } = render(<PayrollPage tab="statutory" onTabChange={() => {}} />);
+    expect(screen.getByTestId("tab-statutory")).toBeInTheDocument();
+    rerender(<PayrollPage tab="dues" onTabChange={() => {}} />);
+    expect(screen.getByTestId("tab-dues")).toBeInTheDocument();
+    rerender(<PayrollPage tab="filings" onTabChange={() => {}} />);
+    expect(screen.getByTestId("tab-filings")).toBeInTheDocument();
   });
 
   it("a trial organisation (add-on on) can use it", () => {

@@ -21,6 +21,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { UnderlineTabs } from "@/components/ui/Tabs";
 import { Badge } from "@/components/ui/Badge";
 import { Panel, TABLE, onError } from "./payroll-ui";
+import { EmployeeStatutoryDialog } from "./EmployeeStatutoryDialog";
+import { anyRegistration, useStatutoryRegistrations } from "./statutory-ui";
 
 type FormState = {
   employeeCode: string; name: string; dateOfBirth: string; gender: string; fatherOrSpouseName: string; address: string; phone: string; email: string;
@@ -46,6 +48,8 @@ export function EmployeesTab() {
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [exiting, setExiting] = useState<{ id: string; name: string } | null>(null);
   const [lists, setLists] = useState(false);
+  const [statutory, setStatutory] = useState<{ id: string; name: string } | null>(null);
+  const { reg } = useStatutoryRegistrations();
   const list = trpc.payrollEmployee.list.useQuery({ status, search: search || undefined, page: 1, limit: 200 });
   const capacity = trpc.payrollEmployee.capacity.useQuery();
   const rows = list.data?.data ?? [];
@@ -144,6 +148,7 @@ export function EmployeesTab() {
                     </td>
                     <td className="whitespace-nowrap text-right">
                       <button className="btn-secondary btn-sm mr-2" onClick={() => setEditing(e.id)}>Open</button>
+                      {anyRegistration(reg) && e.status === "active" && <button className="btn-secondary btn-sm mr-2" onClick={() => setStatutory({ id: e.id, name: e.name })}>Statutory</button>}
                       {e.status === "active" ? (
                         <button className="btn-secondary btn-sm" onClick={() => setExiting({ id: e.id, name: e.name })}>Exit</button>
                       ) : (
@@ -159,6 +164,7 @@ export function EmployeesTab() {
       </Panel>
 
       {editing && <EmployeeForm id={editing === "new" ? null : editing} onClose={() => setEditing(null)} onSaved={refresh} />}
+      {statutory && <EmployeeStatutoryDialog employeeId={statutory.id} name={statutory.name} onClose={() => setStatutory(null)} />}
       {exiting && <ExitDialog employee={exiting} onClose={() => setExiting(null)} onDone={refresh} />}
       {lists && <ListsDialog onClose={() => setLists(false)} />}
     </div>
@@ -171,6 +177,7 @@ function EmployeeForm({ id, onClose, onSaved }: { id: string | null; onClose: ()
   const designations = trpc.payrollEmployee.designationList.useQuery();
   const shifts = trpc.payrollEmployee.shiftList.useQuery();
   const managers = trpc.payrollEmployee.list.useQuery({ status: "active", page: 1, limit: 200 });
+  const { reg } = useStatutoryRegistrations();
   const [v, setV] = useState<FormState>({ ...EMPTY, dateOfJoining: todayISODate() });
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [loaded, setLoaded] = useState(!id);
@@ -308,8 +315,8 @@ function EmployeeForm({ id, onClose, onSaved }: { id: string | null; onClose: ()
             <legend className="mb-2 text-sm font-semibold text-text-primary">Statutory IDs</legend>
             {sensitiveField("pan", "PAN", { maxLength: 10 })}
             {sensitiveField("aadhaar", "Aadhaar number", { inputMode: "numeric", maxLength: 14 })}
-            {sensitiveField("uan", "UAN (for PF)", { inputMode: "numeric", maxLength: 14 })}
-            {sensitiveField("esicNumber", "ESIC IP number", { inputMode: "numeric", maxLength: 20 })}
+            {reg.pf && sensitiveField("uan", "UAN (for PF)", { inputMode: "numeric", maxLength: 14 })}
+            {reg.esi && sensitiveField("esicNumber", "ESIC IP number", { inputMode: "numeric", maxLength: 20 })}
           </fieldset>
 
           <fieldset className="grid gap-3 sm:grid-cols-2">

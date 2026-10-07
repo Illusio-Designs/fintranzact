@@ -6,6 +6,9 @@ import { SalaryTab } from "./SalaryTab";
 import { AttendanceTab } from "./AttendanceTab";
 import { LeaveTab } from "./LeaveTab";
 import { RunsTab } from "./RunsTab";
+import { StatutoryTab } from "./StatutoryTab";
+import { DuesTab } from "./DuesTab";
+import { FilingsTab } from "./FilingsTab";
 
 export const PAYROLL_TABS = [
   { value: "employees", label: "Employees" },
@@ -13,13 +16,16 @@ export const PAYROLL_TABS = [
   { value: "attendance", label: "Attendance" },
   { value: "leave", label: "Leave" },
   { value: "runs", label: "Payroll runs" },
+  { value: "statutory", label: "Statutory settings" },
+  { value: "dues", label: "Statutory dues" },
+  { value: "filings", label: "Filings and registers" },
 ] as const;
 
 export type PayrollTab = (typeof PAYROLL_TABS)[number]["value"];
 
 /**
  * The Payroll page: the add-on notice when the organisation does not have the
- * add-on, otherwise the five sections. (The route file only wires the ?tab=
+ * add-on, otherwise its eight sections. (The route file only wires the ?tab=
  * search parameter to this component.)
  */
 export function PayrollPage({ tab, onTabChange }: { tab: PayrollTab; onTabChange: (tab: PayrollTab) => void }) {
@@ -29,7 +35,7 @@ export function PayrollPage({ tab, onTabChange }: { tab: PayrollTab; onTabChange
 
   return (
     <div>
-      <PageHeader title="Payroll" description="Employees, attendance and leave, salary structures, monthly payroll runs and payslips." />
+      <PageHeader title="Payroll" description="Employees, attendance and leave, salary structures, monthly payroll runs and payslips, and statutory deductions, dues and filings." />
       {access.loading ? (
         <p className="text-sm text-text-tertiary">Loading...</p>
       ) : !usable ? (
@@ -48,6 +54,9 @@ export function PayrollPage({ tab, onTabChange }: { tab: PayrollTab; onTabChange
           {tab === "attendance" && <AttendanceTab />}
           {tab === "leave" && <LeaveTab />}
           {tab === "runs" && <RunsTab />}
+          {tab === "statutory" && <StatutoryTab />}
+          {tab === "dues" && <DuesTab />}
+          {tab === "filings" && <FilingsTab />}
         </>
       )}
     </div>

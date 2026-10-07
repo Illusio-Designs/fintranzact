@@ -18,10 +18,12 @@ const h = vi.hoisted(() => ({
   components: { data: [] as unknown[] },
   templates: { data: [] as unknown[] },
   overview: { data: [] as unknown[] },
+  statutory: { data: undefined as unknown },
 }));
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    payrollStatutory: { settings: { useQuery: () => ({ data: h.statutory.data, isLoading: false }) } },
     useUtils: () => ({ payrollSalary: { componentList: { invalidate: h.invalidate }, templateList: { invalidate: h.invalidate }, overview: { invalidate: h.invalidate } } }),
     payrollSalary: {
       componentList: { useQuery: () => ({ data: h.components.data }) },
@@ -88,9 +90,16 @@ describe("SalaryTab", () => {
     h.overview.data = [{ employeeId: EMP, employeeCode: "E001", name: "Asha Verma", annualCtc: "600000.00", monthlyCtc: "50000.00", effectiveFrom: "2026-04-01", templateName: "Staff 50k" }];
   });
 
-  it("says statutory deductions are not calculated yet", () => {
+  it("says statutory deductions are calculated automatically and names only the registered schemes", () => {
+    h.statutory.data = { flags: { pfRegistered: true, esiRegistered: true, ptStates: ["27"], lwfState: null, tdsEnabled: false } };
+    const { unmount } = render(<SalaryTab />);
+    expect(screen.getByText(/calculated automatically in each payroll run from your Statutory settings/i)).toHaveTextContent("provident fund, ESI and professional tax");
+    unmount();
+    // Without PF the word never appears.
+    h.statutory.data = { flags: { pfRegistered: false, esiRegistered: true, ptStates: [], lwfState: null, tdsEnabled: false } };
     render(<SalaryTab />);
-    expect(screen.getByText(/not calculated yet/i)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/provident|\bPF\b/i);
+    expect(screen.getByText(/Statutory deductions \(ESI\)/)).toBeInTheDocument();
   });
 
   it("offers the standard components when there are none", () => {

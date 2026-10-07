@@ -12,6 +12,10 @@ const h = vi.hoisted(() => ({
   list: { data: undefined as unknown },
   capacity: { data: { active: 2, cap: null as number | null } },
   detail: { data: undefined as unknown },
+  statutory: { data: undefined as unknown },
+  empStat: { data: undefined as unknown },
+  empStatUpdate: vi.fn(),
+  declare: vi.fn(),
 }));
 
 vi.mock("@/lib/trpc", () => ({
@@ -19,7 +23,14 @@ vi.mock("@/lib/trpc", () => ({
     useUtils: () => ({
       payrollEmployee: { list: { invalidate: h.invalidate }, capacity: { invalidate: h.invalidate }, departmentList: { invalidate: h.invalidate }, designationList: { invalidate: h.invalidate } },
       payrollSalary: { overview: { invalidate: h.invalidate } },
+      payrollStatutory: { employeeSettings: { invalidate: h.invalidate } },
     }),
+    payrollStatutory: {
+      settings: { useQuery: () => ({ data: h.statutory.data, isLoading: false }) },
+      employeeSettings: { useQuery: () => ({ data: h.empStat.data, isLoading: !h.empStat.data }) },
+      employeeUpdate: { useMutation: () => ({ mutateAsync: (v: unknown) => { h.empStatUpdate(v); return Promise.resolve(v); }, isPending: false }) },
+      saveDeclaration: { useMutation: () => ({ mutateAsync: (v: unknown) => { h.declare(v); return Promise.resolve(v); }, isPending: false }) },
+    },
     payrollEmployee: {
       list: { useQuery: () => ({ data: h.list.data, isLoading: !h.list.data }) },
       capacity: { useQuery: () => ({ data: h.capacity.data }) },
@@ -56,12 +67,23 @@ const detail = (over: Record<string, unknown> = {}) => ({
   panMasked: "XXXXXX234F", aadhaarMasked: "XXXXXXXX0123", uanMasked: null, esicMasked: null, bankAccountMasked: "XXXXXXXXXX6789", sensitiveIncluded: true, ...over,
 });
 
+const EMP_STAT = {
+  employeeId: "e1", employeeCode: "E001", name: "Asha Verma", taxRegime: "new", pfApplicable: true, pfExcluded: false, epsEligible: true, pfOnActualWages: false, vpfPercent: 0,
+  internationalWorker: false, pfJoinDate: null, esiApplicable: true, epsInEffect: true, financialYear: 2026,
+  epsSuggestion: { status: "not_eligible", reasons: ["Age 59: EPS contributions stop at 58."] },
+  declaration: { sec80C: 0, sec80D: 0, hraExemption: 0, homeLoanInterest: 0, otherDeductions: 0, previousEmployerIncome: 0, previousEmployerTds: 0 },
+};
+
 describe("EmployeesTab", () => {
   beforeEach(() => {
     for (const f of [h.create, h.update, h.exit, h.reactivate, h.deptCreate, h.desigUpdate, h.invalidate]) f.mockReset();
     h.list.data = { data: [row(), row({ id: "e2", employeeCode: "E002", name: "Ravi Nair", panMasked: null, hasBankDetails: false, bankAccountMasked: null })], total: 2, page: 1, limit: 200 };
     h.capacity.data = { active: 2, cap: null };
     h.detail.data = detail();
+    h.statutory.data = { flags: { pfRegistered: true, esiRegistered: true, ptStates: [], lwfState: null, tdsEnabled: false } };
+    h.empStat.data = EMP_STAT;
+    h.empStatUpdate.mockReset();
+    h.declare.mockReset();
   });
 
   it("lists employees with masked numbers only and flags missing bank details", () => {
@@ -177,5 +199,70 @@ describe("EmployeesTab", () => {
     h.list.data = { data: [], total: 0, page: 1, limit: 200 };
     render(<EmployeesTab />);
     expect(screen.getByText("No employees yet")).toBeInTheDocument();
+  });
+
+  it("with PF and ESI registered the form asks for the UAN and ESIC number", () => {
+    render(<EmployeesTab />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Open" })[0]!);
+    expect(screen.getByLabelText("UAN (for PF)")).toBeInTheDocument();
+    expect(screen.getByLabelText("ESIC IP number")).toBeInTheDocument();
+  });
+
+  it("without PF the form has no UAN field and nothing about PF anywhere", () => {
+    h.statutory.data = { flags: { pfRegistered: false, esiRegistered: false, ptStates: ["27"], lwfState: null, tdsEnabled: false } };
+    render(<EmployeesTab />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Open" })[0]!);
+    expect(screen.queryByLabelText(/UAN/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/ESIC/)).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/provident|\bPF\b|\bEPS\b/i);
+  });
+
+  it("offers the Statutory button only when a registration is on, and PF fields only with PF", () => {
+    h.statutory.data = { flags: { pfRegistered: false, esiRegistered: false, ptStates: [], lwfState: null, tdsEnabled: false } };
+    const { unmount } = render(<EmployeesTab />);
+    expect(screen.queryByRole("button", { name: "Statutory" })).not.toBeInTheDocument();
+    unmount();
+
+    h.statutory.data = { flags: { pfRegistered: false, esiRegistered: true, ptStates: [], lwfState: null, tdsEnabled: false } };
+    render(<EmployeesTab />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Statutory" })[0]!);
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("ESI applies to this employee")).toBeInTheDocument();
+    expect(dialog.textContent).not.toMatch(/provident|\bPF\b|\bEPS\b|VPF/i);
+  });
+
+  it("the statutory dialog shows the EPS suggestion, can apply it and saves PF settings", async () => {
+    render(<EmployeesTab />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Statutory" })[0]!);
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByTestId("eps-suggestion")).toHaveTextContent("not EPS eligible");
+    expect(within(dialog).getByTestId("eps-suggestion")).toHaveTextContent("Age 59");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Use the suggestion" }));
+    expect(within(dialog).getByLabelText(/EPS eligible/)).not.toBeChecked();
+    fireEvent.change(within(dialog).getByLabelText(/Voluntary PF/), { target: { value: "5" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await vi.waitFor(() => expect(h.empStatUpdate).toHaveBeenCalled());
+    expect(h.empStatUpdate.mock.calls[0]![0]).toMatchObject({ employeeId: "e1", epsEligible: false, vpfPercent: 5, pfApplicable: true, esiApplicable: true });
+    expect(h.declare).not.toHaveBeenCalled(); // TDS is not on: no declarations
+  });
+
+  it("an excluded employee hides the other PF choices", () => {
+    h.empStat.data = { ...EMP_STAT, pfExcluded: true };
+    render(<EmployeesTab />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Statutory" })[0]!);
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).queryByLabelText(/EPS eligible/)).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/Excluded employee/)).toBeChecked();
+  });
+
+  it("tax declarations appear only when TDS is on and are saved with the financial year", async () => {
+    h.statutory.data = { flags: { pfRegistered: false, esiRegistered: false, ptStates: [], lwfState: null, tdsEnabled: true } };
+    render(<EmployeesTab />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Statutory" })[0]!);
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText("Section 80C"), { target: { value: "150000" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await vi.waitFor(() => expect(h.declare).toHaveBeenCalled());
+    expect(h.declare.mock.calls[0]![0]).toMatchObject({ employeeId: "e1", financialYear: 2026, amounts: { sec80C: 150000 } });
   });
 });

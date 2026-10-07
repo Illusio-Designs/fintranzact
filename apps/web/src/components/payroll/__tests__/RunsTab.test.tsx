@@ -118,6 +118,30 @@ describe("RunsTab", () => {
     expect(h.create).toHaveBeenCalledWith({ month: "2026-10" });
   });
 
+  it("shows statutory columns only for the schemes the run was calculated with", () => {
+    h.detail.data = detail("calculated", { statutory: { financialYear: 2026, ratesSource: "saved", flags: { pfRegistered: false, esiRegistered: true, ptStates: ["27"], lwfState: null, tdsEnabled: true } } });
+    (h.detail.data as { lines: Array<{ components: unknown[] }> }).lines[0]!.components.push(
+      { componentId: null, code: "ESI_EE", name: "ESI (employee)", type: "deduction", category: "other_deduction", statutoryKind: "esi_employee", source: "statutory", full: "0.00", amount: "150.00" },
+      { componentId: null, code: "PT", name: "Professional tax", type: "deduction", category: "other_deduction", statutoryKind: "professional_tax", source: "statutory", full: "0.00", amount: "200.00" },
+    );
+    h.runs.data = [{ id: RUN, month: "2026-08", status: "calculated", employeeCount: 1, grossTotal: "46774.19", netTotal: "45774.19" }];
+    render(<RunsTab />);
+    fireEvent.click(screen.getByRole("button", { name: "Open" }));
+    const headers = screen.getAllByRole("columnheader").map((c) => c.textContent);
+    expect(headers).toEqual(expect.arrayContaining(["ESI", "PT", "TDS"]));
+    expect(headers).not.toContain("PF");
+    expect(screen.getByTestId("stat-esi")).toHaveTextContent("150");
+    expect(screen.getByTestId("stat-pt")).toHaveTextContent("200");
+    expect(screen.getByTestId("statutory-note")).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/provident|\bEPS\b/i);
+  });
+
+  it("a run with no statutory part has no statutory columns", () => {
+    open("calculated");
+    expect(screen.queryByRole("columnheader", { name: "PF" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("statutory-note")).not.toBeInTheDocument();
+  });
+
   it("explains the empty state", () => {
     render(<RunsTab />);
     expect(screen.getByText("No payroll runs yet")).toBeInTheDocument();

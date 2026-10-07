@@ -71,7 +71,7 @@ export function accruedByGroup(lines: ReadonlyArray<{ components: ReadonlyArray<
 
 function ratesOfRun(run: { statutory: Record<string, unknown> | null }): StatutoryRates["dueDates"] {
   const rates = run.statutory?.rates as Partial<StatutoryRates> | undefined;
-  return { ...defaultStatutoryRates().dueDates, ...(rates?.dueDates ?? {}) };
+  return { ...defaultStatutoryRates().dueDates, ...rates?.dueDates };
 }
 
 /** Dues of every approved run of a financial year, with payments. Only authorities with an accrued amount are listed. */
