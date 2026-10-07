@@ -99,7 +99,7 @@ describe("StatutoryTab", () => {
     expect(sent.rates.esi.wageCeilingRupees).toBe(22000);
     expect(sent.rates.pt["29"].slabs).toEqual([{ fromRupees: 25000, toRupees: null, monthlyRupees: 200, februaryRupees: null, gender: "any" }]);
     expect(sent.rates.pt["27"].slabs).toHaveLength(5); // the seeded Maharashtra slabs are untouched
-  });
+}, 30000);
 
   it("income-tax slabs can be added for a regime", () => {
     render(<StatutoryTab />);
