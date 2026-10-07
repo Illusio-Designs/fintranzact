@@ -9,10 +9,10 @@
  * (roundDiv). Totals are the SUM of the rounded parts and are never rounded
  * again, so a payslip always adds up to the paisa.
  *
- * Phase 1 covers earnings, manual deductions and employer contributions you
- * enter yourself. Provident fund, ESI, professional tax and income-tax TDS are
- * Phase 2: components carry a `statutoryKind` for that, and nothing here
- * computes them (see docs/architecture/payroll.md).
+ * This file covers earnings, manual deductions and employer contributions you
+ * enter yourself. Provident fund, ESI, professional tax, LWF and income-tax TDS
+ * are computed in payroll-statutory.ts and added to a line afterwards
+ * (applyStatutoryToLine); their components carry a `statutoryKind`.
  */
 
 // ── Component model ──────────────────────────────────────────────────────────
@@ -60,13 +60,64 @@ export function categoriesForType(type: ComponentType): readonly ComponentCatego
 export const WAGE_CATEGORIES: readonly ComponentCategory[] = ["basic", "da", "retaining_allowance"];
 
 /**
- * What a component is, for the statutory modules of Phase 2. Phase 1 stores it
- * but only accepts null: nothing here computes a statutory amount.
+ * What a component is, for the statutory modules (Phase 2). The statutory
+ * amounts are computed automatically in the payroll run (payroll-statutory.ts)
+ * and carry one of these kinds; user-made salary components stay null.
+ * `pf_employer` is the employer's EPF share (the part of the employer's 12%
+ * that is not EPS); `vpf` is the employee's voluntary PF.
  */
 export const STATUTORY_KINDS = [
-  "pf_employee", "pf_employer", "eps_employer", "esi_employee", "esi_employer", "professional_tax", "income_tax_tds", "gratuity", "lwf_employee", "lwf_employer",
+  "pf_employee", "vpf", "pf_employer", "eps_employer", "esi_employee", "esi_employer", "professional_tax", "income_tax_tds", "gratuity", "lwf_employee", "lwf_employer",
 ] as const;
 export type StatutoryKind = (typeof STATUTORY_KINDS)[number];
+
+export const STATUTORY_KIND_LABELS: Record<StatutoryKind, string> = {
+  pf_employee: "Provident fund (employee)",
+  vpf: "Voluntary provident fund",
+  pf_employer: "Provident fund (employer EPF share)",
+  eps_employer: "Employees' pension scheme (employer EPS)",
+  esi_employee: "ESI (employee)",
+  esi_employer: "ESI (employer)",
+  professional_tax: "Professional tax",
+  income_tax_tds: "Income tax (TDS on salary)",
+  gratuity: "Gratuity",
+  lwf_employee: "Labour welfare fund (employee)",
+  lwf_employer: "Labour welfare fund (employer)",
+};
+
+/** The liability a statutory amount is booked to until it is paid to the authority. */
+export const STATUTORY_PAYABLE_GROUPS = ["pf", "esi", "pt", "lwf", "tds"] as const;
+export type StatutoryPayableGroup = (typeof STATUTORY_PAYABLE_GROUPS)[number];
+
+export const STATUTORY_PAYABLE_LABELS: Record<StatutoryPayableGroup, string> = {
+  pf: "Provident fund (PF and EPS)",
+  esi: "ESI",
+  pt: "Professional tax",
+  lwf: "Labour welfare fund",
+  tds: "TDS on salary",
+};
+
+export function statutoryPayableGroup(kind: string | null | undefined): StatutoryPayableGroup | null {
+  switch (kind) {
+    case "pf_employee":
+    case "vpf":
+    case "pf_employer":
+    case "eps_employer":
+      return "pf";
+    case "esi_employee":
+    case "esi_employer":
+      return "esi";
+    case "professional_tax":
+      return "pt";
+    case "lwf_employee":
+    case "lwf_employer":
+      return "lwf";
+    case "income_tax_tds":
+      return "tds";
+    default:
+      return null;
+  }
+}
 
 /** How a template line gets its monthly amount. */
 export const CALC_TYPES = ["fixed", "percent_of_basic", "percent_of_ctc", "balance"] as const;
@@ -176,7 +227,12 @@ export interface SalaryBreakdown {
 }
 
 export interface PayrollWarning {
-  code: "wages_below_50_percent" | "ctc_mismatch" | "negative_net" | "no_salary_structure" | "no_attendance" | "unmarked_days";
+  code:
+    | "wages_below_50_percent" | "ctc_mismatch" | "negative_net" | "no_salary_structure" | "no_attendance" | "unmarked_days"
+    // Statutory (Phase 2)
+    | "pt_slabs_missing" | "pt_state_missing" | "pt_gender_missing" | "lwf_not_configured" | "tax_slabs_missing" | "tds_pan_missing"
+    | "tds_history_gap" | "tds_capped" | "tds_surcharge" | "tds_senior_citizen" | "pf_uan_missing" | "esi_number_missing"
+    | "double_deduction" | "pf_excluded_review" | "statutory_rates_default";
   message: string;
 }
 
@@ -347,7 +403,7 @@ export interface PayrollLineComponent {
   fullPaise: number;
   /** What is paid / deducted / contributed this month, paise. */
   amountPaise: number;
-  source: "structure" | "overtime" | "adjustment";
+  source: "structure" | "overtime" | "adjustment" | "statutory";
 }
 
 export interface PayrollLineResult {
@@ -541,6 +597,12 @@ export interface PostingTotals {
   deductionsPayablePaise: number;
   /** Credit: employer contributions payable. */
   employerPayablePaise: number;
+  /**
+   * Credit: statutory amounts (employee and employer shares) by the authority
+   * they are paid to. They are NOT in the two totals above, so every credit is
+   * counted once.
+   */
+  statutoryPayable: Record<StatutoryPayableGroup, number>;
 }
 
 /**
@@ -549,9 +611,13 @@ export interface PostingTotals {
  * employer contributions, because net = gross - deductions per line.
  */
 export function buildPostingTotals(
-  lines: ReadonlyArray<{ components: ReadonlyArray<{ type: ComponentType; category: ComponentCategory; amountPaise: number }>; netPaise: number }>,
+  lines: ReadonlyArray<{
+    components: ReadonlyArray<{ type: ComponentType; category: ComponentCategory; amountPaise: number; statutoryKind?: string | null }>;
+    netPaise: number;
+  }>,
 ): PostingTotals {
   const expense: Record<ExpenseGroup, number> = { wages: 0, allowances: 0, bonus_incentives: 0, overtime: 0, employer_contributions: 0 };
+  const statutoryPayable: Record<StatutoryPayableGroup, number> = { pf: 0, esi: 0, pt: 0, lwf: 0, tds: 0 };
   let netPayablePaise = 0;
   let deductionsPayablePaise = 0;
   let employerPayablePaise = 0;
@@ -560,11 +626,13 @@ export function buildPostingTotals(
     for (const c of l.components) {
       const g = expenseGroupOf(c);
       if (g) expense[g] += c.amountPaise;
-      if (c.type === "deduction") deductionsPayablePaise += c.amountPaise;
-      if (c.type === "employer_contribution") employerPayablePaise += c.amountPaise;
+      const payableGroup = c.type === "earning" ? null : statutoryPayableGroup(c.statutoryKind);
+      if (payableGroup) statutoryPayable[payableGroup] += c.amountPaise;
+      else if (c.type === "deduction") deductionsPayablePaise += c.amountPaise;
+      else if (c.type === "employer_contribution") employerPayablePaise += c.amountPaise;
     }
   }
-  return { expense, netPayablePaise, deductionsPayablePaise, employerPayablePaise };
+  return { expense, netPayablePaise, deductionsPayablePaise, employerPayablePaise, statutoryPayable };
 }
 
 // ── Status machine and maker-checker ─────────────────────────────────────────

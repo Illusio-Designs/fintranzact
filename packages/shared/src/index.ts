@@ -37,3 +37,5 @@ export * from "./payment-reminders.js";
 export * from "./payroll-calendar.js";
 export * from "./payroll-calc.js";
 export * from "./payroll.js";
+export * from "./payroll-statutory.js";
+export * from "./payroll-filings.js";
