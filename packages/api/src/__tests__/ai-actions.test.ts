@@ -44,10 +44,8 @@ function stubCaller(answers: Record<string, unknown>, calls: string[]): AiCaller
 /** A tenant database stub: reads answer a count of 0, an insert returns the stored row, everything is recorded. */
 function stubDb() {
   const writes: Array<{ op: string; table?: unknown; values?: unknown }> = [];
-  const thenable = (value: unknown) => ({
-    then: (res: (v: unknown) => unknown) => Promise.resolve(value).then(res),
-    returning: async () => (Array.isArray(value) ? value : [value]),
-  });
+  // A promise that also has `returning`, like the query builder's result.
+  const thenable = (value: unknown) => Object.assign(Promise.resolve(value), { returning: async () => (Array.isArray(value) ? value : [value]) });
   const chain = (result: unknown): unknown =>
     new Proxy({}, { get: (_t, p) => (p === "then" ? (res: (v: unknown) => unknown) => Promise.resolve(result).then(res) : () => chain(result)) });
   const db = {

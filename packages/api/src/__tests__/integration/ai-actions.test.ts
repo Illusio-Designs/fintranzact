@@ -23,7 +23,7 @@ import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import {
   aiConversations, aiCreditGrants, aiMessages, aiPendingActions, aiQuotaCounters, aiSettings, aiUsage, auditLog, billingSubscriptions, businessMembers,
-  invoiceItems, invoices, items, parties, paymentReminders, payments, tenantMembers, tenants,
+  invoices, items, parties, paymentReminders, payments, tenantMembers, tenants,
 } from "@fintranzact/db";
 import { AI_ACTION_KINDS, parseAiCards, type AiConfirmationCard } from "@fintranzact/shared";
 import {
@@ -78,7 +78,6 @@ let asha: { id: string };
 let kiran: { id: string };
 let cotton: { id: string };
 let silk: { id: string };
-let bankAccountId: string;
 
 async function member(t: TestTenant, b: TestBusiness, email: string, role: "admin" | "accountant" | "seller" | "auditor", bizRole: "admin" | "member") {
   const u = await createUser({ email, name: email.split("@")[0] });
@@ -149,7 +148,7 @@ beforeAll(async () => {
   kiran = await createParty(db(), biz.id, { name: "Kiran Exports", type: "customer", state: "Gujarat", stateCode: "24", gstin: "24AABCK1234L1Z5" });
   cotton = await createItem(db(), biz.id, { name: "Cotton Fabric", stockQuantity: "100.000", salePrice: "250.00", taxPercent: "5.00" });
   silk = await createItem(db(), biz.id, { name: "Silk Saree", stockQuantity: "3.000", salePrice: null, taxPercent: "5.00" });
-  bankAccountId = (await createBankAccount(db(), biz.id, { accountName: "HDFC Current", accountType: "current", currentBalance: "1000.00", openingBalance: "1000.00" })).id;
+  await createBankAccount(db(), biz.id, { accountName: "HDFC Current", accountType: "current", currentBalance: "1000.00", openingBalance: "1000.00" });
 
   tenantB = await createTenant({ name: "Other Org" });
   ownerB = await createUser({ email: "owner@otherorg.in", name: "Kiran Mehta" });

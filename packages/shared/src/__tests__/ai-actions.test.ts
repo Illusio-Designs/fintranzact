@@ -193,7 +193,9 @@ describe("the confirmation card", () => {
     expect(card).toBeNull(); // 600 chars is over the 300 limit: dropped, never truncated silently into something misleading
     const ok = buildAiConfirmationCard(row({ preview: { ...preview, title: "<b>Pay</b>\u0007 now", note: "a\nb" } }), NOW)!;
     expect(ok.title).toBe(" b Pay /b  now".replace(/\s+/g, " ").trim());
-    expect(ok.title).not.toMatch(/[<>\u0007]/);
+    expect(ok.title).not.toContain("<");
+    expect(ok.title).not.toContain(">");
+    expect(ok.title).not.toContain("\u0007");
     expect(ok.note).toBe("a b");
   });
 
@@ -206,7 +208,7 @@ describe("the confirmation card", () => {
   it("a message keeps its line breaks but nothing else control-like", () => {
     const card = buildAiConfirmationCard(row({ preview: { ...preview, message: "Hello Asha,\r\n\r\n\r\n\r\nPay <now>\u0007." } }), NOW)!;
     expect(card.message).toBe("Hello Asha,\n\nPay  now .".replace(/ {2,}/g, " "));
-    expect(card.message).not.toMatch(/[<>\u0007\r]/);
+    for (const bad of ["<", ">", "\u0007", "\r"]) expect(card.message).not.toContain(bad);
   });
 
   it("a result link may only be a WhatsApp click-to-send URL", () => {
