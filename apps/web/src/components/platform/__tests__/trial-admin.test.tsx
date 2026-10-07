@@ -115,6 +115,19 @@ describe("TrialSection", () => {
 });
 
 describe("TrialSettingsCard", () => {
+  it("shows no field errors while the saved settings are still loading", () => {
+    const loaded = h.settings.current;
+    (h.settings as { current: unknown }).current = undefined;
+    try {
+      render(<TrialSettingsCard />);
+      for (const label of ["Trial length (days)", "Partner referral trial (days)", "AI questions in the trial", "Payroll employees in the trial"]) {
+        expect(screen.getByLabelText(label)).not.toHaveAttribute("aria-invalid");
+      }
+    } finally {
+      h.settings.current = loaded;
+    }
+  });
+
   it("loads the settings, and saving is disabled until something valid changes", async () => {
     const user = userEvent.setup();
     render(<TrialSettingsCard />);
