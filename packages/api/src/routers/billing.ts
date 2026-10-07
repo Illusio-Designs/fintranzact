@@ -7,7 +7,9 @@ import {
   ADDONS,
   ADDON_IDS,
   AI_PACK_MAX_PER_ORDER,
+  AI_PACK_PRICE_INR,
   AI_PACK_QUESTIONS,
+  effectiveAddonPrice,
   addonCycleAmount,
   aiPackAmount,
   aiQuotaResetsAt,
@@ -74,6 +76,7 @@ function subscriptionForOwner(sub: SubscriptionRow) {
     currentPeriodEnd: sub.currentPeriodEnd,
     cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
     scheduledPlan: sub.scheduledPlan,
+    scheduledAddon: sub.scheduledAddon,
     scheduledCycle: sub.scheduledCycle,
     graceUntil: sub.graceUntil,
     provider: sub.provider,
@@ -81,7 +84,9 @@ function subscriptionForOwner(sub: SubscriptionRow) {
 }
 
 export const billingRouter = router({
-  config: publicProcedure.query(() => ({
+  config: publicProcedure.query(async () => {
+    const prices = await getAddonPrices();
+    return {
     demoPayments: demoPaymentsEnabled(),
     provider: razorpayConfigured() ? ("razorpay" as const) : ("demo" as const),
     razorpayKeyId: razorpayConfigured() ? razorpayKeyId() : null,
@@ -89,7 +94,11 @@ export const billingRouter = router({
     addonAvailability: Object.fromEntries(ADDON_IDS.map((id) => [id, isAddonAvailable(id)])) as Record<(typeof ADDON_IDS)[number], boolean>,
     /** Extra AI question packs can be bought (true when either AI tier is on sale); additive. */
     aiPackAvailable: isAiPackAvailable(),
-  })),
+    /** The add-on prices in force (the admin's overrides, else the built-in ones), ex-GST rupees; the pricing page reads them. Additive. */
+    addonPrices: Object.fromEntries(ADDON_IDS.map((id) => [id, effectiveAddonPrice(id, prices)])) as Record<(typeof ADDON_IDS)[number], { monthlyPriceInr: number; yearlyPriceInr: number | null }>,
+    aiPack: { questions: AI_PACK_QUESTIONS, priceInr: prices.aiPackPriceInr ?? AI_PACK_PRICE_INR },
+    };
+  }),
 
   /**
    * Demo plan checkout (sign-up flow and Billing tab while no gateway is

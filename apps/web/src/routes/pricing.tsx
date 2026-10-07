@@ -6,8 +6,9 @@ import {
 } from "@/components/marketing/MarketingLayout";
 import { useMemo, useState } from "react";
 import { formatPlanLimit, usePlans, type PlanOption } from "@/lib/plans";
-import { ADDONS, isAddonAvailable, PLAN_GST_RATE_PERCENT, TRIAL_DAYS, YEARLY_SAVING_MONTHS, yearlyPrice, type BillingCycle } from "@fintranzact/shared";
+import { ADDONS, AI_PACK_PRICE_INR, AI_PACK_QUESTIONS, isAddonAvailable, PLAN_GST_RATE_PERCENT, TRIAL_DAYS, YEARLY_SAVING_MONTHS, yearlyPrice, type BillingCycle } from "@fintranzact/shared";
 import { cn } from "@/lib/utils";
+import { trpc } from "@/lib/trpc";
 import { EYEBROW, FaqAccordion, HEADING, PricingCards } from "@/components/marketing/sections";
 
 import {
@@ -159,7 +160,11 @@ function CellValue({ value }: { value: Cell }) {
 function AddonsSection({ cycle }: { cycle: BillingCycle }) {
   // Only add-ons whose feature exists are sold (ADDON_FEATURES[id].implemented); none available, nothing shown.
   const available = ADDONS.filter((a) => isAddonAvailable(a.id));
+  // Prices in force (an admin may have edited them): the billing config is public; the built-in prices until it loads.
+  const { data: config } = trpc.billing.config.useQuery(undefined, { enabled: available.length > 0, retry: 0 });
   if (available.length === 0) return null;
+  const aiOnSale = available.some((a) => a.group === "ai");
+  const packPrice = config?.aiPack.priceInr ?? AI_PACK_PRICE_INR;
   return (
     <section>
       <div className="mx-auto max-w-6xl px-4 py-24 md:px-6">
@@ -171,7 +176,9 @@ function AddonsSection({ cycle }: { cycle: BillingCycle }) {
         <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {available.map((addon) => {
             const yearly = cycle === "yearly";
-            const price = yearly ? yearlyPrice(addon.monthlyPriceInr) : addon.monthlyPriceInr;
+            const live = config?.addonPrices[addon.id];
+            const monthly = live?.monthlyPriceInr ?? addon.monthlyPriceInr;
+            const price = yearly ? (live?.yearlyPriceInr ?? yearlyPrice(monthly)) : monthly;
             return (
               <div key={addon.id} className="flex flex-col rounded-2xl border border-border-light bg-surface-0 p-6">
                 <h3 className="text-base font-bold text-text-primary">{addon.name}</h3>
@@ -196,6 +203,11 @@ function AddonsSection({ cycle }: { cycle: BillingCycle }) {
             );
           })}
         </div>
+        {aiOnSale ? (
+          <p className="mt-6 text-center text-sm text-text-secondary" data-testid="pricing-ai-packs">
+            Run out of AI questions? Add a pack of {AI_PACK_QUESTIONS} for ₹{packPrice.toLocaleString("en-IN")}. One-time, no expiry.
+          </p>
+        ) : null}
         <p className="mt-6 text-center text-sm text-text-tertiary">Add-on prices are before {PLAN_GST_RATE_PERCENT}% GST.</p>
       </div>
     </section>

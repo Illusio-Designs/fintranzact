@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Add01Icon, Cancel01Icon, Clock01Icon, Delete02Icon, SentIcon, SparklesIcon, StopIcon } from "@hugeicons/core-free-icons";
 import { AiCards } from "./AiCards";
 import { AiAddonNotice, useAiAccess } from "./AiGate";
+import { AiBuyMore } from "./AiBuyMore";
 import { AI_STARTERS } from "./starters";
 
 interface ChatMessage {
@@ -329,6 +330,10 @@ export function AiAssistantPanel() {
         <div role="alert" data-testid={`ai-notice-${notice.kind}`} className="mx-3 mb-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
           {notice.message}
         </div>
+      )}
+
+      {access.active && access.canBuy && (allowance?.exhausted || notice?.kind === "quota") && (
+        <AiBuyMore isOwner={!!status.data?.isOwner} onNavigate={() => window.matchMedia?.("(max-width: 767px)").matches && closeAiPanel()} />
       )}
 
       {access.active && (

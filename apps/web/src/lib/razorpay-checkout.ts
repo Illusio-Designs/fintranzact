@@ -2,15 +2,19 @@
  * Razorpay checkout popup for subscription payments.
  *
  * Loads checkout.razorpay.com/v1/checkout.js once (allowed by the CSP in
- * csp-hash.ts) and opens the subscription checkout. On success the caller
- * sends the payment id + signature to billing.verifyCheckout, which verifies
- * the HMAC server-side and activates the subscription.
+ * csp-hash.ts) and opens the subscription checkout (or, with `orderId`, a
+ * one-time order checkout). On success the caller sends the payment id +
+ * signature to billing.verifyCheckout (billing.verifyAiPackPayment for an
+ * order), which verifies the HMAC server-side.
  */
 
 export interface RazorpayCheckoutSuccess {
   razorpay_payment_id: string;
   razorpay_signature: string;
-  razorpay_subscription_id: string;
+  /** Set for a subscription checkout. */
+  razorpay_subscription_id?: string;
+  /** Set for a one-time order checkout (extra AI question packs). */
+  razorpay_order_id?: string;
 }
 
 interface RazorpayWindow extends Window {
@@ -38,7 +42,10 @@ function loadScript(): Promise<void> {
 
 export async function openRazorpayCheckout(opts: {
   keyId: string;
-  providerSubscriptionId: string;
+  /** A subscription checkout... */
+  providerSubscriptionId?: string;
+  /** ...or a one-time order checkout (extra AI question packs): the Razorpay order id. */
+  orderId?: string;
   /** Shown in the checkout header. */
   name?: string;
   email?: string;
@@ -50,7 +57,7 @@ export async function openRazorpayCheckout(opts: {
   const Razorpay = (window as RazorpayWindow).Razorpay!;
   new Razorpay({
     key: opts.keyId,
-    subscription_id: opts.providerSubscriptionId,
+    ...(opts.orderId ? { order_id: opts.orderId } : { subscription_id: opts.providerSubscriptionId }),
     name: "Fintranzact",
     description: opts.name,
     theme: { color: "#3b5eaa" },

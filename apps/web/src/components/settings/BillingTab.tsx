@@ -13,6 +13,7 @@ import { toast } from "@/hooks/useToast";
 import { DemoCheckout } from "@/components/billing/DemoCheckout";
 import { GovUsageSection } from "@/components/settings/GovUsageSection";
 import { BillingDetailsForm } from "@/components/settings/BillingDetailsForm";
+import { AiBillingSection } from "@/components/settings/AiBillingSection";
 import { Icon } from "@/components/ui/Icon";
 import { Alert02Icon, CheckmarkCircle02Icon, Download04Icon } from "@hugeicons/core-free-icons";
 import type { BillingCycle, PlanId } from "@fintranzact/shared";
@@ -140,7 +141,8 @@ export function BillingTab() {
   const onPaidPlan = !!planSub && planSub.status !== "halted";
   const addonOf = (id: string) => data.addonSubscriptions.find((s) => s.addon === id);
   // Hide add-ons that cannot be bought yet, unless the organisation already holds one.
-  const visibleAddons = data.addons.filter((a) => a.available || !!addonOf(a.id));
+  // The AI add-ons have their own section (tiers, extra question packs), so they are not repeated here.
+  const visibleAddons = data.addons.filter((a) => a.group !== "ai" && (a.available || !!addonOf(a.id)));
 
   return (
     <div className="space-y-6">
@@ -288,6 +290,9 @@ export function BillingTab() {
         ) : null}
       </section>
 
+      {/* ── AI Assistant: tiers and extra packs; hidden until it is on sale unless the organisation holds it ── */}
+      <AiBillingSection data={data} config={config} cycle={cycle} onPaidPlan={onPaidPlan} refresh={refresh} />
+
       {/* ── Add-ons: purchasable only once built (a.available); held ones stay listed ── */}
       {visibleAddons.length > 0 ? (
       <section className="card p-5">
@@ -360,8 +365,8 @@ export function BillingTab() {
         <div className="mt-3 grid grid-cols-3 gap-3">
           {[
             { label: "Invoices", value: String(data.usage.invoicesThisMonth) },
-            ...(visibleAddons.some((a) => a.group === "ai")
-              ? [{ label: "AI questions", value: data.usage.aiQuestions === null ? "—" : String(data.usage.aiQuestions) }]
+            ...(data.usage.aiQuestions !== null
+              ? [{ label: "AI questions", value: String(data.usage.aiQuestions) }]
               : []),
             ...(visibleAddons.some((a) => a.group === "payroll")
               ? [{ label: "Payroll employees", value: data.usage.payrollEmployees === null ? "—" : String(data.usage.payrollEmployees) }]
