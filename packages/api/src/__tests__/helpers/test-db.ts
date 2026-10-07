@@ -203,6 +203,8 @@ export async function truncateAllTables(): Promise<void> {
   await client`
     TRUNCATE TABLE
       -- Tenant schema (leaf tables first)
+      ai_messages,
+      ai_conversations,
       payslips,
       payroll_statutory_payments,
       employee_tax_declarations,
@@ -263,6 +265,10 @@ export async function truncateAllTables(): Promise<void> {
       parties,
       businesses,
       -- Control schema
+      ai_usage,
+      ai_credit_grants,
+      ai_quota_counters,
+      ai_settings,
       billing_events,
       hsn_sandbox_codes,
       billing_payments,

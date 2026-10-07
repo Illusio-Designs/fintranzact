@@ -16,6 +16,7 @@ import { trpc, getBusinessId } from "@/lib/trpc";
 import { canAccess } from "@/lib/permissions";
 import { formatCurrency, cn, formatDateShort, formatMonthYearShort } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { AskAiButton } from "@/components/ai/AskAiButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PillTabs } from "@/components/ui/Tabs";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
@@ -1477,6 +1478,7 @@ function DashboardPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <AskAiButton role={session?.role} variant="dashboard" />
           <DateRangeBar
             variant="segmented"
             preset={preset}

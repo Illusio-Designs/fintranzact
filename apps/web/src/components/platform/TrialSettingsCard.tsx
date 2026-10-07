@@ -41,7 +41,8 @@ export function TrialSettingsCard() {
   const changed =
     !!data && (Number(days) !== data.days || Number(partnerDays) !== data.partnerDays || Number(ai) !== data.caps.aiQuestions || Number(payroll) !== data.caps.payrollEmployees);
   const dayHint = `Whole days, ${TRIAL_MIN_DAYS} to ${TRIAL_MAX_DAYS}`;
-  const bad = (v: string, min: number, max: number) => !(Number.isInteger(Number(v)) && v.trim() !== "" && Number(v) >= min && Number(v) <= max);
+  // No error toast while the saved figures are still loading (the fields start empty).
+  const bad = (v: string, min: number, max: number) => !!data && !(Number.isInteger(Number(v)) && v.trim() !== "" && Number(v) >= min && Number(v) <= max);
 
   return (
     <section className="rounded-2xl border border-border-light bg-surface-0 p-4" aria-labelledby="trial-settings-heading">

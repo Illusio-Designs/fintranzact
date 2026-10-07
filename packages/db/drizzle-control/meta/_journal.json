@@ -162,6 +162,13 @@
       "when": 1791232770026,
       "tag": "0022_users_phone",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791361804565,
+      "tag": "0023_ai_assistant",
+      "breakpoints": true
     }
   ]
 }

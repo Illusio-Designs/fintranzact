@@ -11,6 +11,7 @@ import { CaPartnerBadge } from "./CaPartnerBadge";
 import { InviteLinkBox } from "./InviteLinkBox";
 import { InviteCaDialog } from "./InviteCaDialog";
 import { TwoFactorPolicyCard } from "./TwoFactorPolicyCard";
+import { AiAssistantSettingsCard } from "./AiAssistantSettingsCard";
 import { AccessLogCard } from "./AccessLogCard";
 
 function TeamSection() {
@@ -61,6 +62,7 @@ function TeamSection() {
   return (
     <>
       <TwoFactorPolicyCard role={callerMember?.role} members={members} />
+      <AiAssistantSettingsCard role={callerMember?.role} />
       <div className="card overflow-visible mt-4">
         <div className="px-6 py-4 flex items-center justify-between border-b border-border-light">
           <div>

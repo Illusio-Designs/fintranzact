@@ -27,6 +27,9 @@ export const ROLE_ABILITIES: Record<string, Set<string>> = {
     "Store:read",
     "RecurringInvoice:read",
     "Business:read",
+    // AI assistant (add-on); what it can read still follows the role's other permissions.
+    "Ai:read",
+    "Ai:create",
   ]),
   seller: new Set([
     "Invoice:read",
@@ -37,6 +40,8 @@ export const ROLE_ABILITIES: Record<string, Set<string>> = {
     "Store:read",
     "Business:read",
     "RecurringInvoice:read",
+    "Ai:read",
+    "Ai:create",
   ]),
   accountant: new Set([
     "Payment:read",
@@ -61,6 +66,8 @@ export const ROLE_ABILITIES: Record<string, Set<string>> = {
     "Payroll:read",
     "Payroll:create",
     "Payroll:update",
+    "Ai:read",
+    "Ai:create",
   ]),
   // Accountant access roles (docs/ACCOUNTANT-ACCESS.md): read everything, change nothing.
   auditor: new Set(ACCOUNTANT_READ),

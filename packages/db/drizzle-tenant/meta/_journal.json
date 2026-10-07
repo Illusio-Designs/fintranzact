@@ -288,6 +288,13 @@
       "when": 1791357102023,
       "tag": "0040_payroll_phase_2",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1791365840921,
+      "tag": "0041_ai_assistant_phase_1",
+      "breakpoints": true
     }
   ]
 }

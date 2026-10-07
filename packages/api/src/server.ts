@@ -51,6 +51,7 @@ import { registerRazorpayWebhook } from "./http/razorpayWebhook.js";
 import { registerBillingInvoiceRoute } from "./http/billingInvoice.js";
 import { registerBusinessRazorpayWebhook } from "./http/businessRazorpayWebhook.js";
 import { registerStorePaymentRoutes } from "./http/storePayments.js";
+import { registerAiStreamRoute } from "./http/aiStream.js";
 import { createStoreOrderPaymentLink, loadStorePaymentOptions } from "./lib/store-payments/order-payment.js";
 import { sendStoreOrderEmail } from "./lib/store-payments/emails.js";
 import { createSharePaymentLink, shareOnlinePaymentAvailable } from "./lib/razorpay/share.js";
@@ -2436,6 +2437,9 @@ registerRazorpayWebhook(app);
 registerBillingInvoiceRoute(app);
 // A business's own Razorpay account: payment-link webhooks routed by a per-business token.
 registerBusinessRazorpayWebhook(app, { clientIp: getClientIp, rateLimitDisabled });
+
+// ── AI assistant (streaming answers over server-sent events) ──
+registerAiStreamRoute(app);
 
 // ── tRPC handler ───────────────────────────────────────────────
 app.use("/api/trpc/*", async (c) => {

@@ -81,6 +81,8 @@ import { ClientSwitcher } from "@/components/tenant/ClientSwitcher";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { MaintenanceBanner } from "@/components/MaintenanceBanner";
 import { BillingBanner } from "@/components/BillingBanner";
+import { AskAiButton } from "@/components/ai/AskAiButton";
+import { AiAssistantPanel } from "@/components/ai/AiAssistantPanel";
 import { TwoFactorBanner } from "@/components/TwoFactorBanner";
 import { useTwoFactorRequirement } from "@/hooks/useTwoFactorRequirement";
 import { useEntitlements } from "@/hooks/useEntitlements";
@@ -1854,6 +1856,7 @@ function RootLayout() {
             </button>
 
             <div className="ml-auto flex items-center gap-2 sm:gap-3 min-w-0">
+              {!isOnboarding && <AskAiButton role={session?.role} />}
               {!isOnboarding && (
                 <NotificationsBell
                   businessId={currentBusinessId ?? businesses?.[0]?.id ?? null}
@@ -1894,6 +1897,9 @@ function RootLayout() {
             </div>
           </div>
         </main>
+
+        {/* Ask Fintranzact AI: a right-hand panel on desktop, full screen on phones. */}
+        {!isOnboarding && <AiAssistantPanel />}
 
         <CommandPalette
           open={showPalette}
