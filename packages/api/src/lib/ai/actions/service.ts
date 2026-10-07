@@ -222,7 +222,7 @@ export function friendlyActionError(err: unknown): string {
  * kind. Here: claim the row (pending -> confirmed, once, under a row lock),
  * then run the real procedure as the person with every normal rule in force.
  */
-export async function confirmAiAction(ctx: AiActionCtx, id: string, checkKind?: (kind: AiActionKind) => void): Promise<ConfirmOutcome> {
+export async function confirmAiAction(ctx: AiActionCtx, id: string): Promise<ConfirmOutcome> {
   const now = nowOf(ctx);
   const first = await loadOwn(ctx, id);
   if (!isAiActionKind(first.kind)) throw new TRPCError({ code: "BAD_REQUEST", message: "Unknown action" });
@@ -232,7 +232,6 @@ export async function confirmAiAction(ctx: AiActionCtx, id: string, checkKind?: 
   // Checked before the claim so a refusal leaves the action waiting (permissions can change in between).
   if (first.status === "pending" && !isAiActionExpired(first.expiresAt, now)) {
     assertCanDoAction(ctx, kind);
-    checkKind?.(kind);
   }
 
   const claim = await ctx.db.transaction(async (tx) => {

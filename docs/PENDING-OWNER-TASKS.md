@@ -273,7 +273,7 @@ that has batches, and open a reminder history.
 - Store Pro, and the later phases of Payroll and the AI business assistant.
   Their add-ons are hidden from sale until each feature is released (one switch
   per add-on, `ADDON_FEATURES[...].implemented`, re-enables it). Payroll Phase 1
-  and the AI assistant Phase 1 (questions, read-only) are built but stay hidden
+  and the AI assistant Phases 1 and 2 (questions, then actions with a confirmation card) are built but stay hidden
   from sale until you release them; section 15 is what the AI assistant needs.
 - Approvals (not on the Business plan until the approval workflow exists).
 - GSTR-2B pull, Taxpayer Session, GST Return Status (waiting for the Sandbox
@@ -329,6 +329,18 @@ the server has an Anthropic API key.
 7. Try it: open an organisation in a trial, click "Ask AI", ask "How much do
    customers owe me?" and a Hinglish question. Then check the admin usage table
    shows the question and an estimated cost.
+8. Try the actions (Phase 2): ask it to "Create an invoice for <one of your
+   customers>: 2 <one of your items>", look at the confirmation card, tap Edit to
+   change a quantity, then Confirm. Check the invoice exists, and that Settings,
+   Account, Activity log shows the invoice and the assistant's steps as "via AI
+   assistant". Also try a WhatsApp payment reminder (the card shows the message;
+   confirming only gives you a link, nothing is sent). Actions are **on by
+   default** for every role that can do the action on the normal screens; you can
+   switch them off for the organisation or per role in Settings, Team, AI
+   assistant ("Allow the assistant to prepare actions"). These were only tested
+   with a scripted model, so please watch how well the real model follows the
+   rules (it should ask when a name matches several parties, and never say
+   something is saved before you confirm).
 
 ### 15.2 Confirm the provider's data-use terms and the privacy wording
 
