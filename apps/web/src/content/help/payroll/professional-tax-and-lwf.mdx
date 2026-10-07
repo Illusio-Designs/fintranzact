@@ -1,0 +1,33 @@
+---
+title: Professional tax and LWF
+description: "How payroll deducts state professional tax by monthly slab (with a February amount and the yearly maximum) and the labour welfare fund half-yearly or yearly, and what happens when a state's slabs are not configured."
+sidebar:
+  order: 8
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+
+<ForDesktop>
+
+Both are **state** rules. Turn them on by choosing the states in [Statutory settings](/help/payroll/statutory-settings), then enter each state's slabs and amounts. **Verify every figure with your CA**: they are different in every state and change.
+
+## Professional tax
+
+- Professional tax is worked out each month on the employee's **gross pay for the month**.
+- The slab is chosen from the monthly gross: a slab applies when the gross is **above** its lower limit and **up to** its upper limit. A state can have different slabs for **men** and **women**; if an employee's gender is not set, the men's slabs are used and the run warns you.
+- A slab can have a **February amount** (some states take a larger amount in February). The February amount is used only where you configure one.
+- The **yearly maximum** (₹2,500 by law) is applied against what was already deducted this financial year, so a deduction is cut rather than going past it.
+- Which state applies to an employee: their **state of work**, if it is one of your professional tax states. An employee with no state of work gets the state of a business with only one; a business with several states needs it set (the run warns).
+- **Slabs not configured.** A state with no slabs deducts nothing and the run shows a warning. Maharashtra starts with slabs; check them. Other states start empty: add your state's slabs.
+
+## Labour welfare fund
+
+- Pick the **labour welfare fund state**, then set how often (monthly, half-yearly or yearly), the **months** it is deducted in (for example 6 and 12 for half-yearly), and the **employee and employer** amounts.
+- In a month it is due, both shares are added to each employee's line; in other months nothing is.
+- If the state has no amounts configured the run deducts nothing and shows a warning.
+
+## Returns
+
+The **Filings and registers** tab makes a **working sheet per state** for a run: employee, gross, and the amount deducted, with a total. It is for your CA to check against the state's own return format. Fintranzact files nothing.
+
+</ForDesktop>

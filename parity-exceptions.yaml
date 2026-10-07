@@ -78,6 +78,19 @@ exceptions:
       - payrollSalary.templateDelete
       - payrollSalary.templateList
       - payrollSalary.templateUpdate
+      # --- Payroll (add-on, Phase 2: statutory) ---
+      # Statutory settings (PF, ESI, PT, LWF and TDS rates, slabs and due dates), employee statutory fields and tax
+      # declarations, and recording statutory dues with challan details are desk work for an owner or CA on the web.
+      # Rates and registrations are compliance-critical and are edited in tables that do not suit a phone. Mobile has
+      # no Payroll area (see Phase 1 above); the statutory files and registers are web downloads.
+      - payrollStatutory.dues
+      - payrollStatutory.employeeSettings
+      - payrollStatutory.employeeUpdate
+      - payrollStatutory.recordPayment
+      - payrollStatutory.saveDeclaration
+      - payrollStatutory.saveRates
+      - payrollStatutory.settings
+      - payrollStatutory.updateBusinessSettings
       # --- Inventory (warehouses & stock) ---
       # Warehouse setup, transfers, adjustments and physical stock are web-only screens for now.
       - stock.adjust
@@ -615,6 +628,18 @@ exceptions:
       - payrollSalary.templateDelete
       - payrollSalary.templateList
       - payrollSalary.templateUpdate
+      # --- Payroll (add-on, Phase 2: statutory) ---
+      # Statutory settings, declarations and the recording of statutory payments are not scripted: they change what an
+      # owner is accountable for to EPFO, ESIC, the states and the income-tax department, so they stay in the web UI
+      # where the verify-with-your-CA reminders and the challan details are shown. The files are web downloads.
+      - payrollStatutory.dues
+      - payrollStatutory.employeeSettings
+      - payrollStatutory.employeeUpdate
+      - payrollStatutory.recordPayment
+      - payrollStatutory.saveDeclaration
+      - payrollStatutory.saveRates
+      - payrollStatutory.settings
+      - payrollStatutory.updateBusinessSettings
       # --- Store policy pages ---
       # Long-text editor with preview, set up once per store in Settings → Online Store.
       - store.getPolicies
@@ -1025,6 +1050,17 @@ exceptions:
       - payrollSalary.templateDelete
       - payrollSalary.templateList
       - payrollSalary.templateUpdate
+      # --- Payroll (add-on, Phase 2: statutory) ---
+      # Statutory rates, registrations, tax declarations (personal financial data) and payments to authorities are not
+      # exposed to MCP tools until the owner decides how an AI client may see or change them.
+      - payrollStatutory.dues
+      - payrollStatutory.employeeSettings
+      - payrollStatutory.employeeUpdate
+      - payrollStatutory.recordPayment
+      - payrollStatutory.saveDeclaration
+      - payrollStatutory.saveRates
+      - payrollStatutory.settings
+      - payrollStatutory.updateBusinessSettings
       # --- Store policy pages ---
       # Long-text editor with preview, set up once per store in Settings → Online Store.
       - store.getPolicies

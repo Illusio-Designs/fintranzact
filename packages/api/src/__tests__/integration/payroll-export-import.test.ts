@@ -3,7 +3,9 @@
  * self-import round trip (employees with their identity and bank numbers, the
  * manager link, salary assignments, attendance, leave, an approved and paid run
  * with its payslips and journal links), and a file WITHOUT the sensitive columns
- * still imports (they are optional in the row schemas).
+ * still imports (they are optional in the row schemas). Phase 2: the statutory
+ * registrations, rates, declarations and payments round-trip too, and an export
+ * from before Phase 2 (no statutory columns) still imports with the defaults.
  */
 
 import { describe, it, expect, afterAll } from "vitest";
@@ -14,7 +16,9 @@ import { Readable } from "node:stream";
 import { promisify } from "node:util";
 import tarStream from "tar-stream";
 import { eq } from "drizzle-orm";
-import { bankAccounts, businessMembers, employees, payrollRuns, payslips } from "@fintranzact/db";
+import {
+  bankAccounts, businessMembers, employees, employeeTaxDeclarations, payrollRunLines, payrollRuns, payrollSettings, payrollStatutoryPayments, payrollStatutorySettings, payslips,
+} from "@fintranzact/db";
 import { createTenant, createUser, addMember, createBusiness, createBankAccount, grantAddon } from "../helpers/fixtures.js";
 import { createTestCaller } from "../helpers/create-test-caller.js";
 import { getTenantTestDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
@@ -78,6 +82,12 @@ describe("payroll in a self-export", () => {
     const boss = await c.payrollEmployee.create({ employeeCode: "B1", name: "Boss Person", dateOfJoining: "2026-01-01", pan: "ABCDE1234F", aadhaar: "234567890123", bankAccountNumber: "50100123456789", bankIfsc: "HDFC0001234" });
     const worker = await c.payrollEmployee.create({ employeeCode: "W1", name: "Worker Person", dateOfJoining: "2026-01-01", managerId: boss.id, bankAccountNumber: "123456789012", bankIfsc: "ICIC0000123" });
     for (const e of [boss, worker]) await c.payrollSalary.assign({ employeeId: e.id, templateId: tpl.id, annualCtc: 360000, effectiveFrom: "2026-01-01" });
+    // Phase 2: registrations, an employee's PF settings, a declaration and the year's rates.
+    await c.payrollStatutory.updateBusinessSettings({ pfRegistered: true, pfEstablishmentCode: "MHBAN0012345000", esiRegistered: false, ptStates: ["27"], tdsEnabled: false });
+    await c.payrollStatutory.employeeUpdate({ employeeId: worker.id, vpfPercent: 5, epsEligible: false });
+    await c.payrollStatutory.saveDeclaration({ employeeId: worker.id, financialYear: 2026, amounts: { sec80C: 50000, sec80D: 0, hraExemption: 0, homeLoanInterest: 0, otherDeductions: 0, previousEmployerIncome: 0, previousEmployerTds: 0 } });
+    const rates = (await c.payrollStatutory.settings({ financialYear: 2026 })).rates;
+    await c.payrollStatutory.saveRates({ financialYear: 2026, rates, verifiedNote: "Checked with the CA" });
     await c.payrollLeave.accrue({ month: "2026-07" });
     const run = await c.payrollRun.create({ month: "2026-07" });
     await c.payrollRun.lockAttendance({ id: run.id, fillUnmarked: "present" });
@@ -85,6 +95,8 @@ describe("payroll in a self-export", () => {
     await c.payrollRun.submit({ id: run.id });
     await c2.payrollRun.approve({ id: run.id });
     await c.payrollRun.post({ id: run.id });
+    const pfDue = (await c.payrollStatutory.dues({ financialYear: 2026 })).rows.find((r) => r.kind === "pf")!;
+    await c.payrollStatutory.recordPayment({ runId: run.id, kind: "pf", amount: Number(pfDue.accrued), paidOn: "2026-08-10", bankAccountId: bank.id, challanNumber: "TRRN-77" });
     await c.payrollRun.markPaid({ runId: run.id, bankAccountId: bank.id, paidOn: "2026-08-01" });
     const before = await c.payrollRun.get({ id: run.id });
 
@@ -94,7 +106,7 @@ describe("payroll in a self-export", () => {
     expect(exportRes.status).toBe(200);
     const files = await unpack(Buffer.from(await exportRes.arrayBuffer()));
     const manifest = JSON.parse(files.get("manifest.json")!.toString("utf8")) as { rowCounts: Record<string, number> };
-    expect(manifest.rowCounts).toMatchObject({ employees: 2, payroll_runs: 1, payroll_run_lines: 2, payslips: 2, salary_templates: 1, salary_template_lines: 2, employee_salary_assignments: 2 });
+    expect(manifest.rowCounts).toMatchObject({ employees: 2, payroll_runs: 1, payroll_run_lines: 2, payslips: 2, salary_templates: 1, salary_template_lines: 2, employee_salary_assignments: 2, payroll_statutory_settings: 1, employee_tax_declarations: 1, payroll_statutory_payments: 1 });
     expect(manifest.rowCounts.leave_ledger).toBeGreaterThan(0);
     expect(manifest.rowCounts.attendance_records).toBeGreaterThan(0);
 
@@ -106,10 +118,14 @@ describe("payroll in a self-export", () => {
     };
     const trimmed = new Map(files);
     trimmed.set("employees.ndjson", strip("employees.ndjson", ["pan", "aadhaar", "uan", "esicNumber", "bankAccountNumber", "bankIfsc"]));
-    trimmed.set("payroll_run_lines.ndjson", strip("payroll_run_lines.ndjson", ["bankAccountNumber", "bankIfsc", "bankAccountName"]));
+    trimmed.set("payroll_run_lines.ndjson", strip("payroll_run_lines.ndjson", ["bankAccountNumber", "bankIfsc", "bankAccountName", "statutory"]));
+    // ...and the Phase 2 columns an export from before the statutory release does not have.
+    trimmed.set("employees.ndjson", strip("employees.ndjson", ["pan", "aadhaar", "uan", "esicNumber", "bankAccountNumber", "bankIfsc", "pfApplicable", "pfExcluded", "epsEligible", "pfOnActualWages", "vpfPercent", "internationalWorker", "pfJoinDate", "esiApplicable"]));
+    trimmed.set("payroll_settings.ndjson", strip("payroll_settings.ndjson", ["pfRegistered", "pfEstablishmentCode", "esiRegistered", "esiCode", "ptStates", "lwfState", "tdsEnabled"]));
+    trimmed.set("payroll_runs.ndjson", strip("payroll_runs.ndjson", ["statutory"]));
     // The manifest carries each file's checksum: refresh it for the two files that changed.
     const trimmedManifest = JSON.parse(files.get("manifest.json")!.toString("utf8")) as { files: Record<string, { sha256: string; rows: number; bytes: number }> };
-    for (const name of ["employees.ndjson", "payroll_run_lines.ndjson"]) {
+    for (const name of ["employees.ndjson", "payroll_run_lines.ndjson", "payroll_settings.ndjson", "payroll_runs.ndjson"]) {
       const content = trimmed.get(name)!;
       trimmedManifest.files[name] = { ...trimmedManifest.files[name]!, sha256: createHash("sha256").update(content).digest("hex"), bytes: content.length };
     }
@@ -153,6 +169,11 @@ describe("payroll in a self-export", () => {
     expect(first.body.rowsInserted).toMatchObject({ employees: 2, payroll_runs: 1, payroll_run_lines: 2, payslips: 2 });
     const noSecrets = await db().select().from(employees);
     expect(noSecrets.every((e) => e.pan === null && e.bankAccountNumber === null)).toBe(true);
+    // An export from before Phase 2 imports with the defaults: nothing registered, PF applicable.
+    expect(noSecrets.every((e) => e.pfApplicable && !e.pfExcluded && e.epsEligible && e.vpfPercent === "0.00")).toBe(true);
+    const [oldSettings] = await db().select().from(payrollSettings);
+    expect(oldSettings).toMatchObject({ pfRegistered: false, esiRegistered: false, ptStates: [], tdsEnabled: false });
+    expect((await db().select().from(payrollRuns))[0]!.statutory).toBeNull();
 
     // ── Then the full file: everything comes back, including the manager link and the sensitive numbers ──
     const full = await importInto(await pack(files));
@@ -169,5 +190,17 @@ describe("payroll in a self-export", () => {
     expect(importedRun!.paymentJournalEntryId).toBeTruthy();
     expect(await db().select().from(payslips).where(eq(payslips.runId, importedRun!.id))).toHaveLength(2);
     expect((await db().select().from(bankAccounts)).length).toBe(1);
+
+    // Phase 2 data came back: registrations, the employee's PF settings, the frozen statutory working, rates, declaration and payment.
+    expect(importedWorker).toMatchObject({ vpfPercent: "5.00", epsEligible: false, pfApplicable: true });
+    const [settings] = await db().select().from(payrollSettings);
+    expect(settings).toMatchObject({ pfRegistered: true, pfEstablishmentCode: "MHBAN0012345000", esiRegistered: false, ptStates: ["27"], tdsEnabled: false });
+    expect(importedRun!.statutory).toMatchObject({ financialYear: 2026, flags: { pfRegistered: true, ptStates: ["27"] } });
+    const lines = await db().select().from(payrollRunLines).where(eq(payrollRunLines.runId, importedRun!.id));
+    expect(lines.every((l) => (l.statutory as { pf: { member: boolean } }).pf.member)).toBe(true);
+    expect(lines.flatMap((l) => l.components).some((cmp) => cmp.statutoryKind === "pf_employee")).toBe(true);
+    expect(await db().select().from(payrollStatutorySettings)).toMatchObject([{ financialYear: 2026, verifiedNote: "Checked with the CA" }]);
+    expect(await db().select().from(employeeTaxDeclarations)).toMatchObject([{ financialYear: 2026, amounts: { sec80C: 50000 } }]);
+    expect(await db().select().from(payrollStatutoryPayments)).toMatchObject([{ kind: "pf", challanNumber: "TRRN-77", runId: importedRun!.id }]);
   }, 120_000);
 });

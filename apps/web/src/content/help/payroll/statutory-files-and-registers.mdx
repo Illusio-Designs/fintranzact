@@ -1,0 +1,51 @@
+---
+title: Statutory files and registers
+description: "Pay and record statutory dues with challan details, and download the PF ECR file, the ESIC contribution file, professional tax and labour welfare fund sheets and the wages, attendance, leave, bonus and gratuity registers."
+sidebar:
+  order: 11
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+
+<ForDesktop>
+
+## Statutory dues
+
+When a payroll run is **posted** to your books, the statutory amounts (employee and employer shares) are booked to their own payable accounts instead of the general ones: **PF and EPS Payable**, **ESI Payable**, **Professional Tax Payable**, **Labour Welfare Fund Payable** and **TDS on Salary Payable**. The entry always balances and posting twice changes nothing. A business without PF never gets a PF account.
+
+Open **Payroll → Statutory dues**. For each run and authority you see what is **accrued**, **paid**, **outstanding** and the **due date** (from your due-day settings; blank when not configured, as for professional tax and labour welfare fund). Overdue amounts are flagged.
+
+**Record payment** after you have paid through your bank or the government portal. Enter the amount, the date, the bank or cash account it came from, the **challan number and date** and a reference (BSR code, TRRN or UTR). It writes *Dr payable account / Cr bank* and a withdrawal on the account. You cannot record more than is outstanding, and a locked period refuses it. **Fintranzact does not pay anything**: it records what you paid.
+
+## Files you upload or hand to your CA
+
+On **Payroll → Filings and registers**, choose an approved run:
+
+| File | What it is |
+|---|---|
+| **PF ECR file** | A text file in the EPFO ECR 2.0 layout, only for PF members with a UAN: gross and EPF, EPS and EDLI wages, the employee's EPF contribution (including VPF), the EPS contribution, the employer's EPF share, non-contributory days. A member without EPS has zero pension wages and contribution. Members left out (for example without a UAN) are listed. Only offered when the run was calculated with PF |
+| **ESIC contribution file** | A CSV with the columns of ESIC's monthly contribution upload: IP number, name, days, monthly wages, reason code, last working day. Covered employees only |
+| **Professional tax sheets** | A working sheet per state: employee, gross and tax, with a total |
+| **Labour welfare fund sheets** | The same for labour welfare fund |
+
+**Check every file against the portal's current template before you upload it.** The ECR layout and the ESIC columns are the best documented ones we know, and the portals change them. Fintranzact files nothing.
+
+The files contain **UAN, ESIC and PAN numbers in full**, so only an owner, admin or accountant can download them. They are never written to logs.
+
+## Registers
+
+| Register | What it shows |
+|---|---|
+| **Wages register** | A month: each employee's paid days, a column per earning and deduction, gross, deductions and net pay |
+| **Attendance register** | A month: each employee, one column per day (P present, A absent, HD half day, WO weekly off, H holiday, L leave) |
+| **Leave register** | A leave year: opening or carried forward, accrued, taken, encashed, lapsed and balance for each employee and leave type |
+| **Bonus register** | A financial year: Basic and DA earned, the wages after your bonus ceiling and the bonus at your configured percentage. If you have not set a ceiling and percentage the register says so and shows no bonus |
+| **Gratuity register** | As on a date: completed years, last drawn Basic and DA, whether the employee has completed the minimum years, and the computed gratuity (15 days for every 26 working days per year, a part year of more than six months counted as a year, up to the configured limit) |
+
+The bonus and gratuity registers are **computed from your payroll data**. Paying bonus or gratuity is not part of this release.
+
+## Related
+
+[Statutory settings](/help/payroll/statutory-settings), [PF and ESI](/help/payroll/pf-and-esi), [Form 16 and Form 24Q](/help/payroll/form-16-and-24q).
+
+</ForDesktop>

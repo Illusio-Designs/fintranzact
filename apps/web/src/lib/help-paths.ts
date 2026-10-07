@@ -117,6 +117,12 @@ export const HELP_NAV: HelpNavSection[] = [
       { label: "Attendance and leave", slug: "payroll/attendance-and-leave" },
       { label: "Running payroll", slug: "payroll/running-payroll" },
       { label: "Payslips and the bank file", slug: "payroll/payslips" },
+      { label: "Statutory settings", slug: "payroll/statutory-settings" },
+      { label: "PF and ESI", slug: "payroll/pf-and-esi" },
+      { label: "Professional tax and LWF", slug: "payroll/professional-tax-and-lwf" },
+      { label: "TDS on salary", slug: "payroll/tds-on-salary" },
+      { label: "Form 16 and Form 24Q", slug: "payroll/form-16-and-24q" },
+      { label: "Statutory files and registers", slug: "payroll/statutory-files-and-registers" },
     ],
   },
   {

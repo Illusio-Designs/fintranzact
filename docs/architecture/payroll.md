@@ -1,6 +1,6 @@
 # Payroll (add-on), Phase 1
 
-Employees, attendance and leave, salary structures, monthly payroll runs, payslips, a bank payment file and posting to the books. It is the first feature of the paid **Payroll add-on** (`payroll`). Phase 1 has **no statutory computation**: PF, ESI, professional tax and income-tax TDS (and their filings) are Phase 2. Roadmap item: "Payroll — Phase 1: employees, attendance, salary and payroll run". Entitlement rules: [`../ENTITLEMENTS.md`](../ENTITLEMENTS.md) ("The Payroll add-on").
+Employees, attendance and leave, salary structures, monthly payroll runs, payslips, a bank payment file and posting to the books. It is the first feature of the paid **Payroll add-on** (`payroll`). Phase 1 has **no statutory computation**: PF, ESI, professional tax and income-tax TDS (and their filings) are Phase 2, described in the last part of this document. Roadmap item: "Payroll — Phase 1: employees, attendance, salary and payroll run". Entitlement rules: [`../ENTITLEMENTS.md`](../ENTITLEMENTS.md) ("The Payroll add-on").
 
 Everything is per business. Money is `numeric(15,2)` rupees like the rest of the app; the calculation works in integer paise.
 
@@ -76,13 +76,67 @@ PAN, Aadhaar, UAN, ESIC number and bank account number are returned masked (last
 
 The 19 payroll tables are in `TABLE_REGISTRY` and `ROW_SCHEMAS` (`employees.manager_id` is a self FK). `integration/payroll-export-import.test.ts` round-trips them. The data audit (`lib/data-audit/rules/payroll.ts`) checks: run totals equal the sum of their lines, a line's net is gross - deductions and its components add up, an approved run has its payslips, a posted run has a balanced journal entry equal to gross + employer contributions, a paid run has its payment entry for the net total, payslip snapshots match their lines.
 
-## What Phase 2 plugs into
+## What Phase 2 plugs into (built: see "Payroll, Phase 2" below, which supersedes this list where they differ)
 
 - `salary_components.statutory_kind` (PF employee and employer, EPS, ESI, professional tax, TDS, gratuity, LWF; the allowed values are `STATUTORY_KINDS` in `payroll-calc.ts`) is already stored and carried through assignments, run lines and the posting totals (`AssignedComponent.statutoryKind`). Phase 2 adds components of those kinds and computes their amounts where `computePayrollLine` builds the component list, with per-financial-year rates held in settings.
 - `payroll_run_lines.components` already holds employee deductions and employer contributions separately, so PF/ESI/PT/TDS lines slot in without a migration of existing runs; Phase 2 adds columns (for example a rates version) rather than reshaping anything.
 - `buildPostingTotals` groups by component type and category: Phase 2 adds payable accounts (PF, ESI, TDS, PT) in `PAYROLL_ACCOUNTS` and splits `deductionsPayable` by statutory kind.
 - `employees` already carry PAN, UAN, ESIC number, tax regime and work state, which the statutory rules need; filings (ECR, challans, Form 24Q, Form 16) read from approved runs.
 
-## Not built (Phase 1 limits)
+## Not built (Phase 1 limits; statutory computation and filings are now built in Phase 2)
 
 Mobile, CLI and MCP; the Payroll add-on billing lines (per-employee counting beyond the trial cap); statutory computation and filings; loans and recurring deductions as first-class records (use adjustments); a payslip share link; off-cycle runs; a bank-specific payment file; a CA review of the rules and figures before go-live (still open: the Labour Codes points, the overtime rate and the rounding rule need the CA).
+
+---
+
+# Payroll, Phase 2: PF, ESI, PT, LWF, TDS and statutory filings
+
+Roadmap item "Payroll — Phase 2: PF, ESI, PT, TDS and statutory filings". It is part of the same paid add-on (`payroll`), gated exactly like Phase 1 (`assertPayroll`, read-only gate, trial employee cap; `ADDON_FEATURES.payroll.implemented` is still false). **Every figure a CA has to confirm is listed in [`../PAYROLL-CA-VERIFICATION.md`](../PAYROLL-CA-VERIFICATION.md).** Nothing is filed with, or paid to, any government system: the app produces files and records payments.
+
+## The principle: rates are data
+
+No rate, ceiling, slab or due date is in code. `StatutoryRates` (zod schema `statutoryRatesSchema`, `packages/shared/src/payroll-statutory.ts`) is one JSON document stored per business and financial year in `payroll_statutory_settings` (`financial_year` = start year; a payroll month uses the **latest row at or before its year**, else `defaultStatutoryRates()`), with a last-verified note and date. Owners and admins edit it on **Payroll → Statutory settings**, which shows "Verify with your CA". The defaults ship only what the roadmap states plus a few long-standing figures; **state PT slabs (except Maharashtra), LWF amounts and the income-tax slabs ship empty**: the calculation yields 0 and the run shows a warning (`pt_slabs_missing`, `lwf_not_configured`, `tax_slabs_missing`, once per run) rather than guess. A run copies the rates it used into `payroll_runs.statutory` when it is calculated, so editing a year never changes a calculated or approved run.
+
+## Where things live
+
+| Part | Path |
+|---|---|
+| Pure rules (no DB, no clock) | `packages/shared/src/payroll-statutory.ts` (PF, EPS, VPF, ESI, PT, LWF, TDS projection, FY helpers, input schemas, due dates, `computeStatutoryLine`, `applyStatutoryToLine`), `payroll-filings.ts` (ECR, ESIC, PT/LWF sheets, 24Q, Form 16, registers, gratuity and bonus computation) |
+| Tables | `packages/db/src/tenant-schema.ts`: new columns on `payroll_settings` (registrations), `employees` (PF, EPS, VPF, ESI fields), `payroll_runs.statutory`, `payroll_run_lines.statutory`; new tables `payroll_statutory_settings`, `employee_tax_declarations`, `payroll_statutory_payments`; migrations unified `0066_payroll_phase_2`, tenant `0040_payroll_phase_2` |
+| Engine glue | `packages/api/src/lib/payroll/statutory.ts` (flags, rates, history, applying to a line), `dues.ts` (dues and recording a payment), `filings.ts`, `form16-pdf.ts`; `run.ts` calls it from `calculateRun` |
+| Router | `payrollStatutory` (`packages/api/src/routers/payrollStatutory.ts`), 16 procedures |
+| Web | `apps/web/src/components/payroll/StatutoryTab.tsx`, `DuesTab.tsx`, `FilingsTab.tsx`, `EmployeeStatutoryDialog.tsx`, `statutory-ui.tsx`; run review columns in `RunsTab.tsx` |
+
+## Registrations and "PF off means PF nowhere"
+
+`payroll_settings` holds `pf_registered` (+ establishment code), `esi_registered` (+ code), `pt_states`, `lwf_state` and `tds_enabled`; all default off, so a business that never registers gets exactly the Phase 1 run (`payroll_runs.statutory` and the lines' `statutory` stay null). With PF off: no PF, VPF or EPS component is produced (`computeStatutoryLine` never touches PF), the payslip leaves off the UAN (and the ESIC number when ESI is off), the PF file is refused, the dues list has no PF row, the PF payable account is never created, the registers have no PF columns, and the UI hides the UAN field, the PF section of settings and the employee's PF fields. The data audit enforces it (`no-pf-without-registration`, `no-esi-without-registration`) from the run's frozen flags.
+
+## Statutory components in the run
+
+Statutory amounts are **not** user-made salary components: `salaryComponentSchema` still accepts only `statutory_kind = null`, and the PF/ESI/... lines are produced by the run. They are appended to the calculated line as components with `source = "statutory"` and a `statutoryKind` (`pf_employee`, `vpf`, `pf_employer` = the employer's EPF share, `eps_employer`, `esi_employee`, `esi_employer`, `professional_tax`, `income_tax_tds`, `lwf_employee`, `lwf_employer`): employee shares are `deduction`s, employer shares `employer_contribution`s, so net pay, totals, the payslip and the maker-checker flow all work unchanged. The line's `statutory` JSON (paise integers) keeps the working the filings need (PF, EPF, EPS and EDLI wages, ESI coverage and reason, PT state, TDS projection). Approval freezes lines, payslips and these details like anything else.
+
+Caveat: employer statutory contributions are added on top of the structure when the run is calculated; they are not inside the structure's monthly CTC unless the owner reduces a balance component.
+
+### Rules implemented (details and assumptions are in the CA checklist)
+
+- **PF**: PF wages = Basic + DA + retaining allowance (and `is_wage` components) **earned** that month; contribution wages are capped at the ceiling unless the employee is on actual wages (or an international worker). Employee 12%; VPF = vpf% of actual wages; employer 12% with EPS = 8.33% of wages up to the EPS ceiling and the rest to EPF, or the whole 12% to EPF without EPS; each rounded once (nearest rupee) and the EPF share is the rounded total less EPS. Excluded employees and PF-not-applicable have none. EPS suggestion: joined PF on or after 1 Sep 2014 with wages above the ceiling: no; age 58 and over: EPS stops (applied automatically in the run from the first of the month the age is reached).
+- **ESI**: covered while the **full-month structure wages** (earnings except overtime) are at or below the ceiling (exactly the ceiling is covered); contributions on earned wages, rounded up to the next rupee. **Contribution periods** April-September and October-March: an employee who contributed in an earlier month of the current period (from approved runs) stays covered until it ends.
+- **PT**: on the month's gross, slab chosen by gender when the state has gender slabs (missing gender uses the male slabs and warns), a per-slab February amount where configured, yearly cap applied against PT deducted so far this year. The state is the employee's work state (if it is a PT state) or the business's only PT state.
+- **LWF**: configured amounts in the configured deduction months (monthly, half-yearly or yearly).
+- **TDS (s.192)**, `projectSalaryTds`: annual income = gross to date (approved runs) + this month + the full monthly gross for each remaining month (to the exit month) + previous-employer income; less the regime's standard deduction; old regime also declarations within their limits and projected PT; tax by slabs, rebate (and marginal relief if on), cess, rounded to a multiple of 10 rupees; less TDS already deducted; this month = remaining / months left including this, rounded to the rupee; capped by the pay left after other deductions (the rest rolls forward). Surcharge, senior-citizen slabs and the s.206AA higher rate are **not** applied (warnings only).
+
+## Posting and paying
+
+`buildPostingTotals` splits statutory amounts by authority (`statutoryPayableGroup`): they are credited to **2430 PF and EPS Payable, 2431 ESI Payable, 2432 Professional Tax Payable, 2433 Labour Welfare Fund Payable, 2434 TDS on Salary Payable** (created lazily like the Phase 1 accounts) instead of 2410/2420; the entry stays balanced (debits = gross + employer contributions) and idempotent. `payrollStatutory.recordPayment` writes Dr payable / Cr cash or bank and a bank withdrawal, with the challan number and date, in `payroll_statutory_payments`; the run row is locked while the outstanding amount is re-checked, so payments never exceed what was accrued.
+
+## Files and registers
+
+All are built from the **frozen lines of approved runs**, returned over tRPC as text (needs Payroll `update`, never logged): PF ECR (`#~#` layout, UAN holders only), ESIC contribution CSV, PT and LWF working sheets per state, Form 24Q working data (deductees and challans), Form 16 working copy (PDF and CSV, labelled for CA review), and the wages, attendance, leave, bonus and gratuity registers (computed; no bonus or gratuity payments, which belong to Phase 4). The layouts must be checked against the portals' current templates before upload.
+
+## Self-export, data audit, tests
+
+The three new tables are in `TABLE_REGISTRY` and `ROW_SCHEMAS`; new columns on existing tables are optional in the row schemas so a Phase 1 export still imports. Data-audit rules: no PF/ESI components without the registration, statutory component typing, payments within accrued, payment journal entries balance. Tests: shared unit tests (`payroll-statutory.test.ts`, `payroll-filings.test.ts`: boundaries at 15,000 and 21,000, slab edges, February, EPS rules, TDS spreading), `integration/payroll-statutory.test.ts` (real Postgres: exact statutory lines, books, dues, files, PF off, add-on gate, roles, isolation, audit) and the web component tests.
+
+## Not built in Phase 2
+
+Mobile, CLI and MCP (parity exceptions); loans and recurring deductions as records; bonus and gratuity payments, full and final settlement (Phase 4); self-service, biometrics (Phase 3); surcharge, senior-citizen slabs and s.206AA; state PT rules beyond monthly slabs (half-yearly or annual PT frequencies); reversing or deleting a recorded statutory payment (use a correcting journal entry); an NPS or other employer-contribution deduction in TDS; and the CA review itself.
