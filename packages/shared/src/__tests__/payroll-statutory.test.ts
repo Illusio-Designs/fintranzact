@@ -2,10 +2,11 @@ import { describe, it, expect } from "vitest";
 import {
   ageOn, applyStatutoryToLine, computeAnnualTax, computeEsi, computeLwf, computePf, computePt, computeStatutoryLine, defaultStatutoryRates, effectiveEps,
   esiContributionPeriod, fyStartYearOfMonth, fyLabel, looksLikeManualStatutory, monthsOfFy, projectSalaryTds, ratesGaps, remainingMonthsAfter, roundPaise,
-  roundToRupeeStep, statutoryRatesSchema, suggestEpsEligibility, tdsQuarterOfMonth, validatePtRule, EMPTY_DECLARATION,
+  roundToRupeeStep, statutoryRatesSchema, statutoryBusinessSettingsSchema, statutoryDueDate, statutoryPaymentSchema, suggestEpsEligibility, tdsQuarterOfMonth, validatePtRule, EMPTY_DECLARATION,
   type PtStateRule, type RegimeConfig, type StatutoryContext, type StatutoryEmployee, type StatutoryHistory, type StatutoryRates,
 } from "../payroll-statutory.js";
 import { buildPostingTotals, computePayrollLine, rupeesToPaise, statutoryPayableGroup, type AssignedComponent } from "../payroll-calc.js";
+import { payrollStatutoryNote } from "../payroll.js";
 
 const R = (n: number) => rupeesToPaise(n);
 const rates = defaultStatutoryRates();
@@ -580,6 +581,40 @@ describe("computeStatutoryLine", () => {
     const base = payLine();
     const r = applyStatutoryToLine(base, [{ code: "X", name: "x", type: "deduction", category: "other_deduction", isWage: false, statutoryKind: "income_tax_tds", fullPaise: 0, amountPaise: base.grossPaise + 1, source: "statutory" }]);
     expect(r.warnings.map((w) => w.code)).toContain("negative_net");
+  });
+});
+
+describe("the salary-screen note and the statutory input schemas", () => {
+  it("names only the registered schemes, so a business without PF never sees PF", () => {
+    const none = { pf: false, esi: false, pt: false, lwf: false, tds: false };
+    expect(payrollStatutoryNote(none)).not.toMatch(/provident|PF/i);
+    expect(payrollStatutoryNote({ ...none, esi: true })).toContain("(ESI)");
+    expect(payrollStatutoryNote({ ...none, pf: true, esi: true, tds: true })).toContain("provident fund, ESI and income-tax TDS");
+  });
+  it("accepts a valid registration and refuses an unknown state or a bad payment", () => {
+    expect(statutoryBusinessSettingsSchema.safeParse({ pfRegistered: true, esiRegistered: false, ptStates: ["27"], tdsEnabled: false }).success).toBe(true);
+    expect(statutoryBusinessSettingsSchema.safeParse({ pfRegistered: true, esiRegistered: false, ptStates: ["99"], tdsEnabled: false }).success).toBe(false);
+    const pay = { runId: "11111111-1111-4111-8111-111111111111", kind: "pf", amount: 10, paidOn: "2026-05-14", bankAccountId: "22222222-2222-4222-8222-222222222222" };
+    expect(statutoryPaymentSchema.safeParse(pay).success).toBe(true);
+    expect(statutoryPaymentSchema.safeParse({ ...pay, amount: 0 }).success).toBe(false);
+    expect(statutoryPaymentSchema.safeParse({ ...pay, kind: "gratuity" }).success).toBe(false);
+    expect(statutoryPaymentSchema.safeParse({ ...pay, paidOn: "2026-02-31" }).success).toBe(false);
+  });
+});
+
+describe("due dates", () => {
+  const due = defaultStatutoryRates().dueDates;
+  it("are the configured day of the month after the wage month", () => {
+    expect(statutoryDueDate("pf", "2026-04", due)).toBe("2026-05-15");
+    expect(statutoryDueDate("esi", "2026-12", due)).toBe("2027-01-15");
+    expect(statutoryDueDate("tds", "2026-10", due)).toBe("2026-11-07");
+  });
+  it("the March TDS uses its own date; PT and LWF have none until configured", () => {
+    expect(statutoryDueDate("tds", "2027-03", due)).toBe("2027-04-30");
+    expect(statutoryDueDate("pt", "2026-04", due)).toBeNull();
+    expect(statutoryDueDate("lwf", "2026-04", due)).toBeNull();
+    expect(statutoryDueDate("pt", "2026-04", { ...due, ptDay: 31 })).toBe("2026-05-31");
+    expect(statutoryDueDate("pt", "2026-03", { ...due, ptDay: 31 })).toBe("2026-04-30"); // clamped to the month's length
   });
 });
 
