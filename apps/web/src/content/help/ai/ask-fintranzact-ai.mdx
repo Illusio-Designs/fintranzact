@@ -1,6 +1,6 @@
 ---
 title: Ask Fintranzact AI
-description: "Ask questions about your business in plain English, Hindi or Hinglish and get answers from your live data: sales, dues, stock, expiring batches, GST payable and cash. What it can answer, its limits, privacy and the owner's controls."
+description: "Ask questions about your business in plain English, Hindi or Hinglish and get answers from your live data, or have it prepare an invoice, payment, party, item or reminder for you to confirm. What it can do, the confirmation card, its limits, privacy and the owner's controls."
 sidebar:
   order: 5
 ---
@@ -40,6 +40,41 @@ Ask in English, Hindi or Hinglish. It answers in the language you asked in.
 
 The panel suggests a few questions to start with. Tap one to ask it.
 
+## Have it prepare work for you
+
+Besides answering, the assistant can **prepare** work for you. It never saves anything by itself: every action is shown to you on a **confirmation card**, and nothing is saved until **you** tap **Confirm**.
+
+| You can ask it to | For example |
+|---|---|
+| Create an invoice | "Create an invoice for Asha Traders: 10 Cotton Fabric", "Asha Traders ke liye invoice banao" |
+| Create a quotation | "Create a quotation for Kiran Exports: 5 Silk Saree at 1200" |
+| Record a payment | "Record a payment of 5000 from Asha Traders by UPI", "Asha se 5000 ka payment record karo" |
+| Add a party | "Add a new customer Meera Stores in Pune, phone 98765 01234" |
+| Add an item | "Add a new item Brass Lamp, price 1200, GST 12%" |
+| Send a payment reminder | "Send a WhatsApp payment reminder to Asha Traders for invoice INV-12" |
+
+The panel's **Or have me prepare something** examples fill the question box for you to complete; they are not sent until you press Send. You only see examples for what your role can do.
+
+### The confirmation card
+
+The card shows everything that would be saved: the party, the date, each line with its quantity, rate, discount and GST, the totals, the place of supply and any warnings. The figures come from the same calculation Fintranzact uses when it saves, so what you review is what is saved.
+
+- **Confirm** saves it, exactly as if you had used the normal screen, as you. You get a link to the new record.
+- **Edit** lets you change dates, quantities, rates, discounts, notes, a payment's amount, mode and reference, or a party's or item's details. The totals are worked out again. You cannot change which party or item it is: ask the assistant, or cancel and start again.
+- **Cancel** drops it. Nothing was saved.
+- A card **expires after 30 minutes**. After that, ask again.
+- If saving is refused (for example the books are locked for that date, or you no longer have permission), the card says why and nothing is saved. Tap Confirm only once: a second tap does not make a second copy.
+
+The assistant picks parties and items by looking them up, never by guessing from a name. If a name matches more than one, it asks you which one. It uses only the amounts, dates and quantities you give it, and asks when something is missing.
+
+### What "send a reminder" means
+
+It does exactly what **Send reminder** on the invoice does. For **email** and **SMS**, confirming sends the message you see on the card. For **WhatsApp**, Fintranzact does not send anything: confirming records the reminder and gives you a button that opens WhatsApp with the message ready, and you press send there.
+
+### It knows the page you are on
+
+If you have an invoice, quotation, party or item open, or a report, the assistant is told which one, so "send this invoice to the customer" or "what does this customer owe?" works. Before it uses that, Fintranzact checks that you are allowed to see it. Pages other than the ones it knows about are not shared with it.
+
 ## What you get back
 
 An answer in text, saying which report and period it used. It may add **cards** under the answer: a small table, a simple bar chart, or a link that opens the invoice or report in the app. Links only ever go to pages inside Fintranzact.
@@ -48,7 +83,7 @@ Answers stream in as they are written. Press **Stop** to end one early.
 
 ## What it cannot do
 
-- It only **reads** your books. It does not create, change, send or delete anything. To do that, use the normal screens.
+- It never saves, sends, changes or deletes anything on its own. It can only prepare the actions listed above, and only you can confirm them. It cannot edit or delete an existing invoice, payment or party, and it cannot do anything else in the app: use the normal screens.
 - It never makes up numbers. If it cannot find something, it says so.
 - It is not a tax or legal adviser. For filing and tax decisions, check with your CA. A GST payable figure comes from your books and may differ from a filed return.
 - It does not answer questions that are not about your business.
@@ -62,19 +97,19 @@ The assistant reads your data **as you**, in the business you have open, with th
 
 - **AI Assistant** includes 150 questions a month and **AI Plus** includes 500. The count resets on the 1st of each month (Indian time).
 - A Full Access Trial includes 50 questions in total.
-- One question is one message that gets an answer. If the AI service has a problem and you get no answer, the question is not counted.
+- One question is one message that gets an answer. If the AI service has a problem and you get no answer, the question is not counted. Preparing an action is part of the question that asked for it, and Confirm, Edit and Cancel do not use up a question.
 - Extra packs of 100 questions can be added to an organisation. The panel shows how many questions are left.
 - When the questions run out, the panel says so. Ask your owner to add more.
 
 ## Your chats
 
-Each person has their own chat history. Open **Past chats** (the clock) to see yours, open one to continue it, or delete one. Nobody else in your organisation can see your chats, including the owner.
+Each person has their own chat history. Open **Past chats** (the clock) to see yours, open one to continue it, or delete one. Nobody else in your organisation can see your chats, including the owner. A confirmation card in an old chat shows what became of it. An action prepared for you can only be confirmed by you, never by another person, even an admin or the owner.
 
 ## Controls for the owner
 
-Owners can open **Settings, then Team, then AI assistant** to switch the assistant off for the whole organisation, or for specific roles (admin, sales manager, salesperson, accountant). This is enforced by the server, not just hidden on screen. Owners always keep access so they can switch it back on.
+Owners can open **Settings, then Team, then AI assistant** to switch the assistant off for the whole organisation, or for specific roles (admin, sales manager, salesperson, accountant). A separate switch, **Allow the assistant to prepare actions**, turns the actions off (for everyone, or for specific roles) while keeping the question-and-answer chat. This is enforced by the server, not just hidden on screen. Owners always keep access to the assistant so they can switch it back on.
 
-Every question and each lookup the assistant makes is recorded in the activity log as **via AI assistant**. The log keeps a short copy of the question and the name of each lookup, not your business figures.
+Every question and each lookup the assistant makes is recorded in the activity log as **via AI assistant**. So is every action it prepares, and what you do with it (edit, confirm, cancel, or a failure), and the record you confirmed (for example the invoice) shows as made **via AI assistant** with your name. The log keeps a short copy of the question and the name of each lookup, not your business figures.
 
 ## Privacy
 
