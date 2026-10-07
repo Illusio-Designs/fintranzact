@@ -397,10 +397,13 @@ export function buildAttendanceRegister(month: string, days: readonly string[], 
 }
 
 /** Leave register for a leave year: balances per employee and leave type. */
-export function buildLeaveRegister(leaveYearLabel: string, rows: ReadonlyArray<{ employeeCode: string; name: string; leaveType: string; opening: number; accrued: number; taken: number; encashed: number; balance: number }>): string {
+export function buildLeaveRegister(
+  leaveYearLabel: string,
+  rows: ReadonlyArray<{ employeeCode: string; name: string; leaveType: string; opening: number; accrued: number; taken: number; encashed: number; lapsed: number; balance: number }>,
+): string {
   return csv(
-    ["Leave Year", "Employee Code", "Employee Name", "Leave Type", "Opening / Carried Forward", "Accrued", "Taken", "Encashed", "Balance"],
-    rows.map((r) => [leaveYearLabel, r.employeeCode, r.name, r.leaveType, r.opening, r.accrued, r.taken, r.encashed, r.balance]),
+    ["Leave Year", "Employee Code", "Employee Name", "Leave Type", "Opening / Carried Forward", "Accrued", "Taken", "Encashed", "Lapsed / Closed", "Balance"],
+    rows.map((r) => [leaveYearLabel, r.employeeCode, r.name, r.leaveType, r.opening, r.accrued, r.taken, r.encashed, r.lapsed, r.balance]),
   );
 }
 

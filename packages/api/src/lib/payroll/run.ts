@@ -51,6 +51,8 @@ import {
   paiseToRupees,
   payslipNumber,
   rupeesToPaise,
+  STATUTORY_PAYABLE_GROUPS,
+  STATUTORY_PAYABLE_LABELS,
   sumRunTotals,
   summarizeAttendance,
   type AssignedComponent,
@@ -64,9 +66,10 @@ import {
 } from "@fintranzact/shared";
 import { amountInWords } from "../invoice-templates/model.js";
 import { assertPeriodOpen } from "../period-lock.js";
-import { bookDate, cashOrBankAccountId, ensurePayrollAccounts, writeJournalEntry, type PayrollAccountKey } from "./books.js";
+import { STATUTORY_PAYABLE_KEYS, bookDate, cashOrBankAccountId, ensurePayrollAccounts, writeJournalEntry, type PayrollAccountKey } from "./books.js";
 import { holidayDatesFor, loadHolidays, loadMonthAttendance, loadPayrollSettings, type PayrollSettingsValues } from "./data.js";
 import { badRequest, isUniqueViolation, notFound } from "./access.js";
+import { applyStatutoryForEmployee, dedupeConfigWarnings, lineStatutoryJson, loadStatutoryRunContext, runSnapshot } from "./statutory.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Tx = any;
@@ -300,6 +303,9 @@ export async function calculateRun(
     const month = run.month;
     const dim = daysInMonth(month);
     const ctx = await loadMonthContext(tx, input.businessId, month);
+    // Statutory (PF, ESI, PT, LWF, TDS): only for a business with a registration turned on.
+    const sctx = await loadStatutoryRunContext(tx, input.businessId, month, ctx.employees);
+    const configWarnings: PayrollWarning[] = [];
 
     const [deptRows, desigRows] = await Promise.all([
       tx.select().from(payrollDepartments).where(eq(payrollDepartments.businessId, input.businessId)),
@@ -357,7 +363,7 @@ export async function calculateRun(
       for (const en of encashments.filter((x) => x.employeeId === emp.id)) {
         adj.push({ id: en.id, name: "Leave encashment", type: "earning", amountPaise: rupeesToPaise(en.amount) });
       }
-      const result = computePayrollLine({
+      let result = computePayrollLine({
         components,
         daysInMonth: dim,
         employedDays: summary.employedDays,
@@ -368,6 +374,18 @@ export async function calculateRun(
         standardHoursPerDay: ctx.settings.standardHoursPerDay,
         adjustments: adj,
       });
+      let statutoryJson: Record<string, unknown> | null = null;
+      if (sctx) {
+        const st = applyStatutoryForEmployee(
+          sctx,
+          emp,
+          result,
+          components.map((c) => ({ type: c.type, category: c.category, isWage: c.isWage, monthlyPaise: c.monthlyPaise })),
+        );
+        result = { ...st.line, warnings: [...st.line.warnings, ...st.warnings] };
+        statutoryJson = lineStatutoryJson(st.details);
+        configWarnings.push(...st.configWarnings);
+      }
       for (const w of result.warnings) warnings.push({ ...w, message: `${emp.name}: ${w.message}`, employeeId: emp.id });
       const finalSettlement = !!emp.lastWorkingDay && emp.lastWorkingDay >= monthStart(month) && emp.lastWorkingDay <= monthEnd(month);
       lines.push({
@@ -389,6 +407,7 @@ export async function calculateRun(
         employerContributions: paiseToRupees(result.employerPaise),
         netPay: paiseToRupees(result.netPaise),
         warnings: result.warnings.map((w) => ({ code: w.code, message: w.message })),
+        statutory: statutoryJson,
         isFinalSettlement: finalSettlement,
         _result: result,
       });
@@ -400,6 +419,15 @@ export async function calculateRun(
     }
     const used = encashments.filter((en) => lines.some((l) => l.employeeId === en.employeeId));
     if (used.length) await tx.update(leaveEncashments).set({ payrollRunId: run.id }).where(inArray(leaveEncashments.id, used.map((u) => u.id)));
+
+    // Warnings about the settings (missing slabs) appear once on the run, not once per employee.
+    for (const w of dedupeConfigWarnings(configWarnings)) warnings.push(w);
+    if (sctx && sctx.loaded.source === "default") {
+      warnings.push({
+        code: "statutory_rates_default",
+        message: `Statutory rates for FY ${sctx.financialYear}-${String((sctx.financialYear + 1) % 100).padStart(2, "0")} have not been saved: the shipped defaults were used. Review them in Statutory settings and verify with your CA.`,
+      });
+    }
 
     const totals = sumRunTotals(lines.map((l) => ({
       grossPaise: l._result.grossPaise,
@@ -417,6 +445,7 @@ export async function calculateRun(
         employerTotal: paiseToRupees(totals.employerPaise),
         netTotal: paiseToRupees(totals.netPaise),
         warnings,
+        statutory: sctx ? runSnapshot(sctx) : null,
         calculatedAt: new Date(),
         calculatedByUserId: input.actor.id,
         calculatedByName: input.actor.name,
@@ -522,6 +551,8 @@ export interface PayslipSnapshot {
   attendance: { daysInMonth: number; employedDays: number; paidDays: string; lopDays: string; overtimeHours: string };
   earnings: Array<{ name: string; full: string; amount: string }>;
   deductions: Array<{ name: string; amount: string }>;
+  /** Employer contributions (PF, EPS, ESI...): not part of net pay. Absent on a payslip with none. */
+  employerContributions?: Array<{ name: string; amount: string }>;
   grossEarnings: string;
   totalDeductions: string;
   netPay: string;
@@ -530,14 +561,24 @@ export interface PayslipSnapshot {
   generatedAt: string;
 }
 
+/** The registrations a run was calculated with (none for a run with no statutory part). */
+export function registrationsOfRun(run: { statutory: Record<string, unknown> | null }): { pf: boolean; esi: boolean } {
+  const flags = (run.statutory?.flags ?? {}) as { pfRegistered?: boolean; esiRegistered?: boolean };
+  return { pf: !!flags.pfRegistered, esi: !!flags.esiRegistered };
+}
+
 /** The payslip data for one line: business header, employee (masked identity numbers), amounts, net pay in words. */
 export function buildPayslipSnapshot(input: {
   business: typeof businesses.$inferSelect;
   month: string;
   line: typeof payrollRunLines.$inferSelect;
   employee: EmployeeRow;
+  /** The registrations the run was calculated with. A number that belongs to a scheme the business is not registered for (UAN without PF) is left off the payslip. */
+  registrations?: { pf: boolean; esi: boolean };
 }): PayslipSnapshot {
   const { business: biz, line: l, employee: e } = input;
+  const reg = input.registrations ?? { pf: false, esi: false };
+  const employerContributions = l.components.filter((c) => c.type === "employer_contribution" && c.statutoryKind && rupeesToPaise(c.amount) > 0).map((c) => ({ name: c.name, amount: c.amount }));
   const earnings = l.components.filter((c) => c.type === "earning" && rupeesToPaise(c.amount) > 0).map((c) => ({ name: c.name, full: c.full, amount: c.amount }));
   const deductions = l.components.filter((c) => c.type === "deduction" && rupeesToPaise(c.amount) > 0).map((c) => ({ name: c.name, amount: c.amount }));
   return {
@@ -555,14 +596,15 @@ export function buildPayslipSnapshot(input: {
       dateOfJoining: e.dateOfJoining,
       lastWorkingDay: e.lastWorkingDay,
       panMasked: maskSensitive(e.pan),
-      uanMasked: maskSensitive(e.uan),
-      esicMasked: maskSensitive(e.esicNumber),
+      uanMasked: reg.pf ? maskSensitive(e.uan) : null,
+      esicMasked: reg.esi ? maskSensitive(e.esicNumber) : null,
       bankAccountMasked: maskSensitive(e.bankAccountNumber),
       bankName: e.bankName,
     },
     attendance: { daysInMonth: l.daysInMonth, employedDays: l.employedDays, paidDays: l.paidDays, lopDays: l.lopDays, overtimeHours: l.overtimeHours },
     earnings,
     deductions,
+    ...(employerContributions.length ? { employerContributions } : {}),
     grossEarnings: l.grossEarnings,
     totalDeductions: l.totalDeductions,
     netPay: l.netPay,
@@ -607,7 +649,7 @@ export async function approveRun(db: TenantDatabase, input: { businessId: string
 
     for (const l of lines) {
       const e = empById.get(l.employeeId)!;
-      const snapshot = buildPayslipSnapshot({ business: biz!, month: run.month, line: l, employee: e });
+      const snapshot = buildPayslipSnapshot({ business: biz!, month: run.month, line: l, employee: e, registrations: registrationsOfRun(run) });
       await tx.insert(payslips).values({
         businessId: input.businessId,
         runId: run.id,
@@ -652,6 +694,7 @@ export async function reopenRun(db: TenantDatabase, input: { businessId: string;
         employerTotal: "0",
         netTotal: "0",
         warnings: [],
+        statutory: null,
         attendanceLockedAt: null,
         attendanceLockedByUserId: null,
         calculatedAt: null,
@@ -703,7 +746,12 @@ export async function postRun(db: TenantDatabase, input: { businessId: string; r
     const totals = buildPostingTotals(
       lines.map((l: typeof payrollRunLines.$inferSelect) => ({
         netPaise: rupeesToPaise(l.netPay),
-        components: l.components.map((c) => ({ type: c.type as ComponentType, category: c.category as ComponentCategory, amountPaise: rupeesToPaise(c.amount) })),
+        components: l.components.map((c) => ({
+          type: c.type as ComponentType,
+          category: c.category as ComponentCategory,
+          amountPaise: rupeesToPaise(c.amount),
+          statutoryKind: c.statutoryKind,
+        })),
       })),
     );
     const keys = new Set<PayrollAccountKey>();
@@ -711,6 +759,7 @@ export async function postRun(db: TenantDatabase, input: { businessId: string; r
     if (totals.netPayablePaise > 0) keys.add("salaries_payable");
     if (totals.deductionsPayablePaise > 0) keys.add("deductions_payable");
     if (totals.employerPayablePaise > 0) keys.add("employer_payable");
+    for (const g of STATUTORY_PAYABLE_GROUPS) if (totals.statutoryPayable[g] > 0) keys.add(STATUTORY_PAYABLE_KEYS[g]);
     if (keys.size === 0) throw badRequest("There is nothing to post: every employee's pay is zero.");
     const acc = await ensurePayrollAccounts(tx, input.businessId, [...keys]);
 
@@ -722,6 +771,11 @@ export async function postRun(db: TenantDatabase, input: { businessId: string; r
     if (totals.netPayablePaise > 0) jl.push({ accountId: acc.salaries_payable!, debitPaise: 0, creditPaise: totals.netPayablePaise, narration: `Net salaries payable ${label}` });
     if (totals.deductionsPayablePaise > 0) jl.push({ accountId: acc.deductions_payable!, debitPaise: 0, creditPaise: totals.deductionsPayablePaise, narration: `Deductions held ${label}` });
     if (totals.employerPayablePaise > 0) jl.push({ accountId: acc.employer_payable!, debitPaise: 0, creditPaise: totals.employerPayablePaise, narration: `Employer contributions ${label}` });
+    for (const g of STATUTORY_PAYABLE_GROUPS) {
+      if (totals.statutoryPayable[g] > 0) {
+        jl.push({ accountId: acc[STATUTORY_PAYABLE_KEYS[g]]!, debitPaise: 0, creditPaise: totals.statutoryPayable[g], narration: `${STATUTORY_PAYABLE_LABELS[g]} ${label}` });
+      }
+    }
 
     const entry = await writeJournalEntry(tx, {
       businessId: input.businessId,

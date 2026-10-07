@@ -14,13 +14,19 @@
  *       Cr  Employer Contributions Payable (2420)
  * Marking the run paid makes a second entry:
  *   Dr  Salaries Payable (2400)   Cr  Cash in Hand (1000) / Bank Accounts (1010)
- * PF, ESI, TDS and PT payable accounts arrive with the statutory phase.
+ * Statutory amounts (employee and employer shares of PF/EPS, ESI, professional
+ * tax, LWF, and TDS on salary) are credited to their own payable account
+ * instead of 2410 / 2420, so each can be paid to its authority on its own:
+ *       Cr  PF and EPS Payable (2430)  ESI Payable (2431)  Professional Tax
+ *           Payable (2432)  Labour Welfare Fund Payable (2433)  TDS on Salary
+ *           Payable (2434)
+ * Paying a statutory due makes Dr <that payable> / Cr cash or bank.
  */
 
 import { and, eq, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { chartOfAccounts, journalEntries, journalEntryLines } from "@fintranzact/db";
-import type { ExpenseGroup } from "@fintranzact/shared";
+import type { ExpenseGroup, StatutoryPayableGroup } from "@fintranzact/shared";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Tx = any;
@@ -32,7 +38,10 @@ export interface PayrollAccountDef {
   accountType: "expense" | "liability";
 }
 
-export const PAYROLL_ACCOUNTS: Record<ExpenseGroup | "salaries_payable" | "deductions_payable" | "employer_payable", PayrollAccountDef> = {
+export const PAYROLL_ACCOUNTS: Record<
+  ExpenseGroup | "salaries_payable" | "deductions_payable" | "employer_payable" | "pf_payable" | "esi_payable" | "pt_payable" | "lwf_payable" | "tds_payable",
+  PayrollAccountDef
+> = {
   wages: { key: "wages", code: "5200", name: "Salary & Wages", accountType: "expense" },
   allowances: { key: "allowances", code: "5201", name: "Salary - Allowances", accountType: "expense" },
   bonus_incentives: { key: "bonus_incentives", code: "5202", name: "Salary - Bonus & Incentives", accountType: "expense" },
@@ -41,6 +50,20 @@ export const PAYROLL_ACCOUNTS: Record<ExpenseGroup | "salaries_payable" | "deduc
   salaries_payable: { key: "salaries_payable", code: "2400", name: "Salaries Payable", accountType: "liability" },
   deductions_payable: { key: "deductions_payable", code: "2410", name: "Payroll Deductions Payable", accountType: "liability" },
   employer_payable: { key: "employer_payable", code: "2420", name: "Employer Contributions Payable", accountType: "liability" },
+  pf_payable: { key: "pf_payable", code: "2430", name: "PF and EPS Payable", accountType: "liability" },
+  esi_payable: { key: "esi_payable", code: "2431", name: "ESI Payable", accountType: "liability" },
+  pt_payable: { key: "pt_payable", code: "2432", name: "Professional Tax Payable", accountType: "liability" },
+  lwf_payable: { key: "lwf_payable", code: "2433", name: "Labour Welfare Fund Payable", accountType: "liability" },
+  tds_payable: { key: "tds_payable", code: "2434", name: "TDS on Salary Payable", accountType: "liability" },
+};
+
+/** The payable account of each statutory group. */
+export const STATUTORY_PAYABLE_KEYS: Record<StatutoryPayableGroup, PayrollAccountKey> = {
+  pf: "pf_payable",
+  esi: "esi_payable",
+  pt: "pt_payable",
+  lwf: "lwf_payable",
+  tds: "tds_payable",
 };
 
 export type PayrollAccountKey = keyof typeof PAYROLL_ACCOUNTS;

@@ -41,6 +41,7 @@ import {
   lockAttendance,
   markRunPaid,
   postRun,
+  registrationsOfRun,
   removeAdjustment,
   reopenRun,
   submitRun,
@@ -53,9 +54,19 @@ function actorOf(ctx: { user: { id: string; name?: string | null; email?: string
   return { id: ctx.user.id, name: ctx.user.name ?? ctx.user.email ?? null };
 }
 
-/** A run as the API returns it: the money columns are rupee strings already. */
+/**
+ * A run as the API returns it: the money columns are rupee strings already. The
+ * statutory snapshot is trimmed to what a screen needs (the financial year, the
+ * registrations the run was calculated with and where the rates came from); the
+ * whole rates document stays in the database.
+ */
 function presentRun(r: typeof payrollRuns.$inferSelect) {
-  return r;
+  const { statutory, ...rest } = r;
+  const snap = statutory as { financialYear?: number; ratesSource?: string; flags?: Record<string, unknown> } | null;
+  return {
+    ...rest,
+    statutory: snap ? { financialYear: snap.financialYear ?? null, ratesSource: snap.ratesSource ?? null, flags: snap.flags ?? {} } : null,
+  };
 }
 
 async function loadPayslipSource(ctx: { db: TenantDatabase; businessId: string }, runId: string, employeeId: string) {
@@ -69,7 +80,7 @@ async function loadPayslipSource(ctx: { db: TenantDatabase; businessId: string }
   const [emp] = await ctx.db.select().from(employees).where(eq(employees.id, employeeId)).limit(1);
   const [biz] = await ctx.db.select().from(businesses).where(eq(businesses.id, ctx.businessId)).limit(1);
   if (!emp || !biz) throw notFound("Payslip");
-  return { run, snapshot: buildPayslipSnapshot({ business: biz, month: run.month, line, employee: emp }), draft: true, slipId: null as string | null };
+  return { run, snapshot: buildPayslipSnapshot({ business: biz, month: run.month, line, employee: emp, registrations: registrationsOfRun(run) }), draft: true, slipId: null as string | null };
 }
 
 export const payrollRunRouter = router({

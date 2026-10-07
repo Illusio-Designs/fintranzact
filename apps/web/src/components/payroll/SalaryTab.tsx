@@ -5,7 +5,7 @@ import {
   COMPONENT_CATEGORY_LABELS,
   COMPONENT_TYPES,
   COMPONENT_TYPE_LABELS,
-  PAYROLL_PHASE2_NOTE,
+  payrollStatutoryNote,
   PayrollRuleError,
   categoriesForType,
   computeSalaryBreakdown,
@@ -137,7 +137,7 @@ export function SalaryTab() {
 
   return (
     <div className="space-y-6">
-      <p className="rounded-lg bg-surface-1 px-4 py-3 text-sm text-text-secondary">{PAYROLL_PHASE2_NOTE}</p>
+      <p className="rounded-lg bg-surface-1 px-4 py-3 text-sm text-text-secondary">{payrollStatutoryNote(statutoryRegistrations(flags))}</p>
 
       <Panel
         title="Salary components"

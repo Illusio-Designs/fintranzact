@@ -94,9 +94,11 @@ export function generatePayslipPDF(s: PayslipSnapshot, opts: PayslipPdfOptions =
       ["Type", TYPE_LABEL[e.employmentType] ?? e.employmentType],
       ["Date of joining", fmtDate(e.dateOfJoining)],
     ];
+    // The UAN and the ESIC number are printed only for a business registered for PF / ESI (they are left out of the snapshot otherwise).
     const right: Array<[string, string]> = [
       ["PAN", e.panMasked ?? "-"],
-      ["UAN", e.uanMasked ?? "-"],
+      ...(e.uanMasked ? ([["UAN", e.uanMasked]] as Array<[string, string]>) : []),
+      ...(e.esicMasked ? ([["ESIC no.", e.esicMasked]] as Array<[string, string]>) : []),
       ["Bank account", e.bankAccountMasked ? `${e.bankAccountMasked}${e.bankName ? ` (${e.bankName})` : ""}` : "-"],
       ["Days in month", String(s.attendance.daysInMonth)],
       ["Paid days", s.attendance.paidDays.replace(/\.0$/, "")],
@@ -113,7 +115,7 @@ export function generatePayslipPDF(s: PayslipSnapshot, opts: PayslipPdfOptions =
     };
     drawPairs(left, margin);
     drawPairs(right, margin + colW + 16);
-    y += left.length * rowH + 10;
+    y += Math.max(left.length, right.length) * rowH + 10;
     if (Number(s.attendance.overtimeHours) > 0) {
       doc.font("NotoSans").fontSize(8).fillColor(muted).text(`Overtime hours: ${Number(s.attendance.overtimeHours)}`, margin, y);
       y += 14;
@@ -157,6 +159,20 @@ export function generatePayslipPDF(s: PayslipSnapshot, opts: PayslipPdfOptions =
     doc.text("Total deductions", xR + 8, y, { width: half - 100 });
     doc.text(fmt(s.totalDeductions), xR + half - 90, y, { width: 82, align: "right" });
     y += 26;
+
+    // Employer contributions (PF, EPS, ESI...): shown for information, not part of net pay.
+    if (s.employerContributions?.length) {
+      doc.rect(margin, y, contentW, 20).fill(band);
+      doc.font("NotoSans-Bold").fontSize(8).fillColor(soft).text("EMPLOYER CONTRIBUTIONS (NOT PART OF NET PAY)", margin + 8, y + 6, { width: contentW - 110 });
+      doc.text("AMOUNT (INR)", margin + contentW - 90, y + 6, { width: 82, align: "right" });
+      y += 24;
+      for (const c of s.employerContributions) {
+        doc.font("NotoSans").fontSize(9).fillColor(ink).text(c.name, margin + 8, y, { width: contentW - 110, lineBreak: false, ellipsis: true });
+        doc.text(fmt(c.amount), margin + contentW - 90, y, { width: 82, align: "right" });
+        y += 16;
+      }
+      y += 8;
+    }
 
     // Net pay.
     doc.rect(margin, y, contentW, 46).fill(band);

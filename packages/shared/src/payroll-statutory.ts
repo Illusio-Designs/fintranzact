@@ -21,7 +21,10 @@
  */
 
 import { z } from "zod";
+import { isStateCode } from "./indian-states.js";
+import { isoDateSchema } from "./payroll.js";
 import {
+  STATUTORY_PAYABLE_GROUPS,
   WAGE_CATEGORIES,
   percentOf,
   roundDiv,
@@ -30,6 +33,7 @@ import {
   type PayrollLineComponent,
   type PayrollLineResult,
   type PayrollWarning,
+  type StatutoryPayableGroup,
 } from "./payroll-calc.js";
 
 export const VERIFY_WITH_CA_LABEL = "Verify with your CA";
@@ -147,6 +151,8 @@ export const statutoryRatesSchema = z.object({
     pfDay: z.number().int().min(1).max(31),
     esiDay: z.number().int().min(1).max(31),
     tdsDepositDay: z.number().int().min(1).max(31),
+    /** The deposit date for the March wage month, "MM-DD" in the next calendar year. */
+    tdsMarchDeposit: z.string().regex(/^\d{2}-\d{2}$/),
     /** Null = state specific: not configured. */
     ptDay: z.number().int().min(1).max(31).nullable(),
     lwfDay: z.number().int().min(1).max(31).nullable(),
@@ -214,6 +220,7 @@ export function defaultStatutoryRates(): StatutoryRates {
       pfDay: 15,
       esiDay: 15,
       tdsDepositDay: 7,
+      tdsMarchDeposit: "04-30",
       ptDay: null,
       lwfDay: null,
       tds24qQuarterEnd: { q1: "07-31", q2: "10-31", q3: "01-31", q4: "05-31" },
@@ -974,3 +981,82 @@ export function looksLikeManualStatutory(c: { name: string; code: string; statut
   if (c.statutoryKind || c.source === "statutory") return false;
   return /\b(pf|epf|vpf|esi|esic|pt|tds|prof(essional)?\s*tax|provident|income\s*tax)\b/i.test(`${c.name} ${c.code}`);
 }
+
+// ── Due dates ────────────────────────────────────────────────────────────────
+
+/**
+ * The date a statutory amount of a wage month is due ("YYYY-MM-DD"), from the
+ * configured due days (the month after the wage month; the March TDS has its own
+ * date). Null when the due day is not configured (PT and LWF are state specific).
+ */
+export function statutoryDueDate(group: StatutoryPayableGroup, month: string, due: StatutoryRates["dueDates"]): string | null {
+  const [y, m] = month.split("-").map(Number) as [number, number];
+  const dm = m === 12 ? 1 : m + 1;
+  const dy = m === 12 ? y + 1 : y;
+  if (group === "tds" && m === 3) return `${dy}-${due.tdsMarchDeposit}`;
+  const day = group === "pf" ? due.pfDay : group === "esi" ? due.esiDay : group === "tds" ? due.tdsDepositDay : group === "pt" ? due.ptDay : due.lwfDay;
+  if (day === null) return null;
+  const last = new Date(Date.UTC(dy, dm, 0)).getUTCDate();
+  return `${dy}-${String(dm).padStart(2, "0")}-${String(Math.min(day, last)).padStart(2, "0")}`;
+}
+
+// ── Input schemas (API, web) ─────────────────────────────────────────────────
+
+const uuidField = z.string().uuid();
+const stateCodeField = z.string().refine(isStateCode, "Choose a state.");
+const optionalText = (max: number) => z.union([z.literal(""), z.string().trim().max(max)]).optional();
+
+export const statutoryBusinessSettingsSchema = z.object({
+  pfRegistered: z.boolean(),
+  pfEstablishmentCode: optionalText(30),
+  esiRegistered: z.boolean(),
+  esiCode: optionalText(30),
+  /** States the business deducts professional tax in (GST state codes). */
+  ptStates: z.array(stateCodeField).max(40),
+  lwfState: z.union([z.literal(""), stateCodeField]).nullable().optional(),
+  tdsEnabled: z.boolean(),
+});
+
+export const statutoryRatesSaveSchema = z.object({
+  /** Start year of the financial year the figures apply from (2026 = 2026-27). */
+  financialYear: z.number().int().min(2020).max(2100),
+  rates: statutoryRatesSchema,
+  /** "Last verified" note: who checked the figures and against what. */
+  verifiedNote: optionalText(300),
+  verifiedOn: z.union([z.literal(""), isoDateSchema]).optional(),
+});
+
+export const employeeStatutorySchema = z.object({
+  employeeId: uuidField,
+  pfApplicable: z.boolean().optional(),
+  pfExcluded: z.boolean().optional(),
+  epsEligible: z.boolean().optional(),
+  pfOnActualWages: z.boolean().optional(),
+  vpfPercent: z.number().min(0).max(100).optional(),
+  internationalWorker: z.boolean().optional(),
+  pfJoinDate: z.union([z.literal(""), isoDateSchema]).nullable().optional(),
+  esiApplicable: z.boolean().optional(),
+});
+
+export const taxDeclarationSaveSchema = z.object({
+  employeeId: uuidField,
+  financialYear: z.number().int().min(2020).max(2100),
+  amounts: taxDeclarationSchema,
+});
+
+export const statutoryPaymentSchema = z.object({
+  runId: uuidField,
+  kind: z.enum(STATUTORY_PAYABLE_GROUPS),
+  /** Rupees. */
+  amount: z.number().positive("Enter an amount above zero.").max(1_000_000_000),
+  paidOn: isoDateSchema,
+  bankAccountId: uuidField,
+  challanNumber: optionalText(40),
+  challanDate: z.union([z.literal(""), isoDateSchema]).optional(),
+  reference: optionalText(100),
+});
+
+export const FILING_REGISTERS = ["wages", "attendance", "leave", "bonus", "gratuity"] as const;
+export type FilingRegister = (typeof FILING_REGISTERS)[number];
+
+export const fyInputSchema = z.object({ financialYear: z.number().int().min(2020).max(2100).optional() });
