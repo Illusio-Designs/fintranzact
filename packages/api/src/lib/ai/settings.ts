@@ -13,23 +13,36 @@ import { AI_DEFAULT_PRICES, AI_SWITCHABLE_ROLES, normaliseAiPrices, type AiPrice
 
 export const AI_PRICES_KEY = "ai.prices";
 
+const switchable = (roles: string[] | null | undefined) =>
+  (roles ?? []).filter((r): r is (typeof AI_SWITCHABLE_ROLES)[number] => (AI_SWITCHABLE_ROLES as readonly string[]).includes(r));
+
 export async function getAiSettings(tenantId: string): Promise<AiSettings> {
   const [row] = await controlDb.select().from(aiSettings).where(eq(aiSettings.tenantId, tenantId)).limit(1);
-  if (!row) return { enabled: true, disabledRoles: [] };
+  if (!row) return { enabled: true, disabledRoles: [], actionsEnabled: true, actionsDisabledRoles: [] };
   return {
     enabled: row.enabled,
-    disabledRoles: (row.disabledRoles ?? []).filter((r): r is (typeof AI_SWITCHABLE_ROLES)[number] => (AI_SWITCHABLE_ROLES as readonly string[]).includes(r)),
+    disabledRoles: switchable(row.disabledRoles),
+    actionsEnabled: row.actionsEnabled,
+    actionsDisabledRoles: switchable(row.actionsDisabledRoles),
   };
 }
 
-export async function saveAiSettings(tenantId: string, settings: AiSettings, userId: string): Promise<void> {
+/** Saves the switches; a value left out (undefined) keeps what is stored, so an older client that only knows the Phase 1 switches never resets the action switches. */
+export async function saveAiSettings(tenantId: string, input: Partial<AiSettings> & Pick<AiSettings, "enabled" | "disabledRoles">, userId: string): Promise<void> {
   const now = new Date();
+  const current = await getAiSettings(tenantId);
+  const settings: AiSettings = {
+    enabled: input.enabled,
+    disabledRoles: input.disabledRoles,
+    actionsEnabled: input.actionsEnabled ?? current.actionsEnabled,
+    actionsDisabledRoles: input.actionsDisabledRoles ?? current.actionsDisabledRoles,
+  };
   await controlDb
     .insert(aiSettings)
-    .values({ tenantId, enabled: settings.enabled, disabledRoles: settings.disabledRoles, updatedByUserId: userId, updatedAt: now })
+    .values({ tenantId, ...settings, updatedByUserId: userId, updatedAt: now })
     .onConflictDoUpdate({
       target: aiSettings.tenantId,
-      set: { enabled: settings.enabled, disabledRoles: settings.disabledRoles, updatedByUserId: userId, updatedAt: now },
+      set: { ...settings, updatedByUserId: userId, updatedAt: now },
     });
 }
 
@@ -38,6 +51,17 @@ export function aiDisabledReason(settings: AiSettings, role: string): "org_disab
   if (role === "superadmin") return null; // the owner always keeps it, so they can switch it back on
   if (!settings.enabled) return "org_disabled";
   if ((settings.disabledRoles as string[]).includes(role)) return "role_disabled";
+  return null;
+}
+
+/**
+ * Why the assistant may not PREPARE actions for this person, or null. The
+ * organisation switch applies to everyone (it is a safety switch; the owner
+ * can switch it back on in Settings), the role switch to everyone but the owner.
+ */
+export function aiActionsDisabledReason(settings: AiSettings, role: string): "actions_org_disabled" | "actions_role_disabled" | null {
+  if (!settings.actionsEnabled) return "actions_org_disabled";
+  if (role !== "superadmin" && (settings.actionsDisabledRoles as string[]).includes(role)) return "actions_role_disabled";
   return null;
 }
 

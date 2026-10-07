@@ -3078,6 +3078,42 @@ export const aiMessages = pgTable("ai_messages", {
   index("ai_messages_conversation_idx").on(t.conversationId, t.createdAt),
 ]);
 
+// ── AI business assistant, Phase 2: pending actions ────────────────
+// A PROPOSAL the assistant prepared for one person to review: never a
+// write. The payload is validated against the same zod input the real tRPC
+// procedure takes; only the person's own Confirm (ai.confirmAction) runs that
+// procedure, as them. Private to (business, user), expires after 30 minutes,
+// kept as a short history afterwards (purged after 30 days). Not part of the
+// data export. See docs/architecture/ai-assistant.md.
+
+export const aiPendingActions = pgTable("ai_pending_actions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull(),
+  conversationId: uuid("conversation_id").references(() => aiConversations.id, { onDelete: "set null" }),
+  /** create_invoice | create_quotation | record_payment | create_party | create_item | send_payment_reminder */
+  kind: text("kind").notNull(),
+  /** The validated input of the real procedure. */
+  payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+  /** What the confirmation card shows (fields, lines, totals, editable inputs, warnings), computed server-side. */
+  preview: jsonb("preview").$type<Record<string, unknown>>().notNull(),
+  summary: text("summary").notNull(),
+  /** pending | confirmed | cancelled | expired | failed */
+  status: text("status").default("pending").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  /** Set when confirmed: { entityType, id, label, url? }. Null while the confirmation is still running. */
+  result: jsonb("result").$type<Record<string, unknown>>(),
+  /** Why a failed action failed (the procedure's own message). */
+  error: text("error"),
+  /** When it was confirmed, cancelled, or failed. */
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("ai_pending_actions_user_idx").on(t.businessId, t.userId, t.createdAt),
+  index("ai_pending_actions_expiry_idx").on(t.status, t.expiresAt),
+]);
+
 // ── Business-date column registry ─────────────────────────────────
 // The canonical user-entered business date for each document table.
 // Date-range filters coming from the UI (pills like "This Month", "This FY"),

@@ -11,6 +11,17 @@ export const aiTables: TableCoverage[] = [
       "A conversation is a title, its owner (a plain user id, users live in the control database) and two timestamps; nothing is derived and nothing must reconcile.",
   },
   {
+    table: "ai_pending_actions",
+    rules: [
+      rule("ai_pending_actions", "confirmed-has-result", "warning",
+        "A confirmed action has the id of the record it created (a confirmation still running for more than 10 minutes means the server stopped part-way).",
+        ["lib/ai/actions/service.ts confirmAiAction"],
+        `SELECT a.business_id, a.id::text, 'action ' || a.kind || ' was confirmed but has no result after 10 minutes'
+         FROM ai_pending_actions a
+         WHERE a.status = 'confirmed' AND a.result IS NULL AND a.updated_at < now() - interval '10 minutes'`),
+    ],
+  },
+  {
     table: "ai_messages",
     rules: [
       rule("ai_messages", "same-business", "error",

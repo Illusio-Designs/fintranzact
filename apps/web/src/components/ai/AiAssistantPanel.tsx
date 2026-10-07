@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { AI_MAX_QUESTION_CHARS, type AiCard } from "@fintranzact/shared";
+import { AI_MAX_QUESTION_CHARS, type AiAnyCard } from "@fintranzact/shared";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { AiRequestError, streamAiAnswer, type AiStreamEvent } from "@/lib/ai-stream";
 import { clearAiDraft, closeAiPanel, useAiPanel } from "@/lib/ai-panel";
+import { getAiPageContext } from "@/lib/ai-page-context";
 import { Icon } from "@/components/ui/Icon";
 import { Spinner } from "@/components/ui/Spinner";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -11,13 +12,13 @@ import { Add01Icon, Cancel01Icon, Clock01Icon, Delete02Icon, SentIcon, SparklesI
 import { AiCards } from "./AiCards";
 import { AiAddonNotice, useAiAccess } from "./AiGate";
 import { AiBuyMore } from "./AiBuyMore";
-import { AI_STARTERS } from "./starters";
+import { AI_STARTERS, actionStartersFor } from "./starters";
 
 interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
-  cards: AiCard[];
+  cards: AiAnyCard[];
   /** An assistant message still being written. */
   pending?: boolean;
   /** What the assistant is doing right now ("Checking outstanding balances…"). */
@@ -31,7 +32,17 @@ const TOOL_LABELS: Record<string, string> = {
   sales_summary: "sales", profit_and_loss: "profit and loss", outstanding_balances: "outstanding balances", overdue_invoices: "overdue invoices",
   top_customers: "top customers", top_selling_items: "top items", stock_levels: "stock levels", low_stock_reorder: "low stock", batch_expiry: "batch expiry",
   gst_payable: "GST", tax_summary: "tax summary", cash_and_bank: "cash and bank", monthly_comparison: "this month and last", sales_trend: "sales trend",
-  expenses_by_category: "expenses", find_invoices: "invoices", get_invoice: "the invoice", find_parties: "parties", recent_transactions: "recent transactions",
+  expenses_by_category: "expenses", find_invoices: "invoices", get_invoice: "the invoice", find_parties: "parties", find_items: "items", recent_transactions: "recent transactions",
+};
+
+/** What the assistant is doing while a propose tool runs: it only prepares, nothing is saved. */
+const PROPOSE_LABELS: Record<string, string> = {
+  propose_create_invoice: "Preparing an invoice for you to review…",
+  propose_create_quotation: "Preparing a quotation for you to review…",
+  propose_record_payment: "Preparing a payment for you to review…",
+  propose_create_party: "Preparing a new party for you to review…",
+  propose_create_item: "Preparing a new item for you to review…",
+  propose_payment_reminder: "Preparing a reminder for you to review…",
 };
 
 let counter = 0;
@@ -134,7 +145,7 @@ export function AiAssistantPanel() {
       const onEvent = (ev: AiStreamEvent) => {
         if (ev.event === "meta") setConversationId(ev.data.conversationId);
         else if (ev.event === "tool") {
-          if (ev.data.status === "start") patch({ activity: `Checking ${TOOL_LABELS[ev.data.name] ?? "your books"}…` });
+          if (ev.data.status === "start") patch({ activity: PROPOSE_LABELS[ev.data.name] ?? `Checking ${TOOL_LABELS[ev.data.name] ?? "your books"}…` });
           else patch({ activity: "Thinking…" });
         } else if (ev.event === "text") setMessages((m) => m.map((x) => (x.id === answerId ? { ...x, content: x.content + ev.data.delta, activity: null } : x)));
         else if (ev.event === "done") {
@@ -151,7 +162,8 @@ export function AiAssistantPanel() {
       };
 
       try {
-        await streamAiAnswer({ message: text, conversationId, signal: controller.signal, onEvent });
+        // The page the person is on (allowlisted shapes only; the server verifies it before using it).
+        await streamAiAnswer({ message: text, conversationId, context: getAiPageContext(), signal: controller.signal, onEvent });
         patch({ pending: false, activity: null });
       } catch (err) {
         if (controller.signal.aborted) {
@@ -181,7 +193,7 @@ export function AiAssistantPanel() {
   const openConversation = async (id: string) => {
     try {
       const conv = await utils.ai.conversation.fetch({ id });
-      setMessages(conv.messages.map((m) => ({ id: m.id, role: m.role, content: m.content, cards: m.cards as AiCard[] })));
+      setMessages(conv.messages.map((m) => ({ id: m.id, role: m.role, content: m.content, cards: m.cards as AiAnyCard[] })));
       setConversationId(conv.id);
       setNotice(null);
       setView("chat");
@@ -192,6 +204,7 @@ export function AiAssistantPanel() {
 
   if (!open) return null;
 
+  const actionStarters = actionStartersFor(chatAllowed ? status.data?.actionKinds : undefined);
   const allowance = status.data?.allowance;
   const remainingLabel = allowance
     ? allowance.exhausted
@@ -284,7 +297,12 @@ export function AiAssistantPanel() {
         <div className="flex-1 overflow-y-auto px-4 py-3" data-testid="ai-messages">
           {messages.length === 0 ? (
             <div>
-              <p className="text-sm text-text-secondary">Ask about your sales, dues, stock, expiring batches, GST or cash. English, Hindi or Hinglish. I only read your books; I never change them.</p>
+              <p className="text-sm text-text-secondary">
+                Ask about your sales, dues, stock, expiring batches, GST or cash. English, Hindi or Hinglish.{" "}
+                {actionStarters.length > 0
+                  ? "I can also prepare invoices, payments and more for you to review: nothing is saved until you tap Confirm."
+                  : "I only read your books; I never change them."}
+              </p>
               <p className="mt-4 text-xs font-medium text-text-tertiary">Try asking</p>
               <ul className="mt-2 flex flex-wrap gap-2" aria-label="Suggested questions">
                 {AI_STARTERS.map((s) => (
@@ -295,6 +313,32 @@ export function AiAssistantPanel() {
                   </li>
                 ))}
               </ul>
+              {actionStarters.length > 0 && (
+                <>
+                  <p className="mt-4 text-xs font-medium text-text-tertiary">Or have me prepare something</p>
+                  <ul className="mt-2 flex flex-wrap gap-2" aria-label="Suggested actions" data-testid="ai-action-starters">
+                    {actionStarters.map((s) => (
+                      <li key={s.text}>
+                        <button
+                          type="button"
+                          lang={s.lang}
+                          onClick={() => {
+                            setInput(s.fill);
+                            setTimeout(() => {
+                              const el = inputRef.current;
+                              el?.focus();
+                              el?.setSelectionRange?.(s.fill.length, s.fill.length);
+                            }, 0);
+                          }}
+                          className="rounded-full border border-dashed border-brand-300 bg-surface-0 px-3 py-1.5 text-left text-xs text-text-primary hover:bg-surface-1"
+                        >
+                          {s.text}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </div>
           ) : (
             <div role="group" aria-label="Conversation" className="space-y-3">

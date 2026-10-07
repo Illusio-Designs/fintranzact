@@ -53,6 +53,25 @@ describe("toAiEvent", () => {
   });
 });
 
+describe("toAiEvent: confirmation cards", () => {
+  const ACTION = "3f0f4d7e-8d7b-4a53-9a10-2f4f8d3c1a11";
+  const card = {
+    type: "confirmation", actionId: ACTION, kind: "create_party", title: "Add customer", status: "pending",
+    fields: [{ label: "Name", value: "Meera Stores" }], totals: [], warnings: [], edits: [], expiresAt: "2026-10-09T06:30:00.000Z",
+  };
+  const done = (cards: unknown[]) => toAiEvent({ event: "done", data: JSON.stringify({ conversationId: "c", messageId: "m", text: "hi", remaining: 3, cards }) }) as Extract<AiStreamEvent, { event: "done" }>;
+
+  it("keeps a valid confirmation card from the server and drops malformed or unknown-kind ones", () => {
+    const ev = done([card, { ...card, kind: "delete_everything" }, { ...card, actionId: "not-a-uuid" }, { ...card, result: { entityType: "reminder", label: "x", externalUrl: "https://evil.example/x" } }]);
+    expect(ev.data.cards).toEqual([expect.objectContaining({ type: "confirmation", actionId: ACTION })]);
+  });
+
+  it("cleans the text of a card (control characters and angle brackets)", () => {
+    const ev = done([{ ...card, title: "<img src=x onerror=alert(1)>Add" }]);
+    expect((ev.data.cards[0] as { title: string }).title).not.toMatch(/[<>]/);
+  });
+});
+
 describe("streamAiAnswer", () => {
   const sse = (events: Array<[string, unknown]>) => events.map(([e, d]) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`).join("");
 
@@ -69,6 +88,19 @@ describe("streamAiAnswer", () => {
     expect(seen!.init).toMatchObject({ method: "POST", credentials: "include" });
     expect(seen!.init.headers).toMatchObject({ "X-Requested-With": "fintranzact", "x-business-id": "biz-1" });
     expect(JSON.parse(String(seen!.init.body))).toEqual({ message: "hi", conversationId: "c0" });
+  });
+
+  it("sends the page context only when there is one", async () => {
+    const bodies: unknown[] = [];
+    const fetchImpl = (async (_u: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)));
+      return new Response(body(sse([["done", { conversationId: "c1", messageId: "m1", text: "ok", cards: [], remaining: 9 }]])), { status: 200 });
+    }) as unknown as typeof fetch;
+    const id = "3f0f4d7e-8d7b-4a53-9a10-2f4f8d3c1a11";
+    await streamAiAnswer({ message: "this invoice", context: { kind: "invoice", id }, onEvent: () => undefined, fetchImpl });
+    await streamAiAnswer({ message: "no page", context: null, onEvent: () => undefined, fetchImpl });
+    await streamAiAnswer({ message: "no page either", onEvent: () => undefined, fetchImpl });
+    expect(bodies).toEqual([{ message: "this invoice", context: { kind: "invoice", id } }, { message: "no page" }, { message: "no page either" }]);
   });
 
   it("raises AiRequestError with the server's message and code for a refusal before the stream", async () => {

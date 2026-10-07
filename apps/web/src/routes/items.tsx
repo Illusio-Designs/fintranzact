@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useAiPageEntity } from "@/lib/ai-page-context";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { usePageSearch } from "@/lib/page-search";
 import { trpc } from "@/lib/trpc";
@@ -154,6 +155,8 @@ function ItemsPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const deleteConfirm = useDeleteConfirmation();
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  // Tell the AI assistant which record is open, so "this customer" means this one (the server verifies it).
+  useAiPageEntity("item", selectedItemId);
   const [labelPanel, setLabelPanel] = useState<{ mode: LabelMode; itemKey?: string } | null>(null);
   const [editItemId, setEditItemId] = useState<string | null>(null);
   const { data: barcodeSetup } = useBarcodeSetup();
