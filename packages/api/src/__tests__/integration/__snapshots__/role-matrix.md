@@ -84,7 +84,9 @@
 | batch.delete | mutation | authorized | delete:Item | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | batch.list | query | authorized | read:Item | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | batch.update | mutation | authorized | update:Item | ✓ | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ |
+| billing.buyAiPack | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | billing.cancelSubscription | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| billing.changeAddon | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | billing.changePlan | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | billing.config | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | billing.demoCheckout | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
@@ -93,6 +95,7 @@
 | billing.subscribeAddon | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | billing.subscribePlan | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | billing.updateBillingDetails | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| billing.verifyAiPackPayment | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | billing.verifyCheckout | mutation | protected | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | business.addMember | mutation | tenant | — (+ requireTenantAdmin) | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | business.auditTrail | query | authorized | read:Report | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -412,14 +415,17 @@
 | period.unlockBooks | mutation | authorized | — (+ only the owner unlocks a period) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | period.unlockGstMonth | mutation | authorized | — (+ only the owner unlocks a period) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | plan.list | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| platform.addonPrices | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.aiCredits | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.aiPrices | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.aiPurchases | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.aiUsage | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.billingSummary | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.closeGovUsageMonth | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.deletePayout | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.endTrial | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.extendTrial | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.grantAddon | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.grantAiCredits | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.grantTrial | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.me | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -430,12 +436,14 @@
 | platform.recordPayout | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.resetPlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.resetTwoFactor | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.revokeAddon | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.roadmapCreate | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.roadmapDelete | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.roadmapList | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.roadmapReorder | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.roadmapUpdate | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.sandboxQuota | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.saveAddonPrices | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.saveAiPrices | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.savePlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.saveTrialSettings | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |

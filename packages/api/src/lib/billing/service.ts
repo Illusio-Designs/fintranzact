@@ -31,6 +31,7 @@ import {
   type SubscriptionStatus,
 } from "@fintranzact/shared";
 import { getPlanCatalog } from "../plan-catalog.js";
+import { getAddonPrices } from "./addon-prices.js";
 import { getGateway, type BillingProvider } from "./gateway.js";
 import { logger } from "../logger.js";
 import { invalidateEntitlements } from "../entitlements-cache.js";
@@ -241,11 +242,19 @@ export async function startCheckout(opts: {
   plan?: string;
   addon?: AddonId;
   cycle: BillingCycle;
+  /**
+   * An add-on switch (AI Assistant to AI Plus): the live subscription this one replaces. It is
+   * retired, with a credit note for its unused time, when the new one activates, so the
+   * organisation is never billed for both. Without it a live tier of the same group blocks the purchase.
+   */
+  replacesSubscriptionId?: string;
 }): Promise<StartCheckoutResult> {
   let itemKey: string;
   let itemName: string;
   let monthlyPriceInr: number;
   let yearlyPriceInr: number | null = null;
+  /** Halted add-on subscriptions of the same group (unpaid after grace) that this purchase retires. */
+  let haltedAddonSubs: Array<{ id: string; providerSubscriptionId: string | null; addon: string | null }> = [];
 
   if (opts.kind === "plan") {
     const plan = (await getPlanCatalog()).find((p) => p.id === opts.plan);
@@ -261,16 +270,18 @@ export async function startCheckout(opts: {
     if (!addon) throw new TRPCError({ code: "BAD_REQUEST", message: "Unknown add-on." });
     // AI Assistant and AI Plus are tiers of one add-on.
     const clash = ADDONS.filter((a) => a.group === addon.group).map((a) => a.id);
-    const [existing] = await controlDb
-      .select({ id: billingSubscriptions.id, addon: billingSubscriptions.addon, status: billingSubscriptions.status })
+    const sameGroup = await controlDb
+      .select({ id: billingSubscriptions.id, addon: billingSubscriptions.addon, status: billingSubscriptions.status, providerSubscriptionId: billingSubscriptions.providerSubscriptionId })
       .from(billingSubscriptions)
       .where(and(
         eq(billingSubscriptions.tenantId, opts.tenantId),
         eq(billingSubscriptions.kind, "addon"),
         inArray(billingSubscriptions.addon, clash),
         inArray(billingSubscriptions.status, ["active", "past_due", "halted"]),
-      ))
-      .limit(1);
+      ));
+    // A halted one (unpaid after the grace period) is dead: buying again retires it, like a halted plan.
+    haltedAddonSubs = sameGroup.filter((r) => r.status === "halted");
+    const existing = sameGroup.find((r) => r.status !== "halted" && r.id !== opts.replacesSubscriptionId);
     if (existing) {
       throw new TRPCError({
         code: "CONFLICT",
@@ -291,7 +302,10 @@ export async function startCheckout(opts: {
       ));
     itemKey = `addon:${addon.id}`;
     itemName = addon.name;
-    monthlyPriceInr = addon.monthlyPriceInr;
+    // The price in force: the admin's override, else the built-in one (billing/addon-prices.ts).
+    const price = (await getAddonPrices()).addons[addon.id];
+    monthlyPriceInr = price?.monthlyPriceInr ?? addon.monthlyPriceInr;
+    yearlyPriceInr = price?.yearlyPriceInr ?? null;
   }
 
   // A live plan subscription blocks a second one: plan changes go through
@@ -333,6 +347,23 @@ export async function startCheckout(opts: {
   // and insert the new row in one transaction: the unique live-plan index
   // would otherwise reject the insert while the old row is still not cancelled.
   const sub = await controlDb.transaction(async (tx) => {
+    if (opts.kind === "addon") {
+      const retiredAt = new Date();
+      for (const halted of haltedAddonSubs) {
+        await tx
+          .update(billingSubscriptions)
+          .set({ status: "cancelled", endedAt: retiredAt, updatedAt: retiredAt })
+          .where(eq(billingSubscriptions.id, halted.id));
+        await recordBillingEvent({
+          provider: "local",
+          type: "subscription.retired",
+          tenantId: opts.tenantId,
+          subscriptionId: halted.id,
+          payload: { reason: "halted add-on replaced by a new purchase", oldAddon: halted.addon, newAddon: opts.addon },
+          executor: tx,
+        });
+      }
+    }
     if (opts.kind === "plan") {
       const now = new Date();
       await tx
@@ -366,6 +397,7 @@ export async function startCheckout(opts: {
         provider: gateway.name,
         providerSubscriptionId: created.id,
         basePaise: amount.basePaise,
+        replacesSubscriptionId: opts.replacesSubscriptionId ?? null,
       })
       .returning();
     await recordBillingEvent({
@@ -381,7 +413,7 @@ export async function startCheckout(opts: {
 
   // The halted subscription is already dead at the gateway; ask it to release
   // the mandate anyway, but never let that failure block the purchase.
-  for (const halted of haltedPlanSubs) {
+  for (const halted of [...haltedPlanSubs, ...haltedAddonSubs]) {
     if (!halted.providerSubscriptionId) continue;
     try {
       await gateway.cancelSubscription(halted.providerSubscriptionId, false);
@@ -432,6 +464,9 @@ export async function activateSubscription(opts: {
       .where(eq(tenants.id, sub.tenantId));
   }
 
+  // An add-on switch (AI Assistant to AI Plus): retire the old tier now, with a credit note for its unused time.
+  if (sub.kind === "addon" && sub.replacesSubscriptionId) await retireReplacedAddon(sub, now);
+
   const itemName = await itemNameFor(sub);
   const credit = Math.min(opts.creditPaise ?? 0, sub.basePaise);
   await recordPayment({
@@ -455,6 +490,60 @@ export async function activateSubscription(opts: {
     payload: { providerPaymentId: opts.providerPaymentId ?? null, creditPaise: credit },
   });
   invalidateEntitlements(sub.tenantId);
+}
+
+/**
+ * The old tier of an add-on switch ends when the new one is paid: the gateway subscription is
+ * cancelled at once (never both billed), the row is cancelled, and the unused time becomes a
+ * credit note (with Razorpay it stands for a manual refund, like a plan upgrade: the new
+ * subscription's first charge is the full price). A gateway failure is recorded, never thrown:
+ * the money for the new tier is already taken.
+ */
+async function retireReplacedAddon(sub: SubscriptionRow, now: Date): Promise<void> {
+  const [old] = await controlDb.select().from(billingSubscriptions).where(eq(billingSubscriptions.id, sub.replacesSubscriptionId!)).limit(1);
+  if (!old || old.tenantId !== sub.tenantId || old.status === "cancelled") return;
+
+  if (old.providerSubscriptionId) {
+    try {
+      await getGateway().cancelSubscription(old.providerSubscriptionId, false);
+    } catch (err) {
+      logger.error({ err, subscriptionId: old.id }, "[billing] could not cancel the replaced add-on at the gateway");
+      await recordBillingEvent({
+        provider: "local",
+        type: "subscription.replace_cancel_failed",
+        tenantId: sub.tenantId,
+        subscriptionId: old.id,
+        payload: { replacedBy: sub.id },
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  await controlDb
+    .update(billingSubscriptions)
+    .set({ status: "cancelled", endedAt: now, updatedAt: now })
+    .where(eq(billingSubscriptions.id, old.id));
+
+  const credit =
+    old.status === "active" && old.basePaise > 0 && old.currentPeriodStart && old.currentPeriodEnd
+      ? prorationCreditPaise({ basePaise: old.basePaise, periodStart: old.currentPeriodStart, periodEnd: old.currentPeriodEnd, at: now })
+      : 0;
+  if (credit > 0) {
+    await recordPayment({
+      tenantId: sub.tenantId,
+      subscriptionId: old.id,
+      status: "credit",
+      description: `Credit note: unused ${await itemNameFor(old)} add-on time`,
+      basePaise: -credit,
+      provider: old.provider as BillingProvider,
+    });
+  }
+  await recordBillingEvent({
+    provider: "local",
+    type: "subscription.addon_switched",
+    tenantId: sub.tenantId,
+    subscriptionId: sub.id,
+    payload: { from: old.addon, to: sub.addon, replacedSubscriptionId: old.id, creditPaise: credit },
+  });
 }
 
 /** A renewal charge succeeded: extend the period and issue the next invoice. */
@@ -553,13 +642,16 @@ export async function cancelAtPeriodEnd(opts: { tenantId: string; subscriptionId
     throw new TRPCError({ code: "NOT_FOUND", message: "No active subscription to cancel." });
   }
   if (sub.cancelAtPeriodEnd) return;
+  if (sub.provider === "admin") {
+    throw new TRPCError({ code: "CONFLICT", message: "This add-on was granted by Fintranzact. Ask us to remove it." });
+  }
 
   if (sub.providerSubscriptionId) {
     await getGateway().cancelSubscription(sub.providerSubscriptionId, true);
   }
   await controlDb
     .update(billingSubscriptions)
-    .set({ cancelAtPeriodEnd: true, scheduledPlan: null, scheduledCycle: null, updatedAt: new Date() })
+    .set({ cancelAtPeriodEnd: true, scheduledPlan: null, scheduledAddon: null, scheduledCycle: null, updatedAt: new Date() })
     .where(eq(billingSubscriptions.id, sub.id));
 
   await recordBillingEvent({
@@ -771,6 +863,20 @@ export async function applyLazyTransitions(tenantId: string): Promise<void> {
       if (sub.cancelAtPeriodEnd) {
         await endSubscription(sub.id);
         await recordBillingEvent({ provider: "local", type: "subscription.ended", tenantId, subscriptionId: sub.id, payload: { reason: "cancelled at period end" } });
+      } else if (sub.kind === "addon" && sub.scheduledAddon && sub.scheduledCycle) {
+        // …and an add-on tier change (AI Plus down to AI Assistant) was waiting for it.
+        await endSubscription(sub.id);
+        const checkout = await startCheckout({ tenantId, kind: "addon", addon: sub.scheduledAddon as AddonId, cycle: sub.scheduledCycle });
+        if (checkout.provider === "demo") {
+          await activateSubscription({ subscriptionId: checkout.subscription.id, method: "downgrade" });
+        }
+        await recordBillingEvent({
+          provider: "local",
+          type: "subscription.addon_downgraded",
+          tenantId,
+          subscriptionId: checkout.subscription.id,
+          payload: { from: sub.addon, to: sub.scheduledAddon },
+        });
       } else if (sub.scheduledPlan && sub.scheduledCycle) {
         // …and a downgrade was waiting for it.
         await endSubscription(sub.id);

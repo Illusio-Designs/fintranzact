@@ -31,6 +31,12 @@ exceptions:
       - platform.aiPrices
       - platform.aiUsage
       - platform.grantAiCredits
+      # Platform console: add-on prices, free add-on grants, per-organisation AI purchases (web admin console only).
+      - platform.addonPrices
+      - platform.saveAddonPrices
+      - platform.grantAddon
+      - platform.revokeAddon
+      - platform.aiPurchases
       - platform.saveAiPrices
       # --- Payroll (add-on, Phase 1) ---
       # Payroll is the paid Payroll add-on. Employees, salary structures, attendance grids, leave, payroll runs,
@@ -386,6 +392,10 @@ exceptions:
       - billing.overview
       - billing.updateBillingDetails
       - billing.changePlan
+      # AI add-on billing: tier change, extra question packs (a one-time Razorpay Order, owner only). A web Settings -> Billing job like the rest of billing.
+      - billing.changeAddon
+      - billing.buyAiPack
+      - billing.verifyAiPackPayment
       - billing.cancelSubscription
       # Public contact/partner forms and the emailed email-change confirmation
       # link are pages of the public website (/contact, /partners,
@@ -597,6 +607,12 @@ exceptions:
       - platform.aiPrices
       - platform.aiUsage
       - platform.grantAiCredits
+      # Platform console: add-on prices, free add-on grants, per-organisation AI purchases (web admin console only).
+      - platform.addonPrices
+      - platform.saveAddonPrices
+      - platform.grantAddon
+      - platform.revokeAddon
+      - platform.aiPurchases
       - platform.saveAiPrices
       # --- Payroll (add-on, Phase 1) ---
       # Payroll is the paid Payroll add-on and is not on sale yet. Its screens are web-only for now; the CLI has no
@@ -912,6 +928,10 @@ exceptions:
       - billing.overview
       - billing.updateBillingDetails
       - billing.changePlan
+      # AI add-on billing: tier change, extra question packs (a one-time Razorpay Order, owner only). A web Settings -> Billing job like the rest of billing.
+      - billing.changeAddon
+      - billing.buyAiPack
+      - billing.verifyAiPackPayment
       - billing.cancelSubscription
       # Public contact/partner forms and the emailed email-change confirmation
       # link are pages of the public website (/contact, /partners,
@@ -1034,6 +1054,12 @@ exceptions:
       - platform.aiPrices
       - platform.aiUsage
       - platform.grantAiCredits
+      # Platform console: add-on prices, free add-on grants, per-organisation AI purchases (web admin console only).
+      - platform.addonPrices
+      - platform.saveAddonPrices
+      - platform.grantAddon
+      - platform.revokeAddon
+      - platform.aiPurchases
       - platform.saveAiPrices
       # --- Payroll (add-on, Phase 1) ---
       # Payroll is the paid Payroll add-on and is not on sale yet. Salary, identity and bank data is deliberately
@@ -1356,6 +1382,10 @@ exceptions:
       - billing.overview
       - billing.updateBillingDetails
       - billing.changePlan
+      # AI add-on billing: tier change, extra question packs (a one-time Razorpay Order, owner only). A web Settings -> Billing job like the rest of billing.
+      - billing.changeAddon
+      - billing.buyAiPack
+      - billing.verifyAiPackPayment
       - billing.cancelSubscription
       # Public contact/partner forms and the emailed email-change confirmation
       # link are pages of the public website (/contact, /partners,

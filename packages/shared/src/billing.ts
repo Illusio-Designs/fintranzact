@@ -71,6 +71,66 @@ export function addonById(id: string): AddonInfo | undefined {
   return ADDONS.find((a) => a.id === id);
 }
 
+// ── Admin price overrides ──────────────────────────────────────────────────
+
+/**
+ * Add-on prices an admin edited (system_config `billing.addon_prices`), like plan
+ * prices: a monthly price in rupees ex-GST and an optional explicit yearly price
+ * (empty = ten months, "2 months free"). `ai_pack` is the one-time price of an
+ * extra question pack. Anything missing falls back to the built-in price.
+ */
+export const ADDON_PRICE_KEYS = [...ADDON_IDS, "ai_pack"] as const;
+export type AddonPriceKey = (typeof ADDON_PRICE_KEYS)[number];
+
+export interface AddonPriceOverride {
+  monthlyPriceInr: number;
+  /** Null = ten times the monthly price. */
+  yearlyPriceInr: number | null;
+}
+export interface AddonPriceOverrides {
+  addons: Partial<Record<AddonId, AddonPriceOverride>>;
+  /** Price of one extra AI pack in rupees, ex-GST. */
+  aiPackPriceInr: number | null;
+}
+
+export const NO_ADDON_PRICE_OVERRIDES: AddonPriceOverrides = { addons: {}, aiPackPriceInr: null };
+
+const MAX_PRICE_INR = 1_000_000;
+const validRupees = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= MAX_PRICE_INR;
+
+/** Parse the stored value: invalid entries are ignored one by one, so a bad edit never breaks checkout. */
+export function normaliseAddonPrices(raw: unknown): AddonPriceOverrides {
+  const out: AddonPriceOverrides = { addons: {}, aiPackPriceInr: null };
+  if (!raw || typeof raw !== "object") return out;
+  const obj = raw as Record<string, unknown>;
+  for (const id of ADDON_IDS) {
+    const e = obj[id];
+    if (!e || typeof e !== "object") continue;
+    const m = (e as Record<string, unknown>).monthlyPriceInr;
+    const y = (e as Record<string, unknown>).yearlyPriceInr;
+    if (!validRupees(m)) continue;
+    out.addons[id] = { monthlyPriceInr: m, yearlyPriceInr: validRupees(y) ? y : null };
+  }
+  const pack = obj.ai_pack;
+  if (pack && typeof pack === "object" && validRupees((pack as Record<string, unknown>).priceInr)) {
+    out.aiPackPriceInr = (pack as { priceInr: number }).priceInr;
+  }
+  return out;
+}
+
+/** The price in force for an add-on: the admin's override, else the built-in one. */
+export function effectiveAddonPrice(id: AddonId, overrides: AddonPriceOverrides = NO_ADDON_PRICE_OVERRIDES): AddonPriceOverride {
+  const o = overrides.addons[id];
+  if (o) return o;
+  return { monthlyPriceInr: addonById(id)?.monthlyPriceInr ?? 0, yearlyPriceInr: null };
+}
+
+/** One billing cycle of an add-on at the price in force: base, GST and total in paise. */
+export function addonCycleAmount(id: AddonId, cycle: BillingCycle, overrides: AddonPriceOverrides = NO_ADDON_PRICE_OVERRIDES): CycleAmount {
+  const p = effectiveAddonPrice(id, overrides);
+  return cycleAmount(p.monthlyPriceInr, cycle, p.yearlyPriceInr);
+}
+
 // ── Cycle amounts ──────────────────────────────────────────────────────────
 
 export type CycleAmount = PlanCheckoutAmount;

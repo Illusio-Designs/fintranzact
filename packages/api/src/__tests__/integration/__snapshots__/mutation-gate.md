@@ -5,7 +5,7 @@ ungated-exempt = public/protected base AND allowlisted (auth, billing, platform 
 inline-guarded = public/protected base, but the router calls assertWritable itself (INLINE_WRITE_GUARDED);
 ungated = public/protected base with no check at all: must be empty of business-data writes.
 
-mutations: 340 (gated 274, exempt 9, ungated-exempt 54, inline-guarded 3, ungated 0)
+mutations: 346 (gated 274, exempt 9, ungated-exempt 60, inline-guarded 3, ungated 0)
 
 | procedure | base | status |
 |---|---|---|
@@ -63,12 +63,15 @@ mutations: 340 (gated 274, exempt 9, ungated-exempt 54, inline-guarded 3, ungate
 | batch.create | authorized | gated |
 | batch.delete | authorized | gated |
 | batch.update | authorized | gated |
+| billing.buyAiPack | protected | ungated-exempt |
 | billing.cancelSubscription | protected | ungated-exempt |
+| billing.changeAddon | protected | ungated-exempt |
 | billing.changePlan | protected | ungated-exempt |
 | billing.demoCheckout | protected | ungated-exempt |
 | billing.subscribeAddon | protected | ungated-exempt |
 | billing.subscribePlan | protected | ungated-exempt |
 | billing.updateBillingDetails | protected | ungated-exempt |
+| billing.verifyAiPackPayment | protected | ungated-exempt |
 | billing.verifyCheckout | protected | ungated-exempt |
 | business.addMember | tenant | gated |
 | business.create | tenant | gated |
@@ -239,15 +242,18 @@ mutations: 340 (gated 274, exempt 9, ungated-exempt 54, inline-guarded 3, ungate
 | platform.deletePayout | protected | ungated-exempt |
 | platform.endTrial | protected | ungated-exempt |
 | platform.extendTrial | protected | ungated-exempt |
+| platform.grantAddon | protected | ungated-exempt |
 | platform.grantAiCredits | protected | ungated-exempt |
 | platform.grantTrial | protected | ungated-exempt |
 | platform.recordPayout | protected | ungated-exempt |
 | platform.resetPlan | protected | ungated-exempt |
 | platform.resetTwoFactor | protected | ungated-exempt |
+| platform.revokeAddon | protected | ungated-exempt |
 | platform.roadmapCreate | protected | ungated-exempt |
 | platform.roadmapDelete | protected | ungated-exempt |
 | platform.roadmapReorder | protected | ungated-exempt |
 | platform.roadmapUpdate | protected | ungated-exempt |
+| platform.saveAddonPrices | protected | ungated-exempt |
 | platform.saveAiPrices | protected | ungated-exempt |
 | platform.savePlan | protected | ungated-exempt |
 | platform.saveTrialSettings | protected | ungated-exempt |

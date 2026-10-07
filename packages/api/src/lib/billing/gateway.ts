@@ -31,8 +31,19 @@ export interface CreateSubscriptionOpts {
   notes: Record<string, string>;
 }
 
+export interface CreateOrderOpts {
+  /** Amount to collect including GST, in paise. */
+  amountPaise: number;
+  /** Our reference (at most 40 characters for Razorpay). */
+  receipt: string;
+  /** Attached to the Razorpay order and its payments for webhook routing. */
+  notes: Record<string, string>;
+}
+
 export interface BillingGateway {
   readonly name: BillingProvider;
+  /** A one-time charge (extra AI question packs): a Razorpay Order, or a demo order id. */
+  createOrder(opts: CreateOrderOpts): Promise<{ id: string }>;
   createSubscription(opts: CreateSubscriptionOpts): Promise<{ id: string }>;
   /** Stop charging: at the period end (owner cancel) or immediately (plan change). */
   cancelSubscription(id: string, atCycleEnd: boolean): Promise<void>;
@@ -44,6 +55,9 @@ const demoGateway: BillingGateway = {
   name: "demo",
   async createSubscription() {
     return { id: "sub_demo_" + nanoid(14) };
+  },
+  async createOrder() {
+    return { id: "order_demo_" + nanoid(14) };
   },
   async cancelSubscription() {},
 };
@@ -120,6 +134,15 @@ async function ensureRazorpayPlan(opts: CreateSubscriptionOpts): Promise<string>
 
 const razorpayGateway: BillingGateway = {
   name: "razorpay",
+  async createOrder(opts) {
+    const order = await razorpayCall<{ id: string }>("POST", "/orders", {
+      amount: opts.amountPaise,
+      currency: "INR",
+      receipt: opts.receipt.slice(0, 40),
+      notes: opts.notes,
+    });
+    return { id: order.id };
+  },
   async createSubscription(opts) {
     const planId = await ensureRazorpayPlan(opts);
     const sub = await razorpayCall<{ id: string }>("POST", "/subscriptions", {
@@ -160,6 +183,20 @@ export function verifyRazorpayCheckoutSignature(opts: {
   const secret = razorpayKeySecret();
   if (!secret) return false;
   const expected = createHmac("sha256", secret).update(`${opts.paymentId}|${opts.subscriptionId}`).digest("hex");
+  const a = Buffer.from(expected, "utf8");
+  const b = Buffer.from(opts.signature, "utf8");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/**
+ * Verify Razorpay's checkout callback for an ORDER: the signature is HMAC-SHA256 of
+ * "<order_id>|<payment_id>" with the key secret (the subscription callback above signs the
+ * ids the other way round).
+ */
+export function verifyRazorpayOrderSignature(opts: { orderId: string; paymentId: string; signature: string }): boolean {
+  const secret = razorpayKeySecret();
+  if (!secret) return false;
+  const expected = createHmac("sha256", secret).update(`${opts.orderId}|${opts.paymentId}`).digest("hex");
   const a = Buffer.from(expected, "utf8");
   const b = Buffer.from(opts.signature, "utf8");
   return a.length === b.length && timingSafeEqual(a, b);
