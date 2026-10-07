@@ -70,6 +70,7 @@ import { manufacturingRouter } from "./routers/manufacturing.js";
 import { priceLevelRouter } from "./routers/priceLevel.js";
 import { pricingRouter } from "./routers/pricing.js";
 import { contactRouter } from "./routers/contact.js";
+import { aiRouter } from "./routers/ai.js";
 
 export const appRouter = router({
   auth: authRouter,
@@ -126,6 +127,7 @@ export const appRouter = router({
   stock: stockRouter,
   batch: batchRouter,
   inventoryReports: inventoryReportsRouter,
+  ai: aiRouter,
   stockGroup: stockGroupRouter,
   manufacturing: manufacturingRouter,
   priceLevel: priceLevelRouter,

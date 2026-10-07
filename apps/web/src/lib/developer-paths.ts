@@ -70,6 +70,8 @@ export const DEVELOPER_GROUP_SLUGS = [
   "period",
   // Payroll (add-on)
   "payroll",
+  // AI assistant (add-on)
+  "ai-assistant",
   // Analytics
   "dashboard",
   "reports",

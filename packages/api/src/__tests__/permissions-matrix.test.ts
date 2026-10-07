@@ -18,6 +18,7 @@ const RESOURCES: Exclude<Resource, "all">[] = [
   "Account", "ITC", "Tds", "PeriodLock",
   "BankReconciliation", "EInvoice", "EWayBill",
   "Payroll",
+  "Ai",
 ];
 
 type Grants = Partial<Record<Exclude<Resource, "all">, string>>;
@@ -51,6 +52,8 @@ const EXPECTED: Record<string, Grants> = {
     Store: "cru",
     SalesTarget: ALL,
     RecurringInvoice: "crud",
+    // AI assistant (add-on): ask and keep own history; the tools use each role's own permissions.
+    Ai: "cr",
   },
   seller: {
     Invoice: "cru",
@@ -62,6 +65,7 @@ const EXPECTED: Record<string, Grants> = {
     SalesTarget: "r",
     RecurringInvoice: "r",
     Report: "r",
+    Ai: "cr",
   },
   accountant: {
     Payment: "cru",
@@ -85,6 +89,7 @@ const EXPECTED: Record<string, Grants> = {
     RecurringInvoice: "r",
     // Payroll (add-on): prepares payroll, never approves it or sees unmasked identity numbers (manage).
     Payroll: "cru",
+    Ai: "cr",
   },
   // Read-only accountant: reads, never writes.
   auditor: READ_ONLY_GRANTS(),

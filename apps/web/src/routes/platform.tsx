@@ -55,6 +55,7 @@ import { MemberRow } from "@/components/platform/MemberRow";
 import { SecurityActivitySection } from "@/components/platform/SecurityActivitySection";
 import { TrialSection, trialListLabel } from "@/components/platform/TrialSection";
 import { TrialSettingsCard } from "@/components/platform/TrialSettingsCard";
+import { AiAdminSection, AiCreditsSection } from "@/components/platform/AiAdminSection";
 
 type View = "overview" | "organisations" | "plans" | "subscriptions" | "partners" | "roadmap";
 const VIEWS: View[] = ["overview", "organisations", "plans", "subscriptions", "partners", "roadmap"];
@@ -380,6 +381,8 @@ function OrganisationsView({ onOpen }: { onOpen: (id: string) => void }) {
       </div>
 
       <TrialSettingsCard />
+
+      <AiAdminSection />
 
       <section className="overflow-hidden rounded-2xl border border-border-light bg-surface-0">
         <div className="flex flex-wrap items-center gap-3 border-b border-border-light px-4 py-3">
@@ -1381,6 +1384,8 @@ function OrganisationPanel({ id, onClose }: { id: string | null; onClose: () => 
           </section>
 
           <TrialSection detail={detail} />
+
+          <AiCreditsSection tenantId={detail.id} />
 
           <section className="space-y-2">
             <h3 className="text-xs font-bold uppercase tracking-wide text-text-tertiary">Members · {detail.members.length}</h3>

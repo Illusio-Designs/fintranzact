@@ -27,6 +27,11 @@ const checks: EnvCheck[] = [
     hint: "Sandbox.co.in API key — enables e-invoice, e-way bill, GSTIN lookup and TDS/TCS filing (also set SANDBOX_API_SECRET)",
   },
   {
+    key: "ANTHROPIC_API_KEY",
+    required: false,
+    hint: "Anthropic API key (console.anthropic.com) for the AI business assistant add-on. Without it the assistant says it is not configured. Optional AI_MODEL_FAST / AI_MODEL_STRONG pick the models. Never put it in code or logs",
+  },
+  {
     key: "SANDBOX_MONTHLY_QUOTA",
     required: false,
     hint: "Sandbox.co.in plan quota (successful calls per month). Raises an alert at 80% and 100% of this number; unset disables the alerts",

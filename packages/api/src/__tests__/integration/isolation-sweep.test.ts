@@ -224,6 +224,8 @@ const PROCS = listProcedures()
   .sort((a, b) => (a.type === b.type ? 0 : a.type === "query" ? -1 : 1));
 
 beforeAll(async () => {
+  // A configured (fake) provider key lets ai.begin reach its own conversation checks; no provider is ever called.
+  process.env.ANTHROPIC_API_KEY = "sk-ant-sweep-not-real";
   world = await buildSweepWorld();
   await seedBusiness(world.a1);
   await seedBusiness(world.a2);
@@ -231,6 +233,7 @@ beforeAll(async () => {
 }, 180_000);
 
 afterAll(async () => {
+  delete process.env.ANTHROPIC_API_KEY;
   await truncateAllTables();
   await closeTestDb();
 });

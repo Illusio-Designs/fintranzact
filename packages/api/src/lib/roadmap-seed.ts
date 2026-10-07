@@ -2677,6 +2677,47 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-09-ai-phase-1",
+    updates: [
+      {
+        // Built and tested (shared unit tests, API unit and integration tests against Postgres with a
+        // scripted fake provider, web component tests). The real Anthropic API was never called and no
+        // browser was run when this was written. Gated by the AI add-on (ADDON_FEATURES.ai_assistant and
+        // ai_plus `implemented` stay false). Notes on specific lines: "Expose existing MCP tools as
+        // tool-use" is a curated read-only allowlist of 19 tools that call the existing tRPC procedures
+        // (the same capabilities the MCP server exposes) through a server-side caller built from the
+        // user's own context; the MCP package's own tool definitions are not reused. "English / Hindi /
+        // Hinglish questions": the prompt, the model router and the starter questions handle all three;
+        // the language of the live model's replies is not verified. "Question quotas ...": included
+        // 150 / 500 per IST month, the trial cap of 50, atomic consume and refund, and the extra-pack
+        // credit ledger with an admin grant are built; the purchase of the packs is the separate "AI
+        // add-on billing" work. "Privacy policy: data not used for training": the page text is added;
+        // the owner still has to confirm the provider's data-use terms and the wording
+        // (docs/PENDING-OWNER-TASKS.md, section 15). No mobile, CLI or MCP screens (parity exceptions).
+        title: "AI business assistant — Phase 1: ask questions about your business",
+        status: "in_progress",
+        done: [
+          "Chat panel: right panel on desktop, full screen on phones",
+          "Entry points on dashboard and header",
+          "Anthropic API client with key from server settings (not in code)",
+          "Expose existing MCP tools as tool-use",
+          "Model routing: cheaper model for simple, stronger for multi-step",
+          "Enforce the signed-in user's permissions and business scope",
+          "English / Hindi / Hinglish questions",
+          "Answer cards: tables, mini charts, links",
+          "Streaming answers",
+          "Suggested questions",
+          "Conversation history per user",
+          "Audit log entries “via AI assistant”",
+          "Owner switch per organisation and per role",
+          "Question quotas: AI Assistant 150, AI Plus 500, ₹199 packs of 100, trial 50",
+          "Admin: usage and cost per organisation",
+          "Privacy policy: data not used for training",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

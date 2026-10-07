@@ -71,6 +71,17 @@ function PrivacyPage() {
         the payment information it handles.
       </p>
 
+      <h2>AI assistant</h2>
+      <p>
+        If your organisation uses the optional AI assistant add-on, the question
+        you type and the business information needed to answer it (such as the
+        figures and names an answer is based on) are sent to our AI provider to
+        produce the answer. We limit what is sent to what is needed to answer,
+        and we do not use your data to train AI models. The assistant reads
+        your data with your own permissions, and the questions asked and the
+        lookups made are recorded in your activity log.
+      </p>
+
       <h2>Data retention and export</h2>
       <p>
         We keep your data for as long as your account is active. You can

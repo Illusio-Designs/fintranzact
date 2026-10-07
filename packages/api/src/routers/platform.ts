@@ -1,11 +1,11 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, asc, count, desc, eq, gte, ilike, inArray, max, or, sql } from "drizzle-orm";
-import { controlDb, getTenantDb, securityEvents, tenants, tenantMembers, users, businesses, planSettings, partners, partnerPayouts, roadmapItems, billingSubscriptions, billingPayments } from "@fintranzact/db";
+import { controlDb, getTenantDb, securityEvents, tenants, tenantMembers, users, businesses, planSettings, partners, partnerPayouts, roadmapItems, billingSubscriptions, billingPayments, aiUsage, aiCreditGrants } from "@fintranzact/db";
 import { ensureReferralCode, getPartnerStats, payingTenantIds } from "../lib/partner-program.js";
 import { emailService } from "../lib/email.js";
 import { logger } from "../lib/logger.js";
-import { RESET_VERIFICATION_METHODS, SECURITY_EVENT_TYPES, PLAN_DEFAULTS, planIdSchema, planSettingsWarnings, effectiveYearlyPriceInr, SUBSCRIPTION_STATUSES, YEARLY_CYCLE_MONTHS, limitsToStored, partnerStatuses, planSettingsSchema, partnerTypes, partnerPayoutStatuses, payoutPeriodSchema, trialSettingsSchema, trialDaysLeftAt, TRIAL_ADMIN_MAX_DAYS } from "@fintranzact/shared";
+import { aiPriceTableSchema, aiQuotaPeriod, RESET_VERIFICATION_METHODS, SECURITY_EVENT_TYPES, PLAN_DEFAULTS, planIdSchema, planSettingsWarnings, effectiveYearlyPriceInr, SUBSCRIPTION_STATUSES, YEARLY_CYCLE_MONTHS, limitsToStored, partnerStatuses, planSettingsSchema, partnerTypes, partnerPayoutStatuses, payoutPeriodSchema, trialSettingsSchema, trialDaysLeftAt, TRIAL_ADMIN_MAX_DAYS } from "@fintranzact/shared";
 import {
   roadmapStatuses,
   roadmapListSchema,
@@ -31,6 +31,9 @@ import { closeGovUsagePeriod } from "../lib/billing/service.js";
 import { invalidateEntitlements } from "../lib/entitlements-cache.js";
 import { endTrialNow, extendTrial, grantCustomTrial, setTrial } from "../lib/trial.js";
 import { getTrialSettings, saveTrialSettings } from "../lib/trial-settings.js";
+import { getAiPrices, saveAiPrices } from "../lib/ai/settings.js";
+import { grantCredits } from "../lib/ai/quota.js";
+import { resolveAiModels } from "../lib/ai/model-router.js";
 import { recordBillingEvent } from "../lib/billing/service.js";
 import { getEntitlements } from "../lib/entitlements.js";
 import { resetTwoFactorByAdmin } from "../lib/two-factor-reset.js";
@@ -311,6 +314,91 @@ export const platformRouter = router({
     });
     return input;
   }),
+
+  // ── AI assistant: usage, cost and extra packs ──────────────────────────────
+
+  /**
+   * AI questions, tokens and the estimated cost per organisation for one IST
+   * month (default: this month), highest cost first. A question given back to
+   * the customer (provider failure) is counted separately and its tokens still
+   * count towards cost, because the provider charged for them.
+   */
+  aiUsage: platformAdminProcedure
+    .input(z.object({ period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use YYYY-MM").optional() }).optional())
+    .query(async ({ input }) => {
+      const period = input?.period ?? aiQuotaPeriod(new Date());
+      const [rows, periods] = await Promise.all([
+        controlDb
+          .select({
+            tenantId: aiUsage.tenantId,
+            name: tenants.name,
+            plan: tenants.plan,
+            questions: sql<number>`count(*) filter (where ${aiUsage.status} in ('ok', 'aborted'))::int`,
+            refunded: sql<number>`count(*) filter (where ${aiUsage.status} = 'refunded')::int`,
+            inputTokens: sql<number>`coalesce(sum(${aiUsage.inputTokens} + ${aiUsage.cacheReadTokens} + ${aiUsage.cacheWriteTokens}), 0)::bigint`,
+            outputTokens: sql<number>`coalesce(sum(${aiUsage.outputTokens}), 0)::bigint`,
+            costPaise: sql<number>`coalesce(sum(${aiUsage.costPaise}), 0)::bigint`,
+            lastAt: sql<Date | null>`max(${aiUsage.createdAt})`,
+          })
+          .from(aiUsage)
+          .innerJoin(tenants, eq(tenants.id, aiUsage.tenantId))
+          .where(eq(aiUsage.period, period))
+          .groupBy(aiUsage.tenantId, tenants.name, tenants.plan)
+          .orderBy(desc(sql`coalesce(sum(${aiUsage.costPaise}), 0)`)),
+        controlDb.selectDistinct({ period: aiUsage.period }).from(aiUsage).orderBy(desc(aiUsage.period)).limit(24),
+      ]);
+      const organisations = rows.map((r) => ({
+        tenantId: r.tenantId,
+        name: r.name,
+        plan: r.plan,
+        questions: Number(r.questions),
+        refunded: Number(r.refunded),
+        inputTokens: Number(r.inputTokens),
+        outputTokens: Number(r.outputTokens),
+        costPaise: Number(r.costPaise),
+        lastAt: r.lastAt ? new Date(r.lastAt).toISOString() : null,
+      }));
+      return {
+        period,
+        periods: periods.map((p) => p.period),
+        organisations,
+        totals: organisations.reduce(
+          (t, o) => ({ questions: t.questions + o.questions, inputTokens: t.inputTokens + o.inputTokens, outputTokens: t.outputTokens + o.outputTokens, costPaise: t.costPaise + o.costPaise }),
+          { questions: 0, inputTokens: 0, outputTokens: 0, costPaise: 0 },
+        ),
+      };
+    }),
+
+  /** The price table (paise per million tokens) the cost estimate uses, and the model ids in force. */
+  aiPrices: platformAdminProcedure.query(async () => ({ prices: await getAiPrices(), models: resolveAiModels() })),
+
+  /** Save the price table. Applies to questions answered from now on. Recorded in the billing event log with the acting admin. */
+  saveAiPrices: platformAdminProcedure.input(aiPriceTableSchema).mutation(async ({ input, ctx }) => {
+    const before = await getAiPrices();
+    await saveAiPrices(input);
+    await recordBillingEvent({ provider: "local", type: "platform.ai_prices_changed", payload: { from: before, to: input, actorUserId: ctx.user.id } });
+    return input;
+  }),
+
+  /** Extra question packs of one organisation: what was granted and what is left. */
+  aiCredits: platformAdminProcedure.input(z.object({ tenantId: z.string().uuid() })).query(async ({ input }) => {
+    const grants = await controlDb.select().from(aiCreditGrants).where(eq(aiCreditGrants.tenantId, input.tenantId)).orderBy(desc(aiCreditGrants.createdAt)).limit(50);
+    return {
+      grants: grants.map((g) => ({ id: g.id, credits: g.credits, used: g.used, source: g.source, reason: g.reason, createdAt: g.createdAt.toISOString() })),
+      remaining: grants.reduce((n, g) => n + (g.credits - g.used), 0),
+    };
+  }),
+
+  /** Grant extra AI questions (one or more packs of 100) to an organisation, with a reason. The purchase flow is a separate piece of work. */
+  grantAiCredits: platformAdminProcedure
+    .input(z.object({ tenantId: z.string().uuid(), credits: z.number().int().min(1).max(100_000), reason: z.string().trim().min(3).max(500) }))
+    .mutation(async ({ input, ctx }) => {
+      const [tenant] = await controlDb.select({ id: tenants.id }).from(tenants).where(eq(tenants.id, input.tenantId)).limit(1);
+      if (!tenant) throw new TRPCError({ code: "NOT_FOUND", message: "Organisation not found" });
+      const grant = await grantCredits({ tenantId: input.tenantId, credits: input.credits, reason: input.reason, grantedByUserId: ctx.user.id });
+      await recordBillingEvent({ provider: "local", tenantId: input.tenantId, type: "platform.ai_credits_granted", payload: { grantId: grant.id, credits: input.credits, reason: input.reason, actorUserId: ctx.user.id } });
+      return { id: grant.id, credits: grant.credits };
+    }),
 
   /** Add days to an organisation trial (from its end when running, from now when over). */
   extendTrial: platformAdminProcedure

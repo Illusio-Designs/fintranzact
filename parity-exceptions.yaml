@@ -16,6 +16,22 @@ schema_version: "2.0"
 exceptions:
   mobile:
     not-applicable:
+      # --- AI business assistant (add-on, Phase 1) ---
+      # Phase 1 is the responsive WEB chat panel (right-hand panel on desktop, full screen on phone widths). The native mobile app
+      # has no assistant yet: it needs its own streaming client and screens, which are a separate piece of work. The owner switches and the
+      # admin usage and price table are a web / platform console job.
+      - ai.begin
+      - ai.conversation
+      - ai.conversations
+      - ai.deleteConversation
+      - ai.settings
+      - ai.status
+      - ai.updateSettings
+      - platform.aiCredits
+      - platform.aiPrices
+      - platform.aiUsage
+      - platform.grantAiCredits
+      - platform.saveAiPrices
       # --- Payroll (add-on, Phase 1) ---
       # Payroll is the paid Payroll add-on. Employees, salary structures, attendance grids, leave, payroll runs,
       # approvals, payslips and the bank file are a desk job done on the web; the salary data is sensitive and
@@ -567,6 +583,21 @@ exceptions:
 
   cli:
     not-applicable:
+      # --- AI business assistant (add-on, Phase 1) ---
+      # The CLI is itself a way to talk to the business from outside the app (and the MCP server gives any AI client the same data), so
+      # an in-app chat, its history, its owner switches and the platform admin usage console are not applicable here.
+      - ai.begin
+      - ai.conversation
+      - ai.conversations
+      - ai.deleteConversation
+      - ai.settings
+      - ai.status
+      - ai.updateSettings
+      - platform.aiCredits
+      - platform.aiPrices
+      - platform.aiUsage
+      - platform.grantAiCredits
+      - platform.saveAiPrices
       # --- Payroll (add-on, Phase 1) ---
       # Payroll is the paid Payroll add-on and is not on sale yet. Its screens are web-only for now; the CLI has no
       # payroll commands (salary and identity data, maker-checker approval and payslip PDFs are not scripted yet).
@@ -989,6 +1020,21 @@ exceptions:
 
   mcp:
     not-applicable:
+      # --- AI business assistant (add-on, Phase 1) ---
+      # The MCP server IS the tool surface an AI client uses, with the client's own model; the in-app assistant (chat history, quota,
+      # owner switches, admin usage and price table) is a separate product feature and does not apply to MCP.
+      - ai.begin
+      - ai.conversation
+      - ai.conversations
+      - ai.deleteConversation
+      - ai.settings
+      - ai.status
+      - ai.updateSettings
+      - platform.aiCredits
+      - platform.aiPrices
+      - platform.aiUsage
+      - platform.grantAiCredits
+      - platform.saveAiPrices
       # --- Payroll (add-on, Phase 1) ---
       # Payroll is the paid Payroll add-on and is not on sale yet. Salary, identity and bank data is deliberately
       # not exposed to MCP tools until the owner decides how an AI client may see it; the screens are web-only for now.

@@ -3042,6 +3042,42 @@ export const payslips = pgTable("payslips", {
   index("payslips_business_idx").on(t.businessId),
 ]);
 
+// ── AI business assistant: conversation history ────────────────────
+// One conversation per chat a person opens, private to that person (user_id
+// is a plain UUID: users live in the control database). Messages keep the
+// text, the VALIDATED answer cards and a summary of the tool calls (name and
+// outcome only, never the data a tool returned). Deleted with the business;
+// not part of the data export (a chat history is not a book of account).
+// See docs/architecture/ai-assistant.md.
+
+export const aiConversations = pgTable("ai_conversations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull(),
+  title: text("title").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("ai_conversations_user_idx").on(t.businessId, t.userId, t.updatedAt),
+]);
+
+export const aiMessages = pgTable("ai_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  conversationId: uuid("conversation_id").notNull().references(() => aiConversations.id, { onDelete: "cascade" }),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  /** user | assistant */
+  role: text("role").notNull(),
+  content: text("content").notNull(),
+  /** Validated cards (shared parseAiCards), or null. */
+  cards: jsonb("cards").$type<Array<Record<string, unknown>>>(),
+  /** [{ name, status }] of the tools used for an assistant message; no data. */
+  toolCalls: jsonb("tool_calls").$type<Array<{ name: string; status: string }>>(),
+  model: text("model"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("ai_messages_conversation_idx").on(t.conversationId, t.createdAt),
+]);
+
 // ── Business-date column registry ─────────────────────────────────
 // The canonical user-entered business date for each document table.
 // Date-range filters coming from the UI (pills like "This Month", "This FY"),

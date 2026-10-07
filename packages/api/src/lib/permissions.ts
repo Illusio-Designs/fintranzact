@@ -13,6 +13,7 @@ export type Resource =
   | "Account" | "ITC" | "Tds" | "PeriodLock"
   | "BankReconciliation" | "EInvoice" | "EWayBill"
   | "Payroll"
+  | "Ai"
   | "all";
 
 export type AppAbility = PureAbility<[Action, Resource]>;
@@ -118,6 +119,10 @@ export function defineAbilityFor(ctx: PermissionContext): AppAbility {
       can("read", "Account");
       can("read", "Business");
       can("read", "Report");
+      // AI assistant (add-on): ask questions and keep own chat history. What it can read is still
+      // decided by this role's own permissions, per tool (lib/ai/tools.ts).
+      can("create", "Ai");
+      can("read", "Ai");
       // GST returns: read (docs/architecture/role-based-ui.md §3)
       can("read", "GstReport");
       // Store: create/read/update (toggle items, confirm orders)
@@ -158,6 +163,9 @@ export function defineAbilityFor(ctx: PermissionContext): AppAbility {
       can("read", "RecurringInvoice");
       // Reports
       can("read", "Report");
+      // AI assistant (add-on): see the seller_manager note.
+      can("create", "Ai");
+      can("read", "Ai");
       break;
 
     case "accountant":
@@ -197,6 +205,9 @@ export function defineAbilityFor(ctx: PermissionContext): AppAbility {
       can("create", "Payroll");
       can("read", "Payroll");
       can("update", "Payroll");
+      // AI assistant (add-on): see the seller_manager note.
+      can("create", "Ai");
+      can("read", "Ai");
       break;
 
     case "auditor":

@@ -717,3 +717,83 @@ export const trialReminders = pgTable("trial_reminders", {
 }, (t) => [
   uniqueIndex("trial_reminders_tenant_kind_idx").on(t.tenantId, t.kind),
 ]);
+
+// ── AI business assistant ──────────────────────────────────────
+// Organisation-level data, so it lives here and not in the tenant database:
+// the switches the owner sets, the question counters and extra-pack credits
+// the quota is enforced against, and the usage ledger the admin console reads.
+// Conversations (business data) are in the tenant schema (ai_conversations).
+
+/** Owner controls: the assistant on or off for the organisation, and off for roles. */
+export const aiSettings = pgTable("ai_settings", {
+  tenantId: uuid("tenant_id").primaryKey().references(() => tenants.id, { onDelete: "cascade" }),
+  enabled: boolean("enabled").default(true).notNull(),
+  /** Permission role names the assistant is off for (AI_SWITCHABLE_ROLES). */
+  disabledRoles: jsonb("disabled_roles").$type<string[]>().default([]).notNull(),
+  updatedByUserId: uuid("updated_by_user_id"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/**
+ * Questions asked, per organisation and counter key: the IST month ("2026-10")
+ * for the paid tiers, "trial:<start>" for a Full Access Trial. Consumed with one
+ * atomic upsert that only increments while below the limit (lib/ai/quota.ts).
+ */
+export const aiQuotaCounters = pgTable("ai_quota_counters", {
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  key: text("key").notNull(),
+  used: integer("used").default(0).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.tenantId, t.key] }),
+]);
+
+/** Extra question packs (credits). Granted by a platform admin now; bought by the AI add-on billing work later. */
+export const aiCreditGrants = pgTable("ai_credit_grants", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  credits: integer("credits").notNull(),
+  used: integer("used").default(0).notNull(),
+  /** admin_grant now; purchase later. */
+  source: text("source").default("admin_grant").notNull(),
+  reason: text("reason").notNull(),
+  grantedByUserId: uuid("granted_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("ai_credit_grants_tenant_idx").on(t.tenantId, t.createdAt),
+]);
+
+/**
+ * One row per question (one user message that gets an answer): who, which
+ * model, tokens and the estimated cost in paise at the price table of the time.
+ * status: pending (running), ok, refunded (provider failure or nothing produced:
+ * the question was given back) or aborted (the person stopped it after text began).
+ */
+export const aiUsage = pgTable("ai_usage", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull(),
+  /** Business in the tenant database (no FK: another database in cloud mode). */
+  businessId: uuid("business_id"),
+  conversationId: uuid("conversation_id"),
+  /** IST month of the question, "YYYY-MM". */
+  period: text("period").notNull(),
+  /** The counter the question was taken from, and whether it came from a pack credit. */
+  counterKey: text("counter_key").notNull(),
+  source: text("source").default("included").notNull(),
+  creditGrantId: uuid("credit_grant_id"),
+  tier: text("tier").notNull(),
+  model: text("model"),
+  status: text("status").default("pending").notNull(),
+  inputTokens: integer("input_tokens").default(0).notNull(),
+  outputTokens: integer("output_tokens").default(0).notNull(),
+  cacheReadTokens: integer("cache_read_tokens").default(0).notNull(),
+  cacheWriteTokens: integer("cache_write_tokens").default(0).notNull(),
+  toolCalls: integer("tool_calls").default(0).notNull(),
+  costPaise: integer("cost_paise").default(0).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (t) => [
+  index("ai_usage_tenant_period_idx").on(t.tenantId, t.period),
+  index("ai_usage_status_idx").on(t.status, t.createdAt),
+]);
