@@ -434,7 +434,7 @@ describe("files and registers from the approved run", () => {
     const data = await accountantC.payrollStatutory.form16Data({ financialYear: 2026, employeeId: ids.E003! });
     expect(data.csv).toContain("Working copy for CA review");
     expect(data.summary.taxDeducted).toBe(7345);
-    await expect(accountantC.payrollStatutory.form16Data({ financialYear: 2026, employeeId: ids.E001!.replace(/.$/, "0") })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(accountantC.payrollStatutory.form16Data({ financialYear: 2026, employeeId: "00000000-0000-4000-8000-000000000000" })).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
   it("registers: wages, attendance, leave, bonus and gratuity", async () => {
