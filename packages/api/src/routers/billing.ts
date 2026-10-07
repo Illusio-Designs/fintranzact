@@ -22,7 +22,6 @@ import {
   effectiveYearlyPriceInr,
   isStateCode,
   SUBSCRIPTION_STATUS_LABELS,
-  cycleAmount,
   entitlementMessage,
   planCheckoutAmount,
   TRIAL_ALREADY_USED_MESSAGE,

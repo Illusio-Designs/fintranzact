@@ -356,7 +356,7 @@ describe("tier changes: AI Assistant <-> AI Plus", () => {
 
     await handleRazorpayEvent({ event: "subscription.activated", payload: { subscription: { entity: { id: r.checkout.providerSubscriptionId } }, payment: { entity: { id: "pay_P1" } } } }, "evt_up2_2");
     expect((await liveAi(tenant.id)).map((s) => s.addon)).toEqual(["ai_plus"]);
-    const cancelCalls = rzpCalls.filter((c) => /\/cancel$/.test(c.path));
+    const cancelCalls = rzpCalls.filter((c) => c.path.endsWith("/cancel"));
     expect(cancelCalls).toHaveLength(1);
     expect(cancelCalls[0]!.path).toBe(`/subscriptions/${first.providerSubscriptionId}/cancel`);
     expect(cancelCalls[0]!.body).toEqual({ cancel_at_cycle_end: 0 });

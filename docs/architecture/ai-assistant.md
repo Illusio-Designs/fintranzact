@@ -51,7 +51,7 @@ The organisation-level data (switches, counters, credits, the ledger) is in the 
 |---|---|---|
 | `ai_settings` (tenant_id, enabled, disabled_roles) | control | An organisation setting, read on every question by the gate |
 | `ai_quota_counters` (tenant_id, key, used) | control | The quota is per organisation across its businesses; `key` is the IST month (`2026-10`) or `trial:<start>` |
-| `ai_credit_grants` (tenant_id, credits, used, reason, granted_by) | control | Extra packs; the credit ledger the later checkout will write to |
+| `ai_credit_grants` (tenant_id, credits, used, source, reason, granted_by, payment_id, order_id) | control | Extra packs: bought (source `purchase`, see [`ai-billing.md`](ai-billing.md)) or granted by an admin |
 | `ai_usage` (one row per question: tenant, user, business, conversation, period, counter key, source, model, status, tokens, tool calls, cost in paise) | control | Read by the platform admin console across organisations; same placement as `gov_api_usage` |
 | `system_config` key `ai.prices` | control | The editable price table (paise per million tokens per model id); invalid values fall back to defaults |
 | `ai_conversations` (business_id, user_id, title) and `ai_messages` (role, text, validated cards, tool-call summary, model) | tenant | Business data derived from the books and private to one person in one business; deleted with the business |

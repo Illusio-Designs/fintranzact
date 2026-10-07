@@ -351,7 +351,71 @@ terms. Before you release the add-ons:
 ### 15.3 When you release it
 
 Flip `ADDON_FEATURES.ai_assistant.implemented` (and `ai_plus`) to `true` in
-`packages/shared/src/entitlements.ts` once the "AI add-on billing" work (checkout
-for the add-ons and the extra packs of 100) is done. Until extra packs have a
-checkout, a platform admin grants them from the organisation's page in the admin
-console.
+`packages/shared/src/entitlements.ts` only after the checklist in section 16
+(the AI add-on billing is built; it needs a live test in Razorpay Test Mode first).
+Platform admins can grant the add-on and extra questions from the organisation's
+page in the admin console before then.
+
+## 16. AI add-on billing (how to release the AI add-ons)
+
+The billing for the AI add-ons is built and tested with fake gateways: AI Assistant
+(₹399 a month, 150 questions), AI Plus (₹999 a month, 500), monthly or yearly with
+two months free, and extra packs (₹199 for 100 questions, one-time), all before 18%
+GST, with a GST invoice from Finvera Solutions LLP and a receipt email. Nothing is on
+sale yet: `ADDON_FEATURES.ai_assistant.implemented` and `ADDON_FEATURES.ai_plus.implemented`
+are **false**, so no buy button appears anywhere and the server refuses every purchase.
+How it works: [`architecture/ai-billing.md`](architecture/ai-billing.md).
+
+### 16.1 Before you flip the flags (all of these)
+
+1. **Anthropic key set** and the data-use terms confirmed: section 15.1 and 15.2.
+2. **Razorpay Test Mode, your own account** (section 4.1): `RAZORPAY_KEY_ID`,
+   `RAZORPAY_KEY_SECRET` and `RAZORPAY_WEBHOOK_SECRET` set. Check the webhook of
+   the platform account sends these events (Razorpay Dashboard, Webhooks, the same
+   URL as subscriptions: `/webhooks/razorpay`): `subscription.activated`,
+   `subscription.charged`, `subscription.pending`, `subscription.halted`,
+   `subscription.cancelled`, `subscription.completed` **and the new ones for packs**:
+   `payment.captured`, `order.paid`, `payment.failed`, `refund.processed`.
+3. **Try it for real, in test mode**, on a test organisation (temporarily flip the
+   two flags on a test deployment, not production):
+   - subscribe to AI Assistant monthly: the Razorpay checkout opens, pay with a test
+     card, the organisation shows "Active" in Settings, Billing, AI Assistant, and
+     the invoice appears with a FIN number;
+   - upgrade to AI Plus: the new subscription is paid, AI Assistant ends, you get a
+     credit note for the unused time (it stands for a manual refund, like a plan
+     upgrade: refund it in Razorpay if you want to honour it), you are never charged
+     for both;
+   - buy one pack, then three packs: the questions are added, the invoice is
+     numbered, the receipt email arrives. Close the browser right after paying once
+     and confirm the questions still arrive (the webhook);
+   - refund a pack payment in the Razorpay dashboard: the unused questions are
+     taken back and a credit note appears;
+   - a failed test card on a pack grants nothing;
+   - in the admin console: Organisations, then Plans, "Add-on prices" (edit and
+     reset a price), and on an organisation "AI add-on and purchases" (grant free,
+     revoke, see the purchases and invoices).
+4. **Check the GST invoice with your CA**: the SAC code (the invoices print `998315`,
+   the same as plan invoices, marked "verify with the CA" in the code; confirm it is
+   right for online software/AI services, or tell me the right one), the 18% rate,
+   the CGST/SGST versus IGST split by place of supply, and the wording of the pack
+   line ("AI question packs, N x 100 questions").
+5. **Confirm the prices and the rules**: ₹399 / ₹999 / ₹199 and "2 months free"
+   yearly (they are editable in the admin console, no code needed), that packs do
+   not expire, that they can only be bought while an AI plan or trial is active,
+   and that a refund takes back the unused questions.
+6. **Partner commission**: the partner program pays on plan subscriptions only,
+   for every add-on (not just AI). Decide if that is what you want; adding add-on
+   revenue is a small change, to be done for all add-ons together.
+
+### 16.2 The flip
+
+In `packages/shared/src/entitlements.ts`, in `ADDON_FEATURES`, change
+`ai_assistant: { ..., implemented: false }` and `ai_plus: { ..., implemented: false }`
+to `true` (a deliberate one-line change each) and deploy. That puts both tiers and the
+extra packs on sale everywhere at once: the pricing page, Settings, Billing, the chat
+panel's "Buy more questions", `billing.subscribeAddon`, `billing.changeAddon` and
+`billing.buyAiPack`. Flip both together: the packs are on sale as soon as either is.
+Then update the roadmap card for the AI item in the admin console.
+
+To pull it back, set them to `false` again: new purchases stop, organisations that
+already have the add-on keep it, and renewals, webhooks and cancellation keep working.

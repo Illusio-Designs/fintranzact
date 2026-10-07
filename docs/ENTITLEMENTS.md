@@ -207,16 +207,31 @@ The AI assistant is the add-on `ai_assistant` (`ai_plus` is the bigger tier and 
 | Surface | Policy |
 |---|---|
 | `ai.status` | CASL `read` on the `Ai` subject. Never throws for a missing add-on: it returns `access` (`ok`, `addon_required`, `org_disabled`, `role_disabled`, `read_only`, `suspended`), the tier and the allowance, so the page can show the right notice |
-| `ai.conversations`, `ai.conversation` | `read:Ai`, then the add-on (`assertAi` in `lib/ai/access.ts`), then the owner's switches. A **read-only** organisation keeps reading its saved chats; a suspended one is refused |
+| `ai.conversations`, `ai.conversation` | `read:Ai`, then the add-on (`assertAi` in `lib/ai/access.ts`), then the owner's switches. A **read-only** organisation, and one whose AI add-on lapsed (it ever held one), keep reading their saved chats; a suspended one is refused, and so is one that never had the add-on |
 | `ai.begin`, `ai.deleteConversation` | `create:Ai`; `begin` also needs the add-on (`requireAddon`, which gives the read-only message while read-only), the owner's switches, a configured server (`ANTHROPIC_API_KEY`) and one question from the quota. Both are mutations, so the read-only gate refuses them while read-only (`gated` in `mutation-gate.md`) |
 | `ai.settings`, `ai.updateSettings` | Organisation owner only (tenant role owner or superadmin), on `tenantProcedure`; refused while read-only |
 | `POST /api/ai/stream` | **write-gated** in `rest-entitlement-policy.ts`: `refuseIfReadOnly` answers 403 with the standard `{ error, entitlement }` body for read-only and suspended organisations, then `ai.begin` applies the add-on, switches and quota. Identity, CSRF, tenant and business resolution are `createContext`'s (the tRPC context), and the tools run through a tRPC caller built from that same context |
 | `platform.aiUsage`, `aiPrices`, `saveAiPrices`, `aiCredits`, `grantAiCredits` | Platform admins only; the two mutations are in the exempt list (`entitlement-exempt.ts`) like the other platform actions |
 | Roles | Owner and admin: everything. Sales manager, salesperson and accountant: `create` and `read` (ask and keep their own history); what the assistant can read for them is each tool's procedure permission. `auditor` and `ca_filing`: nothing in Phase 1 (`Ai` is not in `ACCOUNTANT_READ_SUBJECTS`) |
 
-Where the add-on is on: an admin grant or subscription (`billing_subscriptions`, kind `addon`), AI Plus (which implies Assistant), or a Full Access Trial. Which allowance applies (`deriveAiTier`, shared): a live subscription beats the trial; AI Plus beats AI Assistant. Included questions per IST calendar month: AI Assistant 150, AI Plus 500; the trial includes `trial.caps.aiQuestions` (default 50) for the whole trial. Extra packs of 100 are credits (`ai_credit_grants`) a platform admin grants today and are used after the included questions; the checkout belongs to the separate "AI add-on billing" work. An exhausted organisation gets `FORBIDDEN` with `data.entitlement.reason = "plan_limit"` and the sentence "Your organisation has used all its AI questions for this month. Ask your owner to add more."
+Where the add-on is on: an admin grant or subscription (`billing_subscriptions`, kind `addon`), AI Plus (which implies Assistant), or a Full Access Trial. Which allowance applies (`deriveAiTier`, shared): a live subscription beats the trial; AI Plus beats AI Assistant. Included questions per IST calendar month: AI Assistant 150, AI Plus 500; the trial includes `trial.caps.aiQuestions` (default 50) for the whole trial. Extra packs of 100 are credits (`ai_credit_grants`), bought by the owner (one-time) or granted by a platform admin, and are used after the included questions; the purchase is described in "AI add-on billing" below. An exhausted organisation gets `FORBIDDEN` with `data.entitlement.reason = "plan_limit"` and the sentence "Your organisation has used all its AI questions for this month. Ask your owner to add more."
 
 Tests grant the add-on with `grantAddon(tenantId, "ai_assistant")`; the role and isolation sweeps grant it to both sweep organisations.
+
+### AI add-on billing (subscribe, switch, extra packs)
+
+Architecture: [`architecture/ai-billing.md`](architecture/ai-billing.md). The release flags stay **false**, so while they are, every purchase path is refused on the server and hidden on every surface; an organisation that already holds the add-on (admin grant) keeps it. Rules:
+
+| Surface | Policy |
+|---|---|
+| `billing.subscribeAddon` (AI tiers) | As before (owner only, refused while not on sale). A second tier while one is live is `CONFLICT`; a halted add-on of the same group is retired by the new purchase. The price is the admin's override or the built-in one |
+| `billing.changeAddon` | Owner only (`requirePlanManagerTenant`), refused while the add-on is not on sale (`ADDON_COMING_SOON_MESSAGE`). In the exempt list like the other billing procedures (the way out of read-only). Upgrade now (old tier retired with a credit note when the new one is paid), downgrade at the period end; never billed for both |
+| `billing.buyAiPack`, `billing.verifyAiPackPayment` | Owner only, exempt like the other billing procedures. `buyAiPack` is refused while neither AI tier is on sale (`isAiPackAvailable`, the same flags) and for an organisation with no AI access (plan, admin grant or trial). The signature is checked on the server; the order is paid once whether the callback or the webhook arrives first |
+| `POST /webhooks/razorpay` | Unchanged policy (`exempt-webhook`, signature-verified). Also handles `payment.captured`, `order.paid`, `payment.failed` and `refund.processed` for pack orders, matched by order id |
+| `platform.addonPrices`, `saveAddonPrices`, `grantAddon`, `revokeAddon`, `aiPurchases` | Platform admins only; the three mutations are in the exempt list |
+| Lapsed or unpaid | The add-on is off after the grace period (`addon_required`); saved chats stay readable for an organisation that ever held the add-on; credits stay but cannot be used or bought |
+
+Prices are editable in the admin console (`system_config` key `billing.addon_prices`). There is no partner commission on AI add-ons (the program counts plan subscriptions only, as it does for Payroll).
 
 ## How to add things
 
@@ -230,7 +245,7 @@ Tests grant the add-on with `grantAddon(tenantId, "ai_assistant")`; the role and
 
 ## Not built yet
 
-- Extra AI question packs have no checkout yet (admin grant only): the "AI add-on billing" work builds the purchase flow on top of `ai_credit_grants`.
+- The AI add-on billing (subscribe, switch tiers, extra packs, admin prices and grants) is built and tested but not on sale, and has not been run against a live Razorpay account: see `PENDING-OWNER-TASKS.md`, section 16.
 - WhatsApp trial reminders (email and in-app only for now).
 - Approvals (the `approvals` plan flag): no approval workflow exists in the code; the flag gates nothing (see Plan features).
 - Store Pro does not exist, so that add-on is not on sale (`ADDON_FEATURES[...].implemented` is false; see "Add-on availability"). Payroll Phase 1 and the AI assistant Phase 1 are built and gated (see their sections) but `ADDON_FEATURES.payroll.implemented`, `ai_assistant.implemented` and `ai_plus.implemented` stay false until the owner releases them. Admin grants and the flags for already-held add-ons keep working.
