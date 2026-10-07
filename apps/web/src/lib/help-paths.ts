@@ -147,6 +147,7 @@ export const HELP_NAV: HelpNavSection[] = [
         label: "AI & Automation",
         items: [
           { label: "Overview", slug: "ai" },
+          { label: "Ask Fintranzact AI", slug: "ai/ask-fintranzact-ai" },
           { label: "MCP Server", slug: "ai/mcp-server" },
           { label: "CLI", slug: "ai/cli" },
           { label: "Integrations", slug: "ai/integrations" },

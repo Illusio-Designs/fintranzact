@@ -61,4 +61,4 @@ export const PAYMENT_PROCESSOR = {
 export const REFUND_CREDIT_TIME = "5–7 working days";
 
 /** Date shown as "Last updated" on the legal pages. */
-export const LEGAL_LAST_UPDATED = "30 September 2026";
+export const LEGAL_LAST_UPDATED = "7 October 2026";

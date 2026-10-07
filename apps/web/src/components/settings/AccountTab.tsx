@@ -19,6 +19,9 @@ import { SecurityTab } from "./SecurityTab";
 // ── Action label map ──────────────────────────────────────────────────────────
 
 const ACTION_LABELS: Record<string, string> = {
+  // AI assistant: the question (short) and each read it made. Entries carry source "via AI assistant".
+  "ai.question": "Asked the AI assistant",
+  "ai.toolCall": "AI assistant looked up",
   "gstReturns.requestOtp": "GST portal OTP requested",
   "gstReturns.verifyOtp": "GST portal login verified",
   "gstReturns.saveGstr1": "GSTR-1 saved to the GST portal",
@@ -467,7 +470,10 @@ function ActivityLogContent() {
                 (meta.sourceName ? `${meta.sourceName} → ${meta.targetName}` : null) ||
                 (meta.period as string) ||
                 (meta.returnPeriod as string) ||
+                (meta.question as string) ||
+                (meta.tool as string) ||
                 null;
+              const viaAi = meta.source === "via AI assistant";
               // Accountants (CA) are shown with their access level.
               const actorRole = isCaRole(meta.role as string) ? memberRoleLabel(meta.role as string) : null;
 
@@ -481,7 +487,7 @@ function ActivityLogContent() {
                       )}
                     </div>
                     <span className="text-xs text-text-tertiary mt-0.5 block">
-                      by {entry.userName ?? "Unknown"}{actorRole ? ` · ${actorRole}` : ""}
+                      by {entry.userName ?? "Unknown"}{actorRole ? ` · ${actorRole}` : ""}{viaAi ? " · via AI assistant" : ""}
                     </span>
                   </div>
                   <span className="text-xs text-text-tertiary whitespace-nowrap shrink-0">

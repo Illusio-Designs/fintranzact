@@ -33,6 +33,7 @@ import { shareEndpoints } from "./share";
 import { onlinePaymentsEndpoints } from "./onlinePayments";
 import { reminderEndpoints } from "./reminder";
 import { payrollEndpoints } from "./payroll";
+import { aiEndpoints } from "./ai";
 import { tdsEndpoints } from "./tds";
 import { periodEndpoints } from "./period";
 import { systemEndpoints } from "./system";
@@ -123,6 +124,11 @@ export const allSections: EndpointSection[] = [
     id: "payroll",
     title: "Payroll (add-on)",
     groups: [payrollEndpoints],
+  },
+  {
+    id: "ai",
+    title: "AI Assistant (add-on)",
+    groups: [aiEndpoints],
   },
   {
     id: "analytics",

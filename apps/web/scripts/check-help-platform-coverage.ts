@@ -52,6 +52,9 @@ const WEB_ONLY: Set<string> = new Set([
   // Full backup lives in Settings → Data (web/desktop only)
   "settings/backup-restore.mdx",
 
+  // AI assistant add-on, Phase 1 (web only: no assistant in the mobile app yet)
+  "ai/ask-fintranzact-ai.mdx",
+
   // Payroll add-on (web only: no Payroll area in the mobile app)
   "payroll/index.mdx",
   "payroll/employees.mdx",

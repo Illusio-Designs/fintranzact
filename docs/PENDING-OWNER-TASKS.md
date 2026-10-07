@@ -267,9 +267,11 @@ that has batches, and open a reminder history.
 
 ## 13. Not built yet (so nothing for you to do)
 
-- Payroll, the AI business assistant and Store Pro features. Their add-ons are
-  hidden from sale until each feature exists (one switch per add-on re-enables
-  it).
+- Store Pro, and the later phases of Payroll and the AI business assistant.
+  Their add-ons are hidden from sale until each feature is released (one switch
+  per add-on, `ADDON_FEATURES[...].implemented`, re-enables it). Payroll Phase 1
+  and the AI assistant Phase 1 (questions, read-only) are built but stay hidden
+  from sale until you release them; section 15 is what the AI assistant needs.
 - Approvals (not on the Business plan until the approval workflow exists).
 - GSTR-2B pull, Taxpayer Session, GST Return Status (waiting for the Sandbox
   pages in section 7).
@@ -293,3 +295,60 @@ that has batches, and open a reminder history.
   verified in Resend.
 - **Customers see "service unavailable" on GST filing:** the Sandbox wallet is
   empty or the quota is used.
+
+## 15. AI assistant (before you release the AI add-ons)
+
+The AI assistant (Phase 1: ask questions about your business) is built and gated
+but the add-ons are not on sale (`ADDON_FEATURES.ai_assistant` and `ai_plus`
+`implemented` stay false until you decide). Organisations in the Full Access Trial
+(50 questions) and organisations you grant the add-on to can use it, but only once
+the server has an Anthropic API key.
+
+### 15.1 Get an Anthropic API key and set it
+
+1. Create an account at https://console.anthropic.com and add billing.
+2. Create an API key (Settings, API keys). Name it for this app. **Never paste it
+   in chat or commit it.**
+3. Railway, API service, Variables: add `ANTHROPIC_API_KEY` with the key.
+   Redeploy. Until then the assistant answers "not configured" and counts nothing.
+4. Optional: `AI_MODEL_FAST` (default `claude-haiku-4-5-20251001`, used for simple
+   questions) and `AI_MODEL_STRONG` (default `claude-sonnet-5-5`, used for
+   comparisons and multi-step questions). Leave them unset unless you want to
+   change a model.
+5. **Set a monthly spend limit** in the Anthropic console (Settings, Limits) so a
+   surprise cannot cost more than you decided. The assistant has its own quotas
+   (150 / 500 questions a month, 50 in the trial), but the console limit is your
+   safety net.
+6. In the admin console (Organisations, "AI assistant usage and cost") check the
+   **price table** is right for the exchange rate you want: it holds rupees per
+   million tokens for each model and is only used to estimate cost. The defaults
+   are estimates at about 85 rupees to the dollar.
+7. Try it: open an organisation in a trial, click "Ask AI", ask "How much do
+   customers owe me?" and a Hinglish question. Then check the admin usage table
+   shows the question and an estimated cost.
+
+### 15.2 Confirm the provider's data-use terms and the privacy wording
+
+The privacy policy now has an "AI assistant" paragraph: data sent to the AI
+provider is limited to what is needed to answer, and we do not use it to train
+models. That is **our commitment**; it says nothing about the provider's own
+terms. Before you release the add-ons:
+
+- Read Anthropic's current commercial terms and data-use policy for the API and
+  confirm they allow what the paragraph says (for example how long they keep API
+  inputs and that they do not train on API data by default), and whether you need
+  a zero-data-retention arrangement.
+- Have your CA or lawyer confirm the wording in `apps/web/src/routes/privacy.tsx`
+  (section "AI assistant") and tell me if it should change. If you name the
+  provider in the policy, add it to the "Sharing" list too.
+- The "Privacy policy: data not used for training" line on the Upcoming board is
+  already ticked because the page text is in; only set the whole AI Phase 1 item
+  to Done after this confirmation.
+
+### 15.3 When you release it
+
+Flip `ADDON_FEATURES.ai_assistant.implemented` (and `ai_plus`) to `true` in
+`packages/shared/src/entitlements.ts` once the "AI add-on billing" work (checkout
+for the add-ons and the extra packs of 100) is done. Until extra packs have a
+checkout, a platform admin grants them from the organisation's page in the admin
+console.
