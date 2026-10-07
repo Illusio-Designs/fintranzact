@@ -236,7 +236,7 @@ export interface AccessInput {
 export const ADDON_FEATURES: Record<AddonId, { unlocks: string; implemented: boolean }> = {
   ai_assistant: { unlocks: "AI assistant questions (150 a month); a future ai.* router", implemented: false },
   ai_plus: { unlocks: "AI assistant questions (500 a month, priority); also grants ai_assistant", implemented: false },
-  payroll: { unlocks: "Employees, attendance, leave, salary structures, payroll runs and payslips (the payrollEmployee, payrollSalary, payrollAttendance, payrollLeave and payrollRun routers)", implemented: false },
+  payroll: { unlocks: "Employees, attendance, leave, salary structures, payroll runs and payslips, and statutory payroll: PF, ESI, professional tax, LWF, TDS on salary, statutory files and registers (the payrollEmployee, payrollSalary, payrollAttendance, payrollLeave, payrollRun and payrollStatutory routers)", implemented: false },
   store_pro: { unlocks: "Store custom domain, themes and page builder, online payments at checkout", implemented: false },
 };
 
