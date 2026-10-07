@@ -56,6 +56,11 @@ import { barcodeRouter } from "./routers/barcode.js";
 import { shareRouter } from "./routers/share.js";
 import { onlinePaymentsRouter } from "./routers/onlinePayments.js";
 import { reminderRouter } from "./routers/reminder.js";
+import { payrollEmployeeRouter } from "./routers/payrollEmployee.js";
+import { payrollSalaryRouter } from "./routers/payrollSalary.js";
+import { payrollAttendanceRouter } from "./routers/payrollAttendance.js";
+import { payrollLeaveRouter } from "./routers/payrollLeave.js";
+import { payrollRunRouter } from "./routers/payrollRun.js";
 import { stockRouter } from "./routers/stock.js";
 import { batchRouter } from "./routers/batch.js";
 import { inventoryReportsRouter } from "./routers/inventory-reports.js";
@@ -128,6 +133,11 @@ export const appRouter = router({
   share: shareRouter,
   onlinePayments: onlinePaymentsRouter,
   reminder: reminderRouter,
+  payrollEmployee: payrollEmployeeRouter,
+  payrollSalary: payrollSalaryRouter,
+  payrollAttendance: payrollAttendanceRouter,
+  payrollLeave: payrollLeaveRouter,
+  payrollRun: payrollRunRouter,
   contact: contactRouter,
 });
 

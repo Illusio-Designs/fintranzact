@@ -52,6 +52,14 @@ const WEB_ONLY: Set<string> = new Set([
   // Full backup lives in Settings → Data (web/desktop only)
   "settings/backup-restore.mdx",
 
+  // Payroll add-on (web only: no Payroll area in the mobile app)
+  "payroll/index.mdx",
+  "payroll/employees.mdx",
+  "payroll/salary-structures.mdx",
+  "payroll/attendance-and-leave.mdx",
+  "payroll/running-payroll.mdx",
+  "payroll/payslips.mdx",
+
   // Online store admin (desktop-only)
   "online-store/index.mdx",
 

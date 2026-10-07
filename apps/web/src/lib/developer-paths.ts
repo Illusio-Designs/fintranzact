@@ -68,6 +68,8 @@ export const DEVELOPER_GROUP_SLUGS = [
   "journals",
   "tds",
   "period",
+  // Payroll (add-on)
+  "payroll",
   // Analytics
   "dashboard",
   "reports",

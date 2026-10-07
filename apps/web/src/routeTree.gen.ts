@@ -36,6 +36,7 @@ import { Route as PriceLevelsRouteImport } from './routes/price-levels'
 import { Route as PosRouteImport } from './routes/pos'
 import { Route as PlatformRouteImport } from './routes/platform'
 import { Route as PhysicalStockRouteImport } from './routes/physical-stock'
+import { Route as PayrollRouteImport } from './routes/payroll'
 import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as PartnerPortalRouteImport } from './routes/partner-portal'
 import { Route as PartiesRouteImport } from './routes/parties'
@@ -217,6 +218,11 @@ const PlatformRoute = PlatformRouteImport.update({
 const PhysicalStockRoute = PhysicalStockRouteImport.update({
   id: '/physical-stock',
   path: '/physical-stock',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PayrollRoute = PayrollRouteImport.update({
+  id: '/payroll',
+  path: '/payroll',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PaymentsRoute = PaymentsRouteImport.update({
@@ -503,6 +509,7 @@ export interface FileRoutesByFullPath {
   '/parties': typeof PartiesRoute
   '/partner-portal': typeof PartnerPortalRoute
   '/payments': typeof PaymentsRoute
+  '/payroll': typeof PayrollRoute
   '/physical-stock': typeof PhysicalStockRoute
   '/platform': typeof PlatformRoute
   '/pos': typeof PosRoute
@@ -578,6 +585,7 @@ export interface FileRoutesByTo {
   '/parties': typeof PartiesRoute
   '/partner-portal': typeof PartnerPortalRoute
   '/payments': typeof PaymentsRoute
+  '/payroll': typeof PayrollRoute
   '/physical-stock': typeof PhysicalStockRoute
   '/platform': typeof PlatformRoute
   '/pos': typeof PosRoute
@@ -654,6 +662,7 @@ export interface FileRoutesById {
   '/parties': typeof PartiesRoute
   '/partner-portal': typeof PartnerPortalRoute
   '/payments': typeof PaymentsRoute
+  '/payroll': typeof PayrollRoute
   '/physical-stock': typeof PhysicalStockRoute
   '/platform': typeof PlatformRoute
   '/pos': typeof PosRoute
@@ -731,6 +740,7 @@ export interface FileRouteTypes {
     | '/parties'
     | '/partner-portal'
     | '/payments'
+    | '/payroll'
     | '/physical-stock'
     | '/platform'
     | '/pos'
@@ -806,6 +816,7 @@ export interface FileRouteTypes {
     | '/parties'
     | '/partner-portal'
     | '/payments'
+    | '/payroll'
     | '/physical-stock'
     | '/platform'
     | '/pos'
@@ -881,6 +892,7 @@ export interface FileRouteTypes {
     | '/parties'
     | '/partner-portal'
     | '/payments'
+    | '/payroll'
     | '/physical-stock'
     | '/platform'
     | '/pos'
@@ -957,6 +969,7 @@ export interface RootRouteChildren {
   PartiesRoute: typeof PartiesRoute
   PartnerPortalRoute: typeof PartnerPortalRoute
   PaymentsRoute: typeof PaymentsRoute
+  PayrollRoute: typeof PayrollRoute
   PhysicalStockRoute: typeof PhysicalStockRoute
   PlatformRoute: typeof PlatformRoute
   PosRoute: typeof PosRoute
@@ -1181,6 +1194,13 @@ declare module '@tanstack/react-router' {
       path: '/physical-stock'
       fullPath: '/physical-stock'
       preLoaderRoute: typeof PhysicalStockRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/payroll': {
+      id: '/payroll'
+      path: '/payroll'
+      fullPath: '/payroll'
+      preLoaderRoute: typeof PayrollRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/payments': {
@@ -1549,6 +1569,7 @@ const rootRouteChildren: RootRouteChildren = {
   PartiesRoute: PartiesRoute,
   PartnerPortalRoute: PartnerPortalRoute,
   PaymentsRoute: PaymentsRoute,
+  PayrollRoute: PayrollRoute,
   PhysicalStockRoute: PhysicalStockRoute,
   PlatformRoute: PlatformRoute,
   PosRoute: PosRoute,

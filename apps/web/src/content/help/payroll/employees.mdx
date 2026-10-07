@@ -1,0 +1,56 @@
+---
+title: Employees
+description: "Add employees with their personal, job and bank details, keep PAN, Aadhaar, UAN and ESIC numbers safe, and record an exit with the last working day and full and final settlement."
+sidebar:
+  order: 2
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+
+<ForDesktop>
+
+Open **Payroll** and choose **Employees**. Payroll belongs to one business: each business has its own employees, salaries and runs.
+
+## Add an employee
+
+Choose **+ Add employee**. The form has four parts:
+
+| Part | What it holds |
+|---|---|
+| **Personal details** | Employee code (unique in the business), name, date of birth, gender, father's or spouse's name, mobile, email, address and a small photo (PNG, JPEG or WebP under 150 KB) |
+| **Statutory IDs** | PAN, Aadhaar, UAN (for PF) and ESIC IP number |
+| **Job** | Date of joining, employment type (permanent, contract or intern), department, designation, branch, state of work, manager, shift and tax regime (new or old) |
+| **Bank account for salary** | Account number, IFSC, name as per bank and bank name |
+
+The form checks the formats before it saves: PAN looks like AAAAA9999A, Aadhaar and UAN are 12 digits, an ESIC number is 10 to 17 digits, the IFSC has 11 characters with a 0 as the fifth, and the mobile is an Indian mobile number. Spaces and dashes inside a number are removed for you.
+
+The **state of work** decides which state holidays apply to the employee, and the **branch** which branch holidays apply. The **tax regime** is only a record of the employee's choice for now, because income tax is not calculated yet.
+
+**Departments and designations** are managed from the **Departments and designations** button. A hidden one stays on the employees who already have it.
+
+## How sensitive numbers are handled
+
+PAN, Aadhaar, UAN, ESIC and bank account numbers are personal data.
+
+- **Lists** always show them partly hidden, for example the last four characters only.
+- The **employee page** shows them in full only to **owners and admins**. An accountant sees them partly hidden; typing a new number replaces the stored one, and leaving the field empty keeps it.
+- They are **never written to the audit trail**. The trail records that an employee was changed and which fields, not the numbers.
+- Payslips show only a partly hidden PAN, UAN and bank account.
+- A full backup (**Settings → Data**) does contain them, so keep backup files private.
+
+## Trial limit
+
+During the Full Access Trial you can have up to **10 active employees**. The Employees page shows how many you have. Employees who have left do not count. When you reach the limit, adding or bringing back an employee is refused until someone leaves or you have the Payroll add-on.
+
+## When someone leaves
+
+Choose **Exit** on the employee and give the **last working day**, the **reason** and, if you like, a **full and final settlement** note (notice recovery, leave encashment, dues).
+
+- Payroll pays the employee up to the last working day. In the month they leave, only the days up to the last working day count.
+- The run for that month marks the line as the **final month** and, once the run is approved, links it to the employee as their full and final settlement.
+- The employee stays on file with their history. **Reactivate** brings them back.
+- To pay accrued leave at exit, use **Encash** on the Leave page before you calculate that month's run (see [Attendance and leave](/help/payroll/attendance-and-leave)).
+
+Changing an employee later never changes a payslip that has been approved.
+
+</ForDesktop>

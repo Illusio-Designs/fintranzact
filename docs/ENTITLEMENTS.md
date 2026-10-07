@@ -32,7 +32,7 @@ Operations note: [`TRIAL.md`](TRIAL.md). In short:
 - After `trial_ends_at` with no live plan subscription the organisation is `trial_expired` (read-only): "Your trial has ended. Choose a plan to continue. You can still view, search, download PDFs and export your data." A read-only organisation keeps **data export on every plan** (`limits.dataExport` is forced on while read-only; a Starter organisation could otherwise not export what the banner promises). Buying any plan makes a live subscription, which beats an expired trial; every billing change calls `invalidateEntitlements`, and the organisation row (trial dates and source included) is read fresh on every call, so the unlock is immediate.
 - `source = "none"`: no trial was granted (a trial was already used for this email, phone or GSTIN). Stored as started and ended at the same instant, so it derives `trial_expired`; `billing.status.trialMessage` carries the clear message.
 - A grandfathered organisation never has a trial (`trial.active` false).
-- Caps are **enforced where a hook exists, otherwise exposed only**: no AI, payroll or Store Pro feature exists yet (see `ADDON_FEATURES[...].implemented`), so nothing consumes `trial.caps` today. The future features must read `getEntitlements(tenantId).trial.caps` (AI question counter against `aiQuestions`, employee creation against `payrollEmployees`) while `trial.active`, and `requireAddon` already passes during a trial because the add-ons are on. Plan limits during the trial are enforced (they all read `getEntitlements().limits`).
+- Caps are **enforced where a hook exists, otherwise exposed only**. The **payroll employee cap is enforced**: `payrollEmployee.create` and `payrollEmployee.reactivate` refuse the 11th active employee (default cap 10, `trial.caps.payrollEmployees`) while `trial.active`, counted across the organisation's businesses, with a `plan_limit` error (`lib/payroll/access.ts` `enforceEmployeeCap`). No AI or Store Pro feature exists yet, so nothing consumes `aiQuestions` today: the future AI feature must read `getEntitlements(tenantId).trial.caps` against its question counter while `trial.active`. `requireAddon` passes during a trial because the add-ons are on. Plan limits during the trial are enforced (they all read `getEntitlements().limits`).
 - **Count limits follow the effective plan.** `limits` is the effective plan's (Business during a trial), so during a trial a Starter organisation (`maxApiKeys` 0) can create and use API keys, add more businesses and team members, and its audit window is unlimited. Every count limit goes through `getEntitlements`: `maxApiKeys` (`enforceApiKeyLimit`, `apiKeyUsable`), `maxBusinesses` (`enforceBusinessLimit` and `business.canCreate`), `maxTeamMembers`, `maxConcurrentSessions` and `auditRetentionDays`. `maxOwnedOrgs` is per user, across organisations: `ownedOrgLimit` (`enforceOrgCreationLimit`, `tenant.canCreateOrg`) takes the best EFFECTIVE plan over the organisations the user owns (a trialing organisation counts as Business). `business.canCreate` and `tenant.canCreateOrg` used to read the organisation's own plan and disagreed with the enforcing code during a trial; they now use the same source. When the trial ends (no subscription) the plan's own limits apply again with no special case: a Starter organisation's keys stop authenticating (`apiKeyUsable` is false for `maxApiKeys` 0, as for any plan without API access; the key rows are kept and work again on a plan with API access), new keys are refused (read-only), and a plan that has API access (Growth: 3) keeps authenticating existing keys, with the read-only gate refusing their writes. Covered by `integration/trial-count-limits.test.ts`.
 
 ## Error shape
@@ -184,6 +184,21 @@ An add-on is sold only when its feature is built. The single source of truth is 
 - An organisation that already holds an unavailable add-on (admin grant or an earlier subscription) still sees it on the Billing tab, active, with a "Coming soon" note and no purchase controls. Entitlement flags (`addons` in `billing.status`), webhooks, renewals, cancellation and the platform admin add-on on/off keep working; only new purchases are refused.
 - The Full Access Trial still reports add-on caps; the add-ons themselves arrive in the trial when they exist.
 
+## The Payroll add-on (Phase 1)
+
+Payroll is the add-on `payroll`. Its code is in place and fully gated, but `ADDON_FEATURES.payroll.implemented` is **false**, so it is not on sale (`billing.subscribeAddon` still refuses it, the pricing page does not list it); what exists today is the Full Access Trial (with the employee cap) and add-on subscriptions an admin has granted. Architecture note: [`architecture/payroll.md`](architecture/payroll.md).
+
+| Surface | Policy |
+|---|---|
+| Every procedure of `payrollEmployee`, `payrollSalary`, `payrollAttendance`, `payrollLeave`, `payrollRun` | Two checks, in this order: the CASL permission on the `Payroll` subject (`requireCan`, so a role without it is refused as `FORBIDDEN` whatever the add-on says), then the add-on (`assertPayroll` in `lib/payroll/access.ts`). Without the add-on: `FORBIDDEN` with `data.entitlement = { reason: "addon_required", addon: "payroll", upgradePath }`, the same shape as every add-on refusal |
+| Reads (queries, payslip PDFs, the bank file) | Pass for an organisation with the add-on. A **read-only** organisation (trial over, plan ended) keeps reading the payroll data it has (add-ons are off while read-only, so the reads are let through for it); a suspended organisation is refused |
+| Writes | Gated by the existing read-only gate (every payroll mutation appears as `gated` in `mutation-gate.md`) and refused without the add-on. `payrollRun.approve` needs `Payroll:manage` (owner, admin); `payrollSalary.templateDelete` needs `Payroll:delete` |
+| Employee cap | During a Full Access Trial, `payrollEmployee.create` / `reactivate` refuse the 11th active employee (`trial.caps.payrollEmployees`) with `plan_limit` |
+| Roles | Owner and admin: everything. Accountant: read, create, update (prepares payroll, cannot approve, delete or see unmasked identity numbers). Every other role, including `auditor` and `ca_filing`: nothing (`Payroll` is not in `ACCOUNTANT_READ_SUBJECTS`) |
+| REST | No new REST route: payslip PDFs and the bank file are tRPC queries (`payrollRun.payslipPdf`, `payrollRun.bankFile`), so `rest-entitlement-policy.md` is unchanged |
+
+Tests grant the add-on the way an admin grant does (`grantAddon` in `__tests__/helpers/fixtures.ts` inserts an active `billing_subscriptions` row); the role and isolation sweeps grant it to both sweep organisations so they reach each procedure's permission checks.
+
 ## How to add things
 
 - New tRPC mutation: nothing to do; it is gated. Run `pnpm --filter @fintranzact/api test entitlement-exempt` (with `-u` for snapshot files) and review `mutation-gate.md`. Allowlist only if it must work read-only.
@@ -196,10 +211,10 @@ An add-on is sold only when its feature is built. The single source of truth is 
 
 ## Not built yet
 
-- Enforcement of the trial caps (AI questions, payroll employees): exposed in `trial.caps`, consumed by nothing until those features exist.
+- Enforcement of the AI-questions trial cap: exposed in `trial.caps`, consumed by nothing until the AI assistant exists. (The payroll employee cap is enforced; see the trial section.)
 - WhatsApp trial reminders (email and in-app only for now).
 - Approvals (the `approvals` plan flag): no approval workflow exists in the code; the flag gates nothing (see Plan features).
-- AI assistant, payroll and Store Pro features: the features do not exist, so the add-ons are not on sale (`ADDON_FEATURES[...].implemented` is false; see "Add-on availability"). Admin grants and the flags for already-held add-ons keep working.
+- AI assistant and Store Pro features: the features do not exist, so the add-ons are not on sale (`ADDON_FEATURES[...].implemented` is false; see "Add-on availability"). Payroll Phase 1 is built and gated (next section) but `ADDON_FEATURES.payroll.implemented` stays false until the owner releases it. Admin grants and the flags for already-held add-ons keep working.
 
 ## Tests
 

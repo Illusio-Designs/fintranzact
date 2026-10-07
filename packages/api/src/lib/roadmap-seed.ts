@@ -2584,6 +2584,51 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-07-payroll-phase-1",
+    updates: [
+      {
+        // Built and tested (shared unit tests, API integration tests against Postgres, web component
+        // tests): the employee master with exit and full and final link; salary components, templates
+        // and annual CTC to monthly amounts with the 50% wage rule warning; attendance (daily status,
+        // check-in/out, shifts, weekly offs, holidays by state and branch), leave types with accrual,
+        // carry-forward and encashment, overtime; the payroll run (lock attendance, calculate,
+        // approve with maker-checker, post one balanced journal entry, mark paid against a bank or cash
+        // account); payslip PDFs with email; a generic bank payment file. All gated by the Payroll
+        // add-on (ADDON_FEATURES.payroll.implemented stays false). NOT ticked: "Payslip PDF with email
+        // and share link" (email and download are built; a public share link for salary data is
+        // deliberately not), "Accounting entries: salary expense, PF/ESI/TDS/PT payable, salary payable"
+        // (the expense, deductions payable and salaries payable entries are built; PF, ESI, TDS and PT
+        // payable are Phase 2), and "CA review of rules and figures before go-live" (open: the Labour
+        // Codes points, the overtime rate and the rounding rule need the CA). No mobile, CLI or MCP
+        // screens (parity exceptions). Not run in a browser or on a device when this was written.
+        title: "Payroll — Phase 1: employees, attendance, salary and payroll run",
+        status: "in_progress",
+        done: [
+          "Employee master: personal details and photo",
+          "Employee master: PAN, Aadhaar, UAN, ESIC IP number",
+          "Employee master: code, joining date, department, designation, branch, manager, type",
+          "Employee master: bank account, IFSC, name as per bank",
+          "Employee master: tax regime choice (new/old)",
+          "Employee exit: last working day, reason, link to full & final",
+          "Attendance: daily present/absent/half-day/week-off with check-in/out",
+          "Shifts, weekly offs and holiday calendar per state/branch + national holidays",
+          "Leave types CL/SL/EL-PL/LOP with accrual, carry-forward and encashment",
+          "Overtime at the configured rate (default 2x ordinary wage)",
+          "Monthly paid days and LOP days summary for payroll",
+          "Salary components: Basic, DA, HRA, conveyance, special, bonus, incentives, overtime",
+          "50% wage rule check (Basic + DA + retaining allowance ≥ 50% of remuneration)",
+          "Salary structure templates",
+          "Monthly salary derived from annual CTC",
+          "Payroll run: lock attendance",
+          "Payroll run: calculate earnings − LOP − deductions = net pay",
+          "Payroll run: review and approve (maker-checker)",
+          "Bank bulk-payment file",
+          "Pay salaries through existing bank and journal screens",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

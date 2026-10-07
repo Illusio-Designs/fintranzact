@@ -23,7 +23,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, ne } from "drizzle-orm";
 import { businessMembers } from "@fintranzact/db";
-import { createUser, createTenant, addMember, createSession, type TestUser, type TestTenant } from "./fixtures.js";
+import { createUser, createTenant, addMember, createSession, grantAddon, type TestUser, type TestTenant } from "./fixtures.js";
 import { createTestCaller } from "./create-test-caller.js";
 import { getTenantTestDb, getTestClient } from "./test-db.js";
 import { listProcedures, kindFor, primaryKind, type ProcInfo } from "./sweep-procs.js";
@@ -88,6 +88,10 @@ export async function buildSweepWorld(): Promise<SweepWorld> {
   const stamp = randomUUID().slice(0, 8);
   const tenantA = await createTenant({ name: "Org A Traders", slug: `org-a-${stamp}` });
   const tenantB = await createTenant({ name: `Org B ${CANARY}`, slug: `org-b-${stamp}` });
+  // Payroll is an add-on: both organisations hold it, so the sweeps reach the payroll procedures'
+  // own permission checks (the add-on gate itself is covered by integration/payroll.test.ts).
+  await grantAddon(tenantA.id, "payroll");
+  await grantAddon(tenantB.id, "payroll");
 
   const mk = async (role: string, email: string) => {
     const u = await createUser({ email, name: `Sweep ${role}` });
@@ -219,6 +223,15 @@ export const INPUT_OVERRIDES: Record<string, (ids: Record<string, string>) => un
   }),
   // Leaving the sweep's organisation would remove the sweep user from it for every later call: use one nobody belongs to (NOT_FOUND, not FORBIDDEN).
   "tenant.leave": () => ({ tenantId: randomUUID() }),
+  // Times of day in 24-hour form.
+  "payrollEmployee.shiftCreate": () => ({ startTime: "09:00", endTime: "18:00" }),
+  "payrollEmployee.shiftUpdate": () => ({ startTime: "09:00", endTime: "18:00" }),
+  // Month and date fields are refined strings ("2026-10", a real day): the generator can't see the refinement.
+  "payrollAttendance.month": () => ({ month: new Date().toISOString().slice(0, 7) }),
+  "payrollLeave.accrue": () => ({ month: new Date().toISOString().slice(0, 7) }),
+  "payrollRun.create": () => ({ month: new Date().toISOString().slice(0, 7) }),
+  "payrollRun.markPaid": () => ({ paidOn: new Date().toISOString().slice(0, 10) }),
+  "payrollEmployee.exit": () => ({ lastWorkingDay: new Date().toISOString().slice(0, 10) }),
   "auth.register": () => ({
     username: "sweeper",
     email: `sweep.${randomUUID().slice(0, 8)}@example.in`,
@@ -252,6 +265,9 @@ const uniq = () => randomUUID().slice(0, 8);
 // a random id repeat often (few digits survive, the rest is padding), so
 // count instead: 7 digits, clear of the 4-digit default chart.
 let accountSeq = 0;
+let leaveSeq = 0;
+let holidaySeq = 0;
+let runSeq = 0;
 const accountCode = (prefix: "8" | "9") => `${prefix}${String(++accountSeq).padStart(6, "0")}`;
 
 type Seeder = (b: SweepBusiness, c: Caller) => Promise<string | undefined>;
@@ -463,6 +479,32 @@ export const SEEDERS: Array<[string, Seeder]> = [
     const [row] = await getTenantTestDb().insert(businessMembers).values({ businessId: b.id, userId: u.id, role: "member" }).returning();
     return row!.id;
   }],
+  // Payroll (add-on): one record of each kind. Dates and codes are unique per call so throwaway copies never collide.
+  ["payrollDepartment", async (b, c) => firstId(await c.payrollEmployee.departmentCreate({ name: `Dept ${b.tag} ${uniq()}` } as never))],
+  ["payrollDesignation", async (b, c) => firstId(await c.payrollEmployee.designationCreate({ name: `Role ${b.tag} ${uniq()}` } as never))],
+  ["payrollShift", async (b, c) => firstId(await c.payrollEmployee.shiftCreate({ name: `Shift ${b.tag} ${uniq()}`, startTime: "09:00", endTime: "18:00", weeklyOffDays: [0], standardHours: 8 } as never))],
+  ["salaryComponent", async (b, c) => firstId(await c.payrollSalary.componentCreate({ code: `C${uniq().toUpperCase()}`, name: `Allowance ${b.tag} ${uniq()}`, type: "earning", category: "other_earning" } as never))],
+  ["salaryTemplate", async (b, c) => firstId(await c.payrollSalary.templateCreate({
+    name: `Template ${b.tag} ${uniq()}`, sampleAnnualCtc: 0, lines: [{ componentId: b.ids.salaryComponent!, calcType: "fixed", value: 100 }],
+  } as never))],
+  ["employee", async (b, c) => firstId(await c.payrollEmployee.create({ employeeCode: `E${uniq().toUpperCase()}`, name: `Employee ${b.tag} ${uniq()}`, dateOfJoining: "2026-01-01" } as never))],
+  ["leaveType", async (b, c) => firstId(await c.payrollLeave.typeCreate({ code: `L${uniq().slice(0, 6).toUpperCase()}`, name: `Leave ${b.tag} ${uniq()}`, isPaid: true, accrualType: "none" } as never))],
+  ["leaveApplication", async (b, c) => {
+    // A Monday a week further on every time, so applications never overlap.
+    const day = new Date(Date.UTC(2030, 0, 7 + 7 * ++leaveSeq)).toISOString().slice(0, 10);
+    return firstId(await c.payrollLeave.request({ employeeId: b.ids.employee!, leaveTypeId: b.ids.leaveType!, fromDate: day, toDate: day, reason: `Leave ${b.tag}` } as never));
+  }],
+  ["payrollHoliday", async (b, c) => {
+    const day = new Date(Date.UTC(2031, 0, 1 + ++holidaySeq)).toISOString().slice(0, 10);
+    return firstId(await c.payrollAttendance.holidayCreate({ date: day, name: `Holiday ${b.tag} ${uniq()}`, scope: "national" } as never));
+  }],
+  ["payrollRun", async (_b, c) => {
+    // One run per month: a different old month every time.
+    const m0 = 2015 * 12 + ++runSeq;
+    const month = `${Math.floor(m0 / 12)}-${String((m0 % 12) + 1).padStart(2, "0")}`;
+    return firstId(await c.payrollRun.create({ month } as never));
+  }],
+  ["payrollAdjustment", async (b, c) => firstId(await c.payrollRun.addAdjustment({ runId: b.ids.payrollRun!, employeeId: b.ids.employee!, name: `Advance ${b.tag}`, type: "deduction", amount: 10 } as never))],
   ["premise2", gen("warehouse.premiseCreate", (b) => ({ name: `Site ${b.tag} ${uniq()}`, code: `P${uniq()}` }))],
 ];
 

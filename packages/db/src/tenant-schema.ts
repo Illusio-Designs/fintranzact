@@ -2508,6 +2508,447 @@ export const warehousePermissionsRelations = relations(
   }),
 );
 
+// ── Payroll (add-on, Phase 1) ──────────────────────────────────────
+// Employees, attendance, leave, salary structures and monthly payroll runs.
+// Everything is per business. Money is numeric(15,2) rupees like the rest of
+// the app; the pure calculation lives in packages/shared (payroll-calc.ts).
+// Sensitive identity numbers (PAN, Aadhaar, UAN, ESIC, bank account) are
+// plain columns that the API masks in lists and never writes to logs or the
+// audit trail. Phase 2 (PF, ESI, PT, TDS) adds statutory components through
+// salary_components.statutory_kind and new columns; nothing here needs to be
+// migrated for it (docs/architecture/payroll.md).
+
+// One row per business: the payroll defaults.
+export const payrollSettings = pgTable("payroll_settings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  // Weekday numbers, 0 = Sunday. Used for an employee with no shift.
+  defaultWeeklyOffDays: jsonb("default_weekly_off_days").$type<number[]>().default([0]).notNull(),
+  standardHoursPerDay: numeric("standard_hours_per_day", { precision: 4, scale: 2 }).default("8").notNull(),
+  overtimeMultiplier: numeric("overtime_multiplier", { precision: 4, scale: 2 }).default("2").notNull(),
+  // 1-12; 4 = April.
+  leaveYearStartMonth: integer("leave_year_start_month").default(4).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("payroll_settings_business_idx").on(t.businessId),
+]);
+
+export const payrollDepartments = pgTable("payroll_departments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("payroll_departments_name_idx").on(t.businessId, t.name),
+]);
+
+export const payrollDesignations = pgTable("payroll_designations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("payroll_designations_name_idx").on(t.businessId, t.name),
+]);
+
+// A working pattern: hours and weekly offs.
+export const payrollShifts = pgTable("payroll_shifts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  startTime: text("start_time").notNull(),
+  endTime: text("end_time").notNull(),
+  weeklyOffDays: jsonb("weekly_off_days").$type<number[]>().default([0]).notNull(),
+  standardHours: numeric("standard_hours", { precision: 4, scale: 2 }).default("8").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("payroll_shifts_name_idx").on(t.businessId, t.name),
+]);
+
+//   status         - active | exited
+//   employment_type - permanent | contract | intern
+//   tax_regime     - new | old (a record of the choice; TDS itself is Phase 2)
+//   exit_*         - set by the exit action; fnf_payroll_run_id links the run
+//                    that settled the last month (full and final)
+export const employees = pgTable("employees", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  employeeCode: text("employee_code").notNull(),
+  name: text("name").notNull(),
+  dateOfBirth: date("date_of_birth"),
+  gender: text("gender"),
+  fatherOrSpouseName: text("father_or_spouse_name"),
+  address: text("address"),
+  phone: text("phone"),
+  email: text("email"),
+  // A small profile picture as a data URL (png/jpeg/webp). Only the detail view returns it.
+  photoDataUrl: text("photo_data_url"),
+  // Sensitive: masked in lists, never logged or audited.
+  pan: text("pan"),
+  aadhaar: text("aadhaar"),
+  uan: text("uan"),
+  esicNumber: text("esic_number"),
+  dateOfJoining: date("date_of_joining").notNull(),
+  departmentId: uuid("department_id").references(() => payrollDepartments.id, { onDelete: "set null" }),
+  designationId: uuid("designation_id").references(() => payrollDesignations.id, { onDelete: "set null" }),
+  branch: text("branch"),
+  workState: text("work_state"),
+  managerId: uuid("manager_id").references((): AnyPgColumn => employees.id, { onDelete: "set null" }),
+  shiftId: uuid("shift_id").references(() => payrollShifts.id, { onDelete: "set null" }),
+  employmentType: text("employment_type").default("permanent").notNull(),
+  taxRegime: text("tax_regime").default("new").notNull(),
+  // Sensitive: bank details.
+  bankAccountNumber: text("bank_account_number"),
+  bankIfsc: text("bank_ifsc"),
+  bankAccountName: text("bank_account_name"),
+  bankName: text("bank_name"),
+  status: text("status").default("active").notNull(),
+  lastWorkingDay: date("last_working_day"),
+  exitReason: text("exit_reason"),
+  exitNote: text("exit_note"),
+  fnfNote: text("fnf_note"),
+  fnfPayrollRunId: uuid("fnf_payroll_run_id"),
+  createdByUserId: uuid("created_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("employees_code_idx").on(t.businessId, t.employeeCode),
+  index("employees_business_status_idx").on(t.businessId, t.status),
+  index("employees_department_idx").on(t.departmentId),
+]);
+
+//   type     - earning | deduction | employer_contribution
+//   category - basic, da, hra, ... (packages/shared payroll-calc.ts)
+//   statutory_kind - reserved for Phase 2 (pf_employee, esi_employer, professional_tax,
+//                    income_tax_tds ...); null for every Phase 1 component
+export const salaryComponents = pgTable("salary_components", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  type: text("type").notNull(),
+  category: text("category").notNull(),
+  prorate: boolean("prorate").default(true).notNull(),
+  isWage: boolean("is_wage").default(false).notNull(),
+  statutoryKind: text("statutory_kind"),
+  sortOrder: integer("sort_order").default(100).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("salary_components_code_idx").on(t.businessId, t.code),
+]);
+
+export const salaryTemplates = pgTable("salary_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  description: text("description"),
+  sampleAnnualCtc: numeric("sample_annual_ctc", { precision: 15, scale: 2 }).default("0").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("salary_templates_name_idx").on(t.businessId, t.name),
+]);
+
+//   calc_type - fixed | percent_of_basic | percent_of_ctc | balance
+export const salaryTemplateLines = pgTable("salary_template_lines", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  templateId: uuid("template_id").notNull().references(() => salaryTemplates.id, { onDelete: "cascade" }),
+  componentId: uuid("component_id").notNull().references(() => salaryComponents.id),
+  calcType: text("calc_type").notNull(),
+  value: numeric("value", { precision: 15, scale: 2 }).default("0").notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+}, (t) => [
+  index("salary_template_lines_template_idx").on(t.templateId),
+  uniqueIndex("salary_template_lines_component_idx").on(t.templateId, t.componentId),
+]);
+
+// What an employee is paid, effective-dated. `breakdown` is the snapshot of
+// the monthly amounts at the time of assignment (components with names,
+// categories and amounts), so a later change to a template or component never
+// changes what was assigned. The run uses the latest assignment whose
+// effective_from is on or before the last day of the month.
+export const employeeSalaryAssignments = pgTable("employee_salary_assignments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id),
+  templateId: uuid("template_id").references(() => salaryTemplates.id, { onDelete: "set null" }),
+  annualCtc: numeric("annual_ctc", { precision: 15, scale: 2 }).notNull(),
+  monthlyCtc: numeric("monthly_ctc", { precision: 15, scale: 2 }).notNull(),
+  effectiveFrom: date("effective_from").notNull(),
+  breakdown: jsonb("breakdown").$type<Array<{
+    componentId: string | null;
+    code: string;
+    name: string;
+    type: string;
+    category: string;
+    isWage: boolean;
+    prorate: boolean;
+    statutoryKind: string | null;
+    calcType: string;
+    value: string;
+    monthly: string;
+  }>>().notNull(),
+  createdByUserId: uuid("created_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("employee_salary_assignments_employee_idx").on(t.employeeId, t.effectiveFrom),
+  index("employee_salary_assignments_business_idx").on(t.businessId),
+]);
+
+//   status - present | absent | half_day | week_off | holiday | leave
+//   source - manual | leave (written by an approved leave application)
+export const attendanceRecords = pgTable("attendance_records", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id),
+  date: date("date").notNull(),
+  status: text("status").notNull(),
+  leaveTypeId: uuid("leave_type_id"),
+  checkIn: text("check_in"),
+  checkOut: text("check_out"),
+  overtimeHours: numeric("overtime_hours", { precision: 5, scale: 2 }).default("0").notNull(),
+  note: text("note"),
+  source: text("source").default("manual").notNull(),
+  markedByUserId: uuid("marked_by_user_id"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("attendance_records_day_idx").on(t.employeeId, t.date),
+  index("attendance_records_business_date_idx").on(t.businessId, t.date),
+]);
+
+//   scope - national | state | branch
+export const payrollHolidays = pgTable("payroll_holidays", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  date: date("date").notNull(),
+  name: text("name").notNull(),
+  scope: text("scope").default("national").notNull(),
+  stateCode: text("state_code"),
+  branch: text("branch"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("payroll_holidays_business_date_idx").on(t.businessId, t.date),
+]);
+
+//   accrual_type - none | annual | monthly ; accrual_days is per year or per month
+export const leaveTypes = pgTable("leave_types", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  code: text("code").notNull(),
+  name: text("name").notNull(),
+  isPaid: boolean("is_paid").default(true).notNull(),
+  accrualType: text("accrual_type").default("none").notNull(),
+  accrualDays: numeric("accrual_days", { precision: 6, scale: 2 }).default("0").notNull(),
+  carryForward: boolean("carry_forward").default(false).notNull(),
+  carryForwardMax: numeric("carry_forward_max", { precision: 6, scale: 2 }).default("0").notNull(),
+  encashable: boolean("encashable").default(false).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("leave_types_code_idx").on(t.businessId, t.code),
+]);
+
+// A leave balance is the sum of an employee's ledger rows for a leave type
+// and leave year. kind: accrual | carry_forward | lapse | taken | cancelled |
+// encashment | adjustment. `days` is signed (taken and lapse are negative).
+// period_key makes an accrual idempotent ("2026-04" monthly, "2026" annual).
+export const leaveLedger = pgTable("leave_ledger", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id),
+  leaveTypeId: uuid("leave_type_id").notNull().references(() => leaveTypes.id),
+  leaveYear: integer("leave_year").notNull(),
+  entryDate: date("entry_date").notNull(),
+  kind: text("kind").notNull(),
+  days: numeric("days", { precision: 6, scale: 2 }).notNull(),
+  periodKey: text("period_key"),
+  applicationId: uuid("application_id"),
+  note: text("note"),
+  createdByUserId: uuid("created_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("leave_ledger_employee_idx").on(t.employeeId, t.leaveTypeId, t.leaveYear),
+  uniqueIndex("leave_ledger_period_idx").on(t.employeeId, t.leaveTypeId, t.kind, t.periodKey).where(sql`${t.periodKey} IS NOT NULL`),
+]);
+
+//   status - pending | approved | rejected | cancelled
+//   paid_days / lop_days - the split decided at approval: the balance is used first, the rest is loss of pay
+export const leaveApplications = pgTable("leave_applications", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id),
+  leaveTypeId: uuid("leave_type_id").notNull().references(() => leaveTypes.id),
+  fromDate: date("from_date").notNull(),
+  toDate: date("to_date").notNull(),
+  halfDayStart: boolean("half_day_start").default(false).notNull(),
+  halfDayEnd: boolean("half_day_end").default(false).notNull(),
+  days: numeric("days", { precision: 6, scale: 2 }).notNull(),
+  paidDays: numeric("paid_days", { precision: 6, scale: 2 }).default("0").notNull(),
+  lopDays: numeric("lop_days", { precision: 6, scale: 2 }).default("0").notNull(),
+  reason: text("reason"),
+  status: text("status").default("pending").notNull(),
+  decidedByUserId: uuid("decided_by_user_id"),
+  decidedByName: text("decided_by_name"),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+  decisionNote: text("decision_note"),
+  createdByUserId: uuid("created_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("leave_applications_business_idx").on(t.businessId, t.status),
+  index("leave_applications_employee_idx").on(t.employeeId, t.fromDate),
+]);
+
+// Leave encashment waiting for payroll: the next run that is calculated adds
+// it as an earning; payroll_run_id is set when that run is approved.
+export const leaveEncashments = pgTable("leave_encashments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id),
+  leaveTypeId: uuid("leave_type_id").notNull().references(() => leaveTypes.id),
+  days: numeric("days", { precision: 6, scale: 2 }).notNull(),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+  note: text("note"),
+  payrollRunId: uuid("payroll_run_id"),
+  createdByUserId: uuid("created_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("leave_encashments_employee_idx").on(t.employeeId),
+  index("leave_encashments_run_idx").on(t.payrollRunId),
+]);
+
+//   status - draft | attendance_locked | calculated | pending_approval | approved | posted | paid
+// One run per business and month. The two journal ids link the entries posted
+// to the books (accrual at posting, payment when marked paid).
+export const payrollRuns = pgTable("payroll_runs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  month: text("month").notNull(),
+  status: text("status").default("draft").notNull(),
+  daysInMonth: integer("days_in_month").notNull(),
+  employeeCount: integer("employee_count").default(0).notNull(),
+  grossTotal: numeric("gross_total", { precision: 15, scale: 2 }).default("0").notNull(),
+  deductionsTotal: numeric("deductions_total", { precision: 15, scale: 2 }).default("0").notNull(),
+  employerTotal: numeric("employer_total", { precision: 15, scale: 2 }).default("0").notNull(),
+  netTotal: numeric("net_total", { precision: 15, scale: 2 }).default("0").notNull(),
+  warnings: jsonb("warnings").$type<Array<{ code: string; message: string; employeeId?: string }>>().default([]).notNull(),
+  notes: text("notes"),
+  attendanceLockedAt: timestamp("attendance_locked_at", { withTimezone: true }),
+  attendanceLockedByUserId: uuid("attendance_locked_by_user_id"),
+  calculatedAt: timestamp("calculated_at", { withTimezone: true }),
+  calculatedByUserId: uuid("calculated_by_user_id"),
+  calculatedByName: text("calculated_by_name"),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  submittedByUserId: uuid("submitted_by_user_id"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  approvedByUserId: uuid("approved_by_user_id"),
+  approvedByName: text("approved_by_name"),
+  postedAt: timestamp("posted_at", { withTimezone: true }),
+  postedByUserId: uuid("posted_by_user_id"),
+  accrualJournalEntryId: uuid("accrual_journal_entry_id").references(() => journalEntries.id),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  paidOn: date("paid_on"),
+  paidByUserId: uuid("paid_by_user_id"),
+  paidFromBankAccountId: uuid("paid_from_bank_account_id").references(() => bankAccounts.id),
+  paidReference: text("paid_reference"),
+  paymentJournalEntryId: uuid("payment_journal_entry_id").references(() => journalEntries.id),
+  createdByUserId: uuid("created_by_user_id"),
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("payroll_runs_month_idx").on(t.businessId, t.month),
+]);
+
+// One row per employee in a run: a frozen result. `components` is the list of
+// every component with its full-month and paid amount (paise-exact rupee
+// strings), so a payslip can be rebuilt without any other table.
+export const payrollRunLines = pgTable("payroll_run_lines", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  runId: uuid("run_id").notNull().references(() => payrollRuns.id, { onDelete: "cascade" }),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id),
+  employeeCode: text("employee_code").notNull(),
+  employeeName: text("employee_name").notNull(),
+  department: text("department"),
+  designation: text("designation"),
+  daysInMonth: integer("days_in_month").notNull(),
+  employedDays: integer("employed_days").notNull(),
+  paidDays: numeric("paid_days", { precision: 5, scale: 1 }).notNull(),
+  lopDays: numeric("lop_days", { precision: 5, scale: 1 }).notNull(),
+  overtimeHours: numeric("overtime_hours", { precision: 6, scale: 2 }).default("0").notNull(),
+  components: jsonb("components").$type<Array<{
+    componentId: string | null;
+    code: string;
+    name: string;
+    type: string;
+    category: string;
+    isWage: boolean;
+    statutoryKind: string | null;
+    source: string;
+    full: string;
+    amount: string;
+  }>>().notNull(),
+  grossEarnings: numeric("gross_earnings", { precision: 15, scale: 2 }).notNull(),
+  totalDeductions: numeric("total_deductions", { precision: 15, scale: 2 }).notNull(),
+  employerContributions: numeric("employer_contributions", { precision: 15, scale: 2 }).default("0").notNull(),
+  netPay: numeric("net_pay", { precision: 15, scale: 2 }).notNull(),
+  warnings: jsonb("warnings").$type<Array<{ code: string; message: string }>>().default([]).notNull(),
+  isFinalSettlement: boolean("is_final_settlement").default(false).notNull(),
+  // Frozen at approval, for the bank file (sensitive).
+  bankAccountNumber: text("bank_account_number"),
+  bankIfsc: text("bank_ifsc"),
+  bankAccountName: text("bank_account_name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("payroll_run_lines_employee_idx").on(t.runId, t.employeeId),
+  index("payroll_run_lines_business_idx").on(t.businessId),
+]);
+
+// A one-off amount on one employee's line in one run (a manual deduction, an
+// advance recovery, an incentive). Kept across recalculation.
+export const payrollRunAdjustments = pgTable("payroll_run_adjustments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  runId: uuid("run_id").notNull().references(() => payrollRuns.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id),
+  name: text("name").notNull(),
+  type: text("type").notNull(),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+  note: text("note"),
+  createdByUserId: uuid("created_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("payroll_run_adjustments_run_idx").on(t.runId, t.employeeId),
+]);
+
+// The payslip of one employee for one approved run. `snapshot` holds
+// everything the PDF shows (business header, employee details with MASKED
+// identity numbers, the earnings and deductions, the net pay in words), taken
+// at approval and never changed afterwards. The PDF is drawn from it on demand.
+export const payslips = pgTable("payslips", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  runId: uuid("run_id").notNull().references(() => payrollRuns.id, { onDelete: "cascade" }),
+  lineId: uuid("line_id").notNull().references(() => payrollRunLines.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id),
+  month: text("month").notNull(),
+  number: text("number").notNull(),
+  snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull(),
+  emailedAt: timestamp("emailed_at", { withTimezone: true }),
+  // Masked address (a***@x.com), never the full one.
+  emailedTo: text("emailed_to"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("payslips_run_employee_idx").on(t.runId, t.employeeId),
+  index("payslips_business_idx").on(t.businessId),
+]);
+
 // ── Business-date column registry ─────────────────────────────────
 // The canonical user-entered business date for each document table.
 // Date-range filters coming from the UI (pills like "This Month", "This FY"),

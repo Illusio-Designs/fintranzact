@@ -5,7 +5,7 @@ ungated-exempt = public/protected base AND allowlisted (auth, billing, platform 
 inline-guarded = public/protected base, but the router calls assertWritable itself (INLINE_WRITE_GUARDED);
 ungated = public/protected base with no check at all: must be empty of business-data writes.
 
-mutations: 286 (gated 222, exempt 9, ungated-exempt 52, inline-guarded 3, ungated 0)
+mutations: 330 (gated 266, exempt 9, ungated-exempt 52, inline-guarded 3, ungated 0)
 
 | procedure | base | status |
 |---|---|---|
@@ -177,6 +177,50 @@ mutations: 286 (gated 222, exempt 9, ungated-exempt 52, inline-guarded 3, ungate
 | payment.create | authorized | gated |
 | payment.delete | authorized | gated |
 | payment.update | authorized | gated |
+| payrollAttendance.bulkMark | authorized | gated |
+| payrollAttendance.holidayCopyYear | authorized | gated |
+| payrollAttendance.holidayCreate | authorized | gated |
+| payrollAttendance.holidayDelete | authorized | gated |
+| payrollAttendance.mark | authorized | gated |
+| payrollAttendance.updateSettings | authorized | gated |
+| payrollEmployee.create | authorized | gated |
+| payrollEmployee.departmentCreate | authorized | gated |
+| payrollEmployee.departmentUpdate | authorized | gated |
+| payrollEmployee.designationCreate | authorized | gated |
+| payrollEmployee.designationUpdate | authorized | gated |
+| payrollEmployee.exit | authorized | gated |
+| payrollEmployee.reactivate | authorized | gated |
+| payrollEmployee.shiftCreate | authorized | gated |
+| payrollEmployee.shiftUpdate | authorized | gated |
+| payrollEmployee.update | authorized | gated |
+| payrollLeave.accrue | authorized | gated |
+| payrollLeave.cancel | authorized | gated |
+| payrollLeave.closeYear | authorized | gated |
+| payrollLeave.decide | authorized | gated |
+| payrollLeave.encash | authorized | gated |
+| payrollLeave.request | authorized | gated |
+| payrollLeave.typeCreate | authorized | gated |
+| payrollLeave.typeSeedDefaults | authorized | gated |
+| payrollLeave.typeUpdate | authorized | gated |
+| payrollRun.addAdjustment | authorized | gated |
+| payrollRun.approve | authorized | gated |
+| payrollRun.calculate | authorized | gated |
+| payrollRun.create | authorized | gated |
+| payrollRun.delete | authorized | gated |
+| payrollRun.lockAttendance | authorized | gated |
+| payrollRun.markPaid | authorized | gated |
+| payrollRun.payslipEmail | authorized | gated |
+| payrollRun.post | authorized | gated |
+| payrollRun.removeAdjustment | authorized | gated |
+| payrollRun.reopen | authorized | gated |
+| payrollRun.submit | authorized | gated |
+| payrollSalary.assign | authorized | gated |
+| payrollSalary.componentCreate | authorized | gated |
+| payrollSalary.componentSeedDefaults | authorized | gated |
+| payrollSalary.componentUpdate | authorized | gated |
+| payrollSalary.templateCreate | authorized | gated |
+| payrollSalary.templateDelete | authorized | gated |
+| payrollSalary.templateUpdate | authorized | gated |
 | period.closeYear | authorized | gated |
 | period.lockBooks | authorized | gated |
 | period.lockGstMonth | authorized | gated |

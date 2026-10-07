@@ -109,6 +109,17 @@ export const HELP_NAV: HelpNavSection[] = [
     ],
   },
   {
+    label: "Payroll (add-on)",
+    items: [
+      { label: "Payroll overview", slug: "payroll" },
+      { label: "Employees", slug: "payroll/employees" },
+      { label: "Salary structures", slug: "payroll/salary-structures" },
+      { label: "Attendance and leave", slug: "payroll/attendance-and-leave" },
+      { label: "Running payroll", slug: "payroll/running-payroll" },
+      { label: "Payslips and the bank file", slug: "payroll/payslips" },
+    ],
+  },
+  {
     label: "Settings & Team",
     items: [
       { label: "Settings", slug: "settings" },

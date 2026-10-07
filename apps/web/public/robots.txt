@@ -37,6 +37,7 @@ Disallow: /manufacturing
 Disallow: /parties
 Disallow: /partner-portal
 Disallow: /payments
+Disallow: /payroll
 Disallow: /physical-stock
 Disallow: /platform
 Disallow: /pos

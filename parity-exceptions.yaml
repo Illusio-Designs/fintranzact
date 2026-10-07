@@ -16,6 +16,68 @@ schema_version: "2.0"
 exceptions:
   mobile:
     not-applicable:
+      # --- Payroll (add-on, Phase 1) ---
+      # Payroll is the paid Payroll add-on. Employees, salary structures, attendance grids, leave, payroll runs,
+      # approvals, payslips and the bank file are a desk job done on the web; the salary data is sensitive and
+      # a phone is not where an owner reviews and approves a payroll run. Mobile has no Payroll area in Phase 1.
+      - payrollAttendance.bulkMark
+      - payrollAttendance.holidayCopyYear
+      - payrollAttendance.holidayCreate
+      - payrollAttendance.holidayDelete
+      - payrollAttendance.holidayList
+      - payrollAttendance.mark
+      - payrollAttendance.month
+      - payrollAttendance.settings
+      - payrollAttendance.updateSettings
+      - payrollEmployee.capacity
+      - payrollEmployee.create
+      - payrollEmployee.departmentList
+      - payrollEmployee.designationList
+      - payrollEmployee.exit
+      - payrollEmployee.get
+      - payrollEmployee.list
+      - payrollEmployee.reactivate
+      - payrollEmployee.departmentCreate
+      - payrollEmployee.departmentUpdate
+      - payrollEmployee.designationCreate
+      - payrollEmployee.designationUpdate
+      - payrollEmployee.shiftCreate
+      - payrollEmployee.shiftList
+      - payrollEmployee.update
+      - payrollLeave.accrue
+      - payrollLeave.applications
+      - payrollLeave.balances
+      - payrollLeave.cancel
+      - payrollLeave.closeYear
+      - payrollLeave.decide
+      - payrollLeave.encash
+      - payrollLeave.request
+      - payrollLeave.typeCreate
+      - payrollLeave.typeList
+      - payrollLeave.typeSeedDefaults
+      - payrollRun.addAdjustment
+      - payrollRun.approve
+      - payrollRun.calculate
+      - payrollRun.create
+      - payrollRun.delete
+      - payrollRun.get
+      - payrollRun.list
+      - payrollRun.lockAttendance
+      - payrollRun.markPaid
+      - payrollRun.payslipEmail
+      - payrollRun.post
+      - payrollRun.removeAdjustment
+      - payrollRun.reopen
+      - payrollRun.submit
+      - payrollSalary.assign
+      - payrollSalary.componentCreate
+      - payrollSalary.componentList
+      - payrollSalary.componentSeedDefaults
+      - payrollSalary.overview
+      - payrollSalary.templateCreate
+      - payrollSalary.templateDelete
+      - payrollSalary.templateList
+      - payrollSalary.templateUpdate
       # --- Inventory (warehouses & stock) ---
       # Warehouse setup, transfers, adjustments and physical stock are web-only screens for now.
       - stock.adjust
@@ -492,6 +554,67 @@ exceptions:
 
   cli:
     not-applicable:
+      # --- Payroll (add-on, Phase 1) ---
+      # Payroll is the paid Payroll add-on and is not on sale yet. Its screens are web-only for now; the CLI has no
+      # payroll commands (salary and identity data, maker-checker approval and payslip PDFs are not scripted yet).
+      - payrollAttendance.bulkMark
+      - payrollAttendance.holidayCopyYear
+      - payrollAttendance.holidayCreate
+      - payrollAttendance.holidayDelete
+      - payrollAttendance.holidayList
+      - payrollAttendance.mark
+      - payrollAttendance.month
+      - payrollAttendance.settings
+      - payrollAttendance.updateSettings
+      - payrollEmployee.capacity
+      - payrollEmployee.create
+      - payrollEmployee.departmentList
+      - payrollEmployee.designationList
+      - payrollEmployee.exit
+      - payrollEmployee.get
+      - payrollEmployee.list
+      - payrollEmployee.reactivate
+      - payrollEmployee.departmentCreate
+      - payrollEmployee.departmentUpdate
+      - payrollEmployee.designationCreate
+      - payrollEmployee.designationUpdate
+      - payrollEmployee.shiftCreate
+      - payrollEmployee.shiftList
+      - payrollEmployee.update
+      - payrollLeave.accrue
+      - payrollLeave.applications
+      - payrollLeave.balances
+      - payrollLeave.cancel
+      - payrollLeave.closeYear
+      - payrollLeave.decide
+      - payrollLeave.encash
+      - payrollLeave.request
+      - payrollLeave.typeCreate
+      - payrollLeave.typeList
+      - payrollLeave.typeSeedDefaults
+      - payrollRun.addAdjustment
+      - payrollRun.approve
+      - payrollRun.calculate
+      - payrollRun.create
+      - payrollRun.delete
+      - payrollRun.get
+      - payrollRun.list
+      - payrollRun.lockAttendance
+      - payrollRun.markPaid
+      - payrollRun.payslipEmail
+      - payrollRun.post
+      - payrollRun.removeAdjustment
+      - payrollRun.reopen
+      - payrollRun.submit
+      - payrollSalary.assign
+      - payrollSalary.componentCreate
+      - payrollSalary.componentList
+      - payrollSalary.componentSeedDefaults
+      - payrollSalary.overview
+      - payrollSalary.templateCreate
+      - payrollSalary.templateDelete
+      - payrollSalary.templateList
+      - payrollSalary.templateUpdate
       # --- Store policy pages ---
       # Long-text editor with preview, set up once per store in Settings → Online Store.
       - store.getPolicies
@@ -841,6 +964,67 @@ exceptions:
 
   mcp:
     not-applicable:
+      # --- Payroll (add-on, Phase 1) ---
+      # Payroll is the paid Payroll add-on and is not on sale yet. Salary, identity and bank data is deliberately
+      # not exposed to MCP tools until the owner decides how an AI client may see it; the screens are web-only for now.
+      - payrollAttendance.bulkMark
+      - payrollAttendance.holidayCopyYear
+      - payrollAttendance.holidayCreate
+      - payrollAttendance.holidayDelete
+      - payrollAttendance.holidayList
+      - payrollAttendance.mark
+      - payrollAttendance.month
+      - payrollAttendance.settings
+      - payrollAttendance.updateSettings
+      - payrollEmployee.capacity
+      - payrollEmployee.create
+      - payrollEmployee.departmentList
+      - payrollEmployee.designationList
+      - payrollEmployee.exit
+      - payrollEmployee.get
+      - payrollEmployee.list
+      - payrollEmployee.reactivate
+      - payrollEmployee.departmentCreate
+      - payrollEmployee.departmentUpdate
+      - payrollEmployee.designationCreate
+      - payrollEmployee.designationUpdate
+      - payrollEmployee.shiftCreate
+      - payrollEmployee.shiftList
+      - payrollEmployee.update
+      - payrollLeave.accrue
+      - payrollLeave.applications
+      - payrollLeave.balances
+      - payrollLeave.cancel
+      - payrollLeave.closeYear
+      - payrollLeave.decide
+      - payrollLeave.encash
+      - payrollLeave.request
+      - payrollLeave.typeCreate
+      - payrollLeave.typeList
+      - payrollLeave.typeSeedDefaults
+      - payrollRun.addAdjustment
+      - payrollRun.approve
+      - payrollRun.calculate
+      - payrollRun.create
+      - payrollRun.delete
+      - payrollRun.get
+      - payrollRun.list
+      - payrollRun.lockAttendance
+      - payrollRun.markPaid
+      - payrollRun.payslipEmail
+      - payrollRun.post
+      - payrollRun.removeAdjustment
+      - payrollRun.reopen
+      - payrollRun.submit
+      - payrollSalary.assign
+      - payrollSalary.componentCreate
+      - payrollSalary.componentList
+      - payrollSalary.componentSeedDefaults
+      - payrollSalary.overview
+      - payrollSalary.templateCreate
+      - payrollSalary.templateDelete
+      - payrollSalary.templateList
+      - payrollSalary.templateUpdate
       # --- Store policy pages ---
       # Long-text editor with preview, set up once per store in Settings → Online Store.
       - store.getPolicies

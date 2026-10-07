@@ -33,6 +33,21 @@ interface EmailService {
   sendNotice(to: string, subject: string, text: string): Promise<void>;
   /** A payment reminder from a business to its customer. */
   sendReminder(mail: ReminderEmail): Promise<void>;
+  /** A payslip (PDF attached) from a business to one employee. */
+  sendPayslip(mail: PayslipEmail): Promise<void>;
+}
+
+export interface PayslipEmail {
+  to: string;
+  /** The business name, shown as the sender's display name. */
+  fromName: string;
+  /** The business's own email, so a reply reaches the business. */
+  replyTo?: string | null;
+  subject: string;
+  text: string;
+  filename: string;
+  /** The PDF. */
+  pdf: Buffer;
 }
 
 export interface ReminderEmail {
@@ -377,6 +392,11 @@ export function buildInvitationEmail(p: InvitationEmailParams): BuiltEmail {
 }
 
 class ConsoleEmailService implements EmailService {
+  async sendPayslip(mail: PayslipEmail): Promise<void> {
+    // Dev / self-hosted without a mail provider: log that it happened, never the address, the amounts or the file.
+    console.log(`[payslip] email to ${maskEmail(mail.to)} from ${JSON.stringify(mail.fromName)} subject=${JSON.stringify(mail.subject)} (${mail.pdf.length} bytes attached)`);
+  }
+
   async sendReminder(mail: ReminderEmail): Promise<void> {
     // Dev / self-hosted without a mail provider: log that it happened, never the address or the message.
     console.log(`[reminder] email to ${maskEmail(mail.to)} from ${JSON.stringify(mail.fromName)} subject=${JSON.stringify(mail.subject)}`);
@@ -441,6 +461,27 @@ class ConsoleEmailService implements EmailService {
 }
 
 class ResendEmailService implements EmailService {
+  async sendPayslip(mail: PayslipEmail): Promise<void> {
+    const address = /<([^>]+)>/.exec(this.fromAddress)?.[1] ?? this.fromAddress;
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: `${safeDisplayName(mail.fromName)} <${address}>`,
+        to: mail.to,
+        ...(mail.replyTo ? { reply_to: mail.replyTo } : {}),
+        subject: mail.subject,
+        text: mail.text,
+        html: `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><title>${escapeHtml(mail.subject)}</title></head><body style="margin:0;padding:24px;background-color:#f3f4f6;"><table role="presentation" width="100%" style="max-width:560px;margin:0 auto;background-color:#ffffff;border:1px solid #e5e7eb;border-radius:12px;"><tr><td style="padding:24px;${MAIL_FONT}font-size:15px;line-height:23px;color:#374151;">${escapeHtml(mail.text).replace(/\n/g, "<br />")}</td></tr></table></body></html>`,
+        attachments: [{ filename: mail.filename, content: mail.pdf.toString("base64") }],
+      }),
+    });
+    if (!res.ok) {
+      console.error("[email] Resend payslip failed:", res.status);
+      throw new Error("Failed to send email");
+    }
+  }
+
   async sendReminder(mail: ReminderEmail): Promise<void> {
     const address = /<([^>]+)>/.exec(this.fromAddress)?.[1] ?? this.fromAddress;
     const res = await fetch("https://api.resend.com/emails", {

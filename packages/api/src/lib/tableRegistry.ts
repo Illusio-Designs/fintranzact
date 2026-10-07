@@ -45,6 +45,25 @@ import {
   auditLog,
   gstr2bUploads,
   gstr2bRecords,
+  payrollSettings,
+  payrollDepartments,
+  payrollDesignations,
+  payrollShifts,
+  employees,
+  salaryComponents,
+  salaryTemplates,
+  salaryTemplateLines,
+  employeeSalaryAssignments,
+  attendanceRecords,
+  payrollHolidays,
+  leaveTypes,
+  leaveLedger,
+  leaveApplications,
+  leaveEncashments,
+  payrollRuns,
+  payrollRunLines,
+  payrollRunAdjustments,
+  payslips,
 } from "@fintranzact/db";
 
 /**
@@ -659,4 +678,28 @@ export const TABLE_REGISTRY: TableRegistryEntry[] = [
     recomputeOnImport: [],
     scope: { type: "direct" },
   },
+
+  // 36+. Payroll (add-on), in foreign-key order. Identity and bank numbers are
+  // exported in full (only the owner can export a business) and are optional
+  // columns in the row schemas, so a file without them still imports.
+  { tableName: "payroll_settings", drizzleTable: payrollSettings, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "payroll_departments", drizzleTable: payrollDepartments, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "payroll_designations", drizzleTable: payrollDesignations, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "payroll_shifts", drizzleTable: payrollShifts, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
+  // An employee's manager is another employee: two-pass insert.
+  { tableName: "employees", drizzleTable: employees, redactedFields: [], importable: true, selfFkFields: ["managerId"], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "salary_components", drizzleTable: salaryComponents, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "salary_templates", drizzleTable: salaryTemplates, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "salary_template_lines", drizzleTable: salaryTemplateLines, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "child", parentTable: "salary_templates", parentFk: "template_id" } },
+  { tableName: "employee_salary_assignments", drizzleTable: employeeSalaryAssignments, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "leave_types", drizzleTable: leaveTypes, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "attendance_records", drizzleTable: attendanceRecords, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 5000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "payroll_holidays", drizzleTable: payrollHolidays, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "leave_ledger", drizzleTable: leaveLedger, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 5000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "leave_applications", drizzleTable: leaveApplications, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "leave_encashments", drizzleTable: leaveEncashments, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "payroll_runs", drizzleTable: payrollRuns, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "payroll_run_lines", drizzleTable: payrollRunLines, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "payroll_run_adjustments", drizzleTable: payrollRunAdjustments, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "payslips", drizzleTable: payslips, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
 ];
