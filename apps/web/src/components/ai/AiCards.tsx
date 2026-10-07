@@ -1,10 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { aiLinkHref, type AiBarChartCard, type AiCard, type AiLinkCard, type AiTableCard } from "@fintranzact/shared";
+import { aiLinkHref, type AiAnyCard, type AiBarChartCard, type AiLinkCard, type AiTableCard } from "@fintranzact/shared";
+import { AiConfirmationCardView } from "./AiConfirmationCard";
 
 /**
- * The cards under an assistant answer. Only the three validated card types are
+ * The cards under an assistant answer. Only the four validated card types are
  * ever drawn, as plain text in real table / SVG / link elements: no HTML from
- * the model, and links only to the in-app routes `aiLinkHref` allows.
+ * the model, and links only to the in-app routes `aiLinkHref` allows. The
+ * confirmation card is built by the server from a stored pending action.
  */
 
 const NUMBER = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 });
@@ -103,12 +105,13 @@ export function AiLink({ card, onNavigate }: { card: AiLinkCard; onNavigate?: ()
   );
 }
 
-export function AiCards({ cards, onNavigate }: { cards: AiCard[]; onNavigate?: () => void }) {
+export function AiCards({ cards, onNavigate }: { cards: AiAnyCard[]; onNavigate?: () => void }) {
   if (cards.length === 0) return null;
   return (
     <div className="mt-2 space-y-2">
       {cards.map((card, i) =>
-        card.type === "table" ? <AiTable key={i} card={card} />
+        card.type === "confirmation" ? <AiConfirmationCardView key={card.actionId} card={card} onNavigate={onNavigate} />
+        : card.type === "table" ? <AiTable key={i} card={card} />
         : card.type === "bar_chart" ? <AiBarChart key={i} card={card} />
         : <AiLink key={i} card={card} onNavigate={onNavigate} />,
       )}

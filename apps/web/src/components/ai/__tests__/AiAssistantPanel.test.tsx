@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
   invalidate: vi.fn(),
   fetchConversation: vi.fn(),
   deleteMutate: vi.fn(),
+  confirm: vi.fn(),
 }));
 
 vi.mock("@/lib/trpc", () => ({
@@ -20,6 +21,10 @@ vi.mock("@/lib/trpc", () => ({
     ai: {
       status: { useQuery: () => ({ data: h.aiStatus.current, isLoading: h.aiStatus.current === undefined }) },
       conversations: { useQuery: () => ({ data: h.conversations.current, isLoading: false }) },
+      confirmAction: { useMutation: () => ({ mutateAsync: h.confirm }) },
+      cancelAction: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+      updateAction: { useMutation: () => ({ mutateAsync: vi.fn() }) },
+      action: { useQuery: () => ({ data: undefined }) },
       deleteConversation: {
         useMutation: (opts: { onSuccess?: (r: unknown, v: unknown) => void } = {}) => ({
           isPending: false,
@@ -48,6 +53,8 @@ import { AskAiButton } from "../AskAiButton";
 import { openAiPanel, resetAiPanel, useAiPanel } from "@/lib/ai-panel";
 import { AiRequestError, type AiStreamEvent } from "@/lib/ai-stream";
 import { axe } from "vitest-axe";
+import { resetAiPageEntity, setAiPageEntity } from "@/lib/ai-page-context";
+import { buildAiConfirmationCard } from "@fintranzact/shared";
 
 const billing = (over: Record<string, unknown> = {}) => ({
   state: "active", readOnly: false, reason: null, canManageBilling: true,
@@ -58,6 +65,7 @@ const billing = (over: Record<string, unknown> = {}) => ({
 const okStatus = (over: Record<string, unknown> = {}) => ({
   configured: true, access: "ok", isOwner: true, tier: "assistant",
   allowance: { scope: "month", limit: 150, used: 10, includedRemaining: 140, creditsRemaining: 0, remaining: 140, exhausted: false },
+  actionKinds: [],
   ...over,
 });
 
@@ -251,6 +259,121 @@ describe("asking", () => {
     render(<AiAssistantPanel />);
     expect(screen.getByLabelText("Your question")).toHaveValue("What is my GST payable?");
     expect(h.stream).not.toHaveBeenCalled();
+  });
+});
+
+describe("actions (Phase 2)", () => {
+  const INVOICE = "3f0f4d7e-8d7b-4a53-9a10-2f4f8d3c1a11";
+  const ACTION = "5a0f4d7e-8d7b-4a53-9a10-2f4f8d3c1a22";
+  const actionCard = () =>
+    buildAiConfirmationCard(
+      {
+        id: ACTION, kind: "create_party", status: "pending", expiresAt: new Date(Date.now() + 20 * 60_000),
+        preview: { title: "Add customer", fields: [{ label: "Name", value: "Meera Stores" }], totals: [], warnings: [], note: "Nothing is saved until you tap Confirm.", edits: [] },
+      },
+      new Date(),
+    )!;
+
+  beforeEach(() => {
+    window.history.pushState({}, "", "/");
+    resetAiPageEntity();
+  });
+
+  it("shows no action examples when the assistant may not prepare actions for this person", () => {
+    h.aiStatus.current = okStatus({ actionKinds: [] });
+    openAiPanel();
+    render(<AiAssistantPanel />);
+    expect(screen.queryByTestId("ai-action-starters")).not.toBeInTheDocument();
+    expect(screen.getByText(/I only read your books/)).toBeInTheDocument();
+  });
+
+  it("shows only the examples for what the role may do, in English, Hinglish and Hindi, and fills the box instead of sending", async () => {
+    h.aiStatus.current = okStatus({ actionKinds: ["create_invoice", "record_payment"] });
+    openAiPanel();
+    render(<AiAssistantPanel />);
+    const list = screen.getByRole("list", { name: "Suggested actions" });
+    const labels = within(list).getAllByRole("button").map((b) => b.textContent);
+    expect(labels).toEqual(expect.arrayContaining(["Create an invoice for …", "Record a payment of … from …", "… ke liye invoice banao", "… के लिए इनवॉइस बनाओ"]));
+    expect(labels).not.toContain("Add a new customer …");
+    expect(labels).not.toContain("Send a payment reminder to …");
+    expect(within(list).getByRole("button", { name: "… के लिए इनवॉइस बनाओ" })).toHaveAttribute("lang", "hi");
+    expect(screen.getByText(/nothing is saved until you tap Confirm/i)).toBeInTheDocument();
+    await userEvent.click(within(list).getByRole("button", { name: "Create an invoice for …" }));
+    expect(screen.getByLabelText("Your question")).toHaveValue("Create an invoice for ");
+    expect(h.stream).not.toHaveBeenCalled();
+  });
+
+  it("sends the page the person is on with the question: an invoice id from an allowlisted route", async () => {
+    answerWith([{ event: "done", data: { conversationId: "c1", messageId: "m1", text: "ok", cards: [], remaining: 1 } }]);
+    window.history.pushState({}, "", `/invoices?id=${INVOICE}`);
+    openAiPanel();
+    render(<AiAssistantPanel />);
+    await userEvent.type(screen.getByLabelText("Your question"), "send this invoice to the customer{Enter}");
+    await waitFor(() => expect(h.stream).toHaveBeenCalledTimes(1));
+    expect(h.stream.mock.calls[0]![0]).toMatchObject({ message: "send this invoice to the customer", context: { kind: "invoice", id: INVOICE } });
+  });
+
+  it("sends a party the page published, and nothing from a route that is not allowlisted", async () => {
+    answerWith([{ event: "done", data: { conversationId: "c1", messageId: "m1", text: "ok", cards: [], remaining: 1 } }]);
+    window.history.pushState({}, "", "/parties");
+    setAiPageEntity({ kind: "party", id: INVOICE });
+    openAiPanel();
+    const { unmount } = render(<AiAssistantPanel />);
+    await userEvent.type(screen.getByLabelText("Your question"), "what does this customer owe{Enter}");
+    await waitFor(() => expect(h.stream).toHaveBeenCalledTimes(1));
+    expect(h.stream.mock.calls[0]![0]).toMatchObject({ context: { kind: "party", id: INVOICE } });
+    unmount();
+    h.stream.mockClear();
+    window.history.pushState({}, "", `/settings?id=${INVOICE}`);
+    openAiPanel();
+    render(<AiAssistantPanel />);
+    await userEvent.type(screen.getByLabelText("Your question"), "hello{Enter}");
+    await waitFor(() => expect(h.stream).toHaveBeenCalledTimes(1));
+    expect(h.stream.mock.calls[0]![0].context ?? null).toBeNull();
+  });
+
+  it("shows what it is preparing while a propose tool runs, then the confirmation card, which the person confirms", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    h.stream.mockImplementation(async (opts: { onEvent: (e: AiStreamEvent) => void }) => {
+      opts.onEvent({ event: "tool", data: { name: "propose_create_party", status: "start" } });
+      await gate;
+      opts.onEvent({ event: "tool", data: { name: "propose_create_party", status: "ok" } });
+      opts.onEvent({ event: "done", data: { conversationId: "c1", messageId: "m1", text: "I prepared it. Please review and tap Confirm.", cards: [actionCard()], remaining: 1 } });
+    });
+    h.confirm.mockResolvedValue({
+      status: "confirmed", message: null, executedNow: true,
+      card: { ...actionCard(), status: "confirmed", edits: [], result: { entityType: "party", id: INVOICE, label: "Customer Meera Stores" } },
+    });
+    openAiPanel();
+    render(<AiAssistantPanel />);
+    await userEvent.type(screen.getByLabelText("Your question"), "Add a customer Meera Stores{Enter}");
+    expect(await screen.findByTestId("ai-activity")).toHaveTextContent("Preparing a new party for you to review…");
+    await act(async () => release());
+    const card = await screen.findByTestId("ai-card-confirmation");
+    expect(card).toHaveTextContent("Meera Stores");
+    // Only the person's tap confirms: nothing was sent to the server by the stream.
+    expect(h.confirm).not.toHaveBeenCalled();
+    await userEvent.click(within(card).getByRole("button", { name: "Confirm" }));
+    expect(h.confirm).toHaveBeenCalledWith({ id: ACTION });
+    expect(await screen.findByTestId("ai-card-outcome")).toHaveTextContent("Customer Meera Stores");
+  });
+
+  it("a reopened chat shows its cards with the status the server says they have now", async () => {
+    h.conversations.current = [{ id: "c1", title: "Add Meera", updatedAt: "2026-10-09T10:00:00.000Z", createdAt: "2026-10-09T09:00:00.000Z" }];
+    h.fetchConversation.mockResolvedValue({
+      id: "c1",
+      messages: [
+        { id: "a", role: "user", content: "Add Meera Stores" },
+        { id: "b", role: "assistant", content: "Prepared.", cards: [{ ...actionCard(), status: "confirmed", edits: [], result: { entityType: "party", id: INVOICE, label: "Customer Meera Stores" } }] },
+      ],
+    });
+    openAiPanel();
+    render(<AiAssistantPanel />);
+    await userEvent.click(screen.getByRole("button", { name: "Past chats" }));
+    await userEvent.click(within(screen.getByTestId("ai-history")).getByRole("button", { name: /^Add Meera/ }));
+    expect(await screen.findByTestId("ai-card-status")).toHaveTextContent("Done");
+    expect(screen.queryByRole("button", { name: "Confirm" })).not.toBeInTheDocument();
   });
 });
 

@@ -206,6 +206,8 @@ const PNG_1PX =
  * sweep is using for this call.
  */
 export const INPUT_OVERRIDES: Record<string, (ids: Record<string, string>) => unknown> = {
+  // The card's edits are a record with key-pattern validation the generator can't see.
+  "ai.updateAction": () => ({ edits: { notes: "x" } }),
   "business.uploadLogo": () => ({ data: { dataUrl: PNG_1PX } }),
   "business.uploadSignature": () => ({ data: { dataUrl: PNG_1PX } }),
   // Exactly one of paymentId / expenseId / bankTransactionId.

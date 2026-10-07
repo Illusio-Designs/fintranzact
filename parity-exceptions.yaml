@@ -20,12 +20,19 @@ exceptions:
       # Phase 1 is the responsive WEB chat panel (right-hand panel on desktop, full screen on phone widths). The native mobile app
       # has no assistant yet: it needs its own streaming client and screens, which are a separate piece of work. The owner switches and the
       # admin usage and price table are a web / platform console job.
+      # Phase 2 (actions with confirmation): the confirmation card (review, edit, confirm, cancel) is part of that web chat; the
+      # native app has no card component or chat to host it, so action, updateAction, confirmAction and cancelAction have no mobile
+      # screens. Everything they run (invoice, payment, party, item, reminder) is available natively through the normal screens.
+      - ai.action
       - ai.begin
+      - ai.cancelAction
+      - ai.confirmAction
       - ai.conversation
       - ai.conversations
       - ai.deleteConversation
       - ai.settings
       - ai.status
+      - ai.updateAction
       - ai.updateSettings
       - platform.aiCredits
       - platform.aiPrices
@@ -585,13 +592,18 @@ exceptions:
     not-applicable:
       # --- AI business assistant (add-on, Phase 1) ---
       # The CLI is itself a way to talk to the business from outside the app (and the MCP server gives any AI client the same data), so
-      # an in-app chat, its history, its owner switches and the platform admin usage console are not applicable here.
+      # an in-app chat, its history, its owner switches and the platform admin usage console are not applicable here. Phase 2 actions
+      # are the chat's confirmation card (the person's Confirm tap); the CLI runs the same procedures directly with its own commands.
+      - ai.action
       - ai.begin
+      - ai.cancelAction
+      - ai.confirmAction
       - ai.conversation
       - ai.conversations
       - ai.deleteConversation
       - ai.settings
       - ai.status
+      - ai.updateAction
       - ai.updateSettings
       - platform.aiCredits
       - platform.aiPrices
@@ -1022,13 +1034,18 @@ exceptions:
     not-applicable:
       # --- AI business assistant (add-on, Phase 1) ---
       # The MCP server IS the tool surface an AI client uses, with the client's own model; the in-app assistant (chat history, quota,
-      # owner switches, admin usage and price table) is a separate product feature and does not apply to MCP.
+      # owner switches, admin usage and price table) is a separate product feature and does not apply to MCP. Phase 2 actions are the
+      # in-app chat's confirmation card; an MCP client's own host decides how to confirm a tool call, and MCP calls the real tools directly.
+      - ai.action
       - ai.begin
+      - ai.cancelAction
+      - ai.confirmAction
       - ai.conversation
       - ai.conversations
       - ai.deleteConversation
       - ai.settings
       - ai.status
+      - ai.updateAction
       - ai.updateSettings
       - platform.aiCredits
       - platform.aiPrices

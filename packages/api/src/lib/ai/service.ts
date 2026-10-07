@@ -320,15 +320,34 @@ function ownConversation(ctx: Pick<AiCtx, "businessId" | "user">, id: string) {
 
 async function loadHistory(ctx: AiCtx, conversationId: string): Promise<AiMessage[]> {
   const rows = await ctx.db
-    .select({ role: aiMessages.role, content: aiMessages.content })
+    .select({ role: aiMessages.role, content: aiMessages.content, cards: aiMessages.cards })
     .from(aiMessages)
     .where(and(eq(aiMessages.conversationId, conversationId), eq(aiMessages.businessId, ctx.businessId)))
     .orderBy(desc(aiMessages.createdAt))
     .limit(HISTORY_MESSAGES);
+  // The model is not handed the result of a write. What it may know, in the NEXT question, is where each card
+  // it prepared stands now (waiting, done as invoice INV-7 with this id, cancelled, failed): server-built text
+  // from the person's own actions, so "now send that invoice to the customer" can find the invoice.
+  const cardIds = [...new Set(rows.flatMap((r) => (r.role === "assistant" && r.cards ? parseTrustedAiCards(r.cards) : []).flatMap((c) => (c.type === "confirmation" ? [c.actionId] : []))))];
+  const live = await loadActionCards(ctx, cardIds);
+  const withCardNotes = (r: { role: string; content: string; cards: unknown }): string => {
+    if (r.role !== "assistant" || !r.cards) return r.content.slice(0, HISTORY_CHARS);
+    const notes = parseTrustedAiCards(r.cards).flatMap((c) => {
+      if (c.type !== "confirmation") return [];
+      const card = live.get(c.actionId);
+      if (!card) return [];
+      const outcome =
+        card.status === "confirmed" && card.result ? `done: ${clip(card.result.label, 80)}${card.result.id ? ` (id ${card.result.id})` : ""}`
+        : card.status === "failed" ? `failed${card.error ? `: ${clip(card.error, 120)}` : ""}`
+        : card.status;
+      return [`[Card shown to the person: "${clip(card.title, 60)}" - ${outcome}]`];
+    });
+    return `${r.content.slice(0, HISTORY_CHARS)}${notes.length ? `\n\n${notes.join("\n")}` : ""}`;
+  };
   const turns = rows
     .reverse()
     .filter((r) => r.role === "user" || r.role === "assistant")
-    .map((r) => ({ role: r.role as "user" | "assistant", content: r.content.slice(0, HISTORY_CHARS) }));
+    .map((r) => ({ role: r.role as "user" | "assistant", content: withCardNotes(r) }));
   // The API wants the first turn to be the user's and turns to alternate: drop a leading assistant turn and merge repeats.
   const out: AiMessage[] = [];
   for (const t of turns) {

@@ -22,6 +22,13 @@ const ACTION_LABELS: Record<string, string> = {
   // AI assistant: the question (short) and each read it made. Entries carry source "via AI assistant".
   "ai.question": "Asked the AI assistant",
   "ai.toolCall": "AI assistant looked up",
+  // Actions the assistant prepared for a person to confirm (Phase 2). The record the person confirmed has its own entry
+  // (invoice.create ...) which also says "via AI assistant".
+  "ai.action.propose": "AI assistant prepared an action",
+  "ai.action.edit": "Edited an action the AI assistant prepared",
+  "ai.action.confirm": "Confirmed an action the AI assistant prepared",
+  "ai.action.cancel": "Cancelled an action the AI assistant prepared",
+  "ai.action.fail": "An action the AI assistant prepared could not be completed",
   "gstReturns.requestOtp": "GST portal OTP requested",
   "gstReturns.verifyOtp": "GST portal login verified",
   "gstReturns.saveGstr1": "GSTR-1 saved to the GST portal",
@@ -472,6 +479,7 @@ function ActivityLogContent() {
                 (meta.returnPeriod as string) ||
                 (meta.question as string) ||
                 (meta.tool as string) ||
+                (meta.summary as string) ||
                 null;
               const viaAi = meta.source === "via AI assistant";
               // Accountants (CA) are shown with their access level.

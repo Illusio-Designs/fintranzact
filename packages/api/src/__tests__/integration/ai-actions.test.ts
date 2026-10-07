@@ -293,7 +293,7 @@ describe("confirming creates exactly what the normal procedure creates", () => {
     expect(out.status).toBe("confirmed");
     expect(await countRows(payments)).toBe(before + 1);
     const row = await rowOf(card.actionId);
-    await ownerC.payment.create({ ...(row.payload as never), invoiceId: inv2.id });
+    await ownerC.payment.create({ ...(row.payload as never as Parameters<typeof ownerC.payment.create>[0]), invoiceId: inv2.id });
     const rows = await db().select().from(payments).where(eq(payments.businessId, biz.id));
     const viaAi = rows.find((p) => p.id === out.card.result!.id)!;
     const direct = rows.find((p) => p.invoiceId === inv2.id)!;
@@ -323,7 +323,7 @@ describe("confirming creates exactly what the normal procedure creates", () => {
     const pOut = await ownerC.ai.confirmAction({ id: pCard.actionId });
     expect(pOut.card.result).toMatchObject({ entityType: "party", label: "Customer Meera Stores" });
     const pRow = await rowOf(pCard.actionId);
-    const directParty = await ownerC.party.create({ ...(pRow.payload as never), name: "Meera Stores Direct" });
+    const directParty = await ownerC.party.create({ ...(pRow.payload as never as Parameters<typeof ownerC.party.create>[0]), name: "Meera Stores Direct" });
     const [viaAi] = await db().select().from(parties).where(eq(parties.id, pOut.card.result!.id!));
     expect(viaAi).toMatchObject({ name: "Meera Stores", pan: directParty.pan, stateCode: directParty.stateCode, type: "customer", openingBalance: "0.00" });
     expect(viaAi!.pan).toBe("AABCU9603R");
@@ -477,7 +477,12 @@ describe("cancel, expiry and edit", () => {
   it("bad edits are refused with a message and change nothing; ids and unknown fields cannot be edited", async () => {
     const card = await proposeOk(ownerCtx(), "propose_create_invoice", INVOICE_INPUT());
     const row = await rowOf(card.actionId);
-    for (const edits of [{ "lines.0.quantity": "-3" }, { "lines.0.quantity": "abc" }, { date: "2026-13-45" }, { "lines.0.discountPercent": "150" }, { partyId: kiran.id }, { "lines.9.quantity": "1" }, { "lines.0.itemId": cotton.id }, { "__proto__": "x" }]) {
+    const badEdits: Array<Record<string, string>> = [
+      { "lines.0.quantity": "-3" }, { "lines.0.quantity": "abc" }, { date: "2026-13-45" }, { "lines.0.discountPercent": "150" },
+      { partyId: kiran.id }, { "lines.9.quantity": "1" }, { "lines.0.itemId": cotton.id },
+      JSON.parse('{"__proto__":"x"}') as Record<string, string>, // an own property named __proto__, which an object literal cannot make
+    ];
+    for (const edits of badEdits) {
       await expect(ownerC.ai.updateAction({ id: card.actionId, edits }), JSON.stringify(edits)).rejects.toMatchObject({ code: expect.stringMatching(/BAD_REQUEST/) });
     }
     expect((await rowOf(card.actionId)).payload).toEqual(row.payload);
@@ -869,6 +874,19 @@ describe("the chat shows the card, keeps it current, and cleans up", () => {
     // The tool call itself is audited by name and outcome.
     const audit = await db().select().from(auditLog).where(eq(auditLog.action, "ai.toolCall"));
     expect(audit.map((a) => JSON.parse(a.metadata!).tool)).toContain("propose_create_party");
+  });
+
+  it("the next question tells the model where each card stands (never the write itself): waiting, then done with the record's id", async () => {
+    const begun = await ownerC.ai.begin({ message: "Add Meera Stores" });
+    const card = await proposeOk({ ...ownerCtx(), conversationId: begun.conversationId }, "propose_create_party", { type: "customer", name: "History Buyer" });
+    await db().insert(aiMessages).values({ conversationId: begun.conversationId, businessId: biz.id, role: "assistant", content: "I prepared it.", cards: [card] as never });
+    const waiting = (await ownerC.ai.begin({ conversationId: begun.conversationId, message: "what is the status?" })).history;
+    expect(waiting.at(-1)!.content).toContain('[Card shown to the person: "Add customer" - pending]');
+    const out = await ownerC.ai.confirmAction({ id: card.actionId });
+    const after = (await ownerC.ai.begin({ conversationId: begun.conversationId, message: "now what?" })).history;
+    expect(after.at(-1)!.content).toContain(`done: Customer History Buyer (id ${out.card.result!.id})`);
+    // Another person's chat history never carries it.
+    expect((await sellerC.ai.conversations()).length).toBe(0);
   });
 
   it("the lazy sweep expires waiting actions and purges old finished ones; audit entries stay", async () => {

@@ -18,7 +18,7 @@
  *          tool  { name, status: "start" | "ok" | "denied" | ... }
  *          text  { delta }
  *          done  { conversationId, messageId, text, cards, remaining }   (cards include any confirmation cards for
- *                prepared actions; confirming is NOT part of this stream: it is ai.confirmAction, called by the person's tap)
+ *                prepared actions; confirming is NOT part of this stream: it is a separate tRPC call made by the person's tap on the card)
  *          error { code, message }     (the question is given back unless text was already produced)
  * Failures before the stream starts are plain JSON { error, code, entitlement? } with an HTTP status.
  */

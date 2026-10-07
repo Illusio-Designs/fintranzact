@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useAiPageEntity } from "@/lib/ai-page-context";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { usePageSearch } from "@/lib/page-search";
@@ -95,6 +96,8 @@ function PartiesPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const deleteConfirm = useDeleteConfirmation();
   const [selectedPartyId, setSelectedPartyId] = useState<string | null>(null);
+  // Tell the AI assistant which record is open, so "this customer" means this one (the server verifies it).
+  useAiPageEntity("party", selectedPartyId);
   const [exporting, setExporting] = useState(false);
 
   const debouncedSearch = useDebounce(search, 300);
