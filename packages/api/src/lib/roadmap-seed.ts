@@ -2629,6 +2629,54 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-08-payroll-phase-2",
+    updates: [
+      {
+        // Built and tested (shared unit tests with boundary values, API integration tests against
+        // Postgres, web component tests): statutory settings per financial year (every rate, ceiling,
+        // slab and due date is data, with a last-verified note and a "Verify with your CA" label);
+        // business registrations (PF + establishment code, ESI + code, PT states, LWF state, TDS);
+        // PF, VPF, EPS, ESI, professional tax, LWF and TDS on salary computed in the payroll run from
+        // the settings and the employee's flags, with PF/EPS hidden everywhere when PF is off; payable
+        // accounts per authority and recording statutory payments with challan details; the PF ECR
+        // text file, the ESIC contribution file, PT and LWF sheets, Form 24Q working data, a Form 16
+        // working copy (labelled for CA review) and the wages, attendance, leave, bonus and gratuity
+        // registers. NOT ticked: "Professional Tax slabs by state (Maharashtra, Karnataka, Gujarat,
+        // West Bengal…)" (the editable per-state slabs are built, but only Maharashtra is seeded and
+        // the other states ship empty on purpose until a CA supplies the figures), "Other deductions:
+        // advances, loan EMIs, penalties" (loans and recurring deductions as records belong to a later
+        // phase; Phase 1 adjustments cover one-offs) and "CA verification of all rates and limits
+        // before go-live" (open: see docs/PAYROLL-CA-VERIFICATION.md). The income-tax slabs also ship
+        // empty. No mobile, CLI or MCP screens (parity exceptions). Not run in a browser; no portal
+        // has validated any file layout.
+        title: "Payroll — Phase 2: PF, ESI, PT, TDS and statutory filings",
+        status: "in_progress",
+        done: [
+          "Statutory rates and limits as settings per financial year",
+          "Business settings: PF registered + establishment code",
+          "Business settings: ESI registered + code",
+          "Business settings: PT state(s) and LWF state",
+          "Hide PF/EPS everywhere when the business has no PF",
+          "Employee settings: PF applicable yes/no",
+          "Employee settings: EPS eligible, with auto-suggest (post-Sep-2014 > ₹15,000, age 58, international workers)",
+          "Employee settings: excluded employee (opted out, never a PF member)",
+          "PF on actual wages or capped at ₹15,000",
+          "VPF percentage",
+          "PF/EPF calculation: 12% + 12%, EPS 8.33% capped; full 12% to EPF without EPS",
+          "ESI calculation (0.75% / 3.25%, ≤ ₹21,000) with auto-off and contribution-period rules",
+          "TDS on salary (s.192) for new and old regime, standard deduction and 87A rebate",
+          "Labour Welfare Fund by state (half-yearly/yearly)",
+          "PF ECR file (PF members only; zero pension without EPS)",
+          "ESIC monthly contribution file",
+          "TDS Form 24Q quarterly data",
+          "Form 16 yearly",
+          "PT returns per state",
+          "Registers: wages, attendance, leave, bonus, gratuity",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

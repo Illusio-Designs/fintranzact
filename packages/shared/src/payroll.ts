@@ -170,7 +170,7 @@ export const salaryComponentSchema = z
     category: z.enum(COMPONENT_CATEGORIES),
     prorate: z.boolean().default(true),
     isWage: z.boolean().default(false),
-    /** Reserved for Phase 2 (PF, ESI, PT, TDS). Phase 1 accepts only null. */
+    /** Always null here: statutory components (PF, ESI, PT, LWF, TDS) are calculated by the payroll run, not added by hand. */
     statutoryKind: z.null().optional(),
     sortOrder: z.number().int().min(0).max(999).default(100),
   })
@@ -390,5 +390,17 @@ export function payslipNumber(month: string, employeeCode: string): string {
   return `PS-${month}-${employeeCode.replace(/[^A-Za-z0-9]/g, "").toUpperCase() || "EMP"}`;
 }
 
-export const PAYROLL_PHASE2_NOTE =
-  "Provident fund, ESI, professional tax and income-tax TDS are not calculated yet. Enter them as manual deductions until the statutory module is released.";
+/**
+ * The note on the salary screen about statutory deductions. They are not salary
+ * components: each payroll run calculates them from the Statutory settings. Only
+ * the schemes the business is registered for are named, so a business without PF
+ * never sees PF mentioned.
+ */
+export function payrollStatutoryNote(reg: { pf: boolean; esi: boolean; pt: boolean; lwf: boolean; tds: boolean }): string {
+  const names = [reg.pf ? "provident fund" : null, reg.esi ? "ESI" : null, reg.pt ? "professional tax" : null, reg.lwf ? "labour welfare fund" : null, reg.tds ? "income-tax TDS" : null].filter(Boolean) as string[];
+  if (names.length === 0) {
+    return "Statutory deductions (for example ESI, professional tax and income-tax TDS) are calculated automatically in each payroll run once you turn them on in Statutory settings. Do not add them here as deductions.";
+  }
+  const list = names.length === 1 ? names[0]! : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return `Statutory deductions (${list}) are calculated automatically in each payroll run from your Statutory settings. Do not add them here as components or manual deductions.`;
+}

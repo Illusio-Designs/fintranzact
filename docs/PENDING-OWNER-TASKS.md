@@ -218,7 +218,10 @@ SMS is built but off until you have:
 ## 8. CA (chartered accountant) sign-off
 
 Give your CA `docs/GST-RETURNS-CA-VERIFICATION.md` and
-`docs/SUBSCRIPTION-GST-CA-CHECKLIST.md`. They need to confirm:
+`docs/SUBSCRIPTION-GST-CA-CHECKLIST.md`. For Payroll (before it is released), also
+`docs/PAYROLL-CA-VERIFICATION.md`: every statutory default, rule and file layout
+(PF, ESI, professional tax, LWF, TDS on salary, ECR, ESIC, Form 24Q, Form 16).
+They need to confirm:
 
 - TDS & TCS sections, rates and thresholds.
 - GSTR-4 tables and due dates (composition dealers).

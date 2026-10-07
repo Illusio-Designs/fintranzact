@@ -59,6 +59,12 @@ const WEB_ONLY: Set<string> = new Set([
   "payroll/attendance-and-leave.mdx",
   "payroll/running-payroll.mdx",
   "payroll/payslips.mdx",
+  "payroll/statutory-settings.mdx",
+  "payroll/pf-and-esi.mdx",
+  "payroll/professional-tax-and-lwf.mdx",
+  "payroll/tds-on-salary.mdx",
+  "payroll/form-16-and-24q.mdx",
+  "payroll/statutory-files-and-registers.mdx",
 
   // Online store admin (desktop-only)
   "online-store/index.mdx",

@@ -5,7 +5,7 @@ import {
   COMPONENT_CATEGORY_LABELS,
   COMPONENT_TYPES,
   COMPONENT_TYPE_LABELS,
-  PAYROLL_PHASE2_NOTE,
+  payrollStatutoryNote,
   PayrollRuleError,
   categoriesForType,
   computeSalaryBreakdown,
@@ -28,6 +28,7 @@ import { InputField, SelectField, TextareaField } from "@/components/ui/FormFiel
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 import { CheckRow, Panel, TABLE, onError } from "./payroll-ui";
+import { useStatutoryRegistrations } from "./statutory-ui";
 
 interface ComponentRow {
   id: string;
@@ -110,6 +111,7 @@ export function BreakdownTable({ breakdown }: { breakdown: SalaryBreakdown }) {
 
 export function SalaryTab() {
   const utils = trpc.useUtils();
+  const { reg } = useStatutoryRegistrations();
   const canDelete = useCan("Payroll", "delete");
   const components = trpc.payrollSalary.componentList.useQuery();
   const templates = trpc.payrollSalary.templateList.useQuery();
@@ -137,7 +139,7 @@ export function SalaryTab() {
 
   return (
     <div className="space-y-6">
-      <p className="rounded-lg bg-surface-1 px-4 py-3 text-sm text-text-secondary">{PAYROLL_PHASE2_NOTE}</p>
+      <p className="rounded-lg bg-surface-1 px-4 py-3 text-sm text-text-secondary">{payrollStatutoryNote(reg)}</p>
 
       <Panel
         title="Salary components"

@@ -2528,9 +2528,81 @@ export const payrollSettings = pgTable("payroll_settings", {
   overtimeMultiplier: numeric("overtime_multiplier", { precision: 4, scale: 2 }).default("2").notNull(),
   // 1-12; 4 = April.
   leaveYearStartMonth: integer("leave_year_start_month").default(4).notNull(),
+  // Statutory registrations (Phase 2). When PF is not registered, PF/EPS never
+  // appear anywhere (salary lines, payslips, registers, files, screens).
+  pfRegistered: boolean("pf_registered").default(false).notNull(),
+  pfEstablishmentCode: text("pf_establishment_code"),
+  esiRegistered: boolean("esi_registered").default(false).notNull(),
+  esiCode: text("esi_code"),
+  // GST state codes of the states the business deducts professional tax in.
+  ptStates: jsonb("pt_states").$type<string[]>().default([]).notNull(),
+  lwfState: text("lwf_state"),
+  // Deduct income tax (TDS) on salary under s.192; needs the TAN on the business.
+  tdsEnabled: boolean("tds_enabled").default(false).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   uniqueIndex("payroll_settings_business_idx").on(t.businessId),
+]);
+
+// The statutory rates, ceilings, slabs and due dates, per business and
+// financial year (`financial_year` is the start year: 2026 = 2026-27). `rates`
+// is a StatutoryRates document (packages/shared payroll-statutory.ts). A
+// payroll month uses the latest row at or before its financial year, else the
+// shipped defaults. Editable by owners and admins; verify with your CA.
+export const payrollStatutorySettings = pgTable("payroll_statutory_settings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  financialYear: integer("financial_year").notNull(),
+  rates: jsonb("rates").$type<Record<string, unknown>>().notNull(),
+  // "Last verified" note: who checked these figures and when (free text) and the date.
+  verifiedNote: text("verified_note"),
+  verifiedOn: date("verified_on"),
+  updatedByUserId: uuid("updated_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("payroll_statutory_settings_year_idx").on(t.businessId, t.financialYear),
+]);
+
+// An employee's investment declarations for a financial year (old regime), in
+// rupees: { sec80C, sec80D, hraExemption, homeLoanInterest, otherDeductions,
+// previousEmployerIncome, previousEmployerTds }.
+export const employeeTaxDeclarations = pgTable("employee_tax_declarations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  financialYear: integer("financial_year").notNull(),
+  amounts: jsonb("amounts").$type<Record<string, number>>().notNull(),
+  updatedByUserId: uuid("updated_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("employee_tax_declarations_idx").on(t.employeeId, t.financialYear),
+  index("employee_tax_declarations_business_idx").on(t.businessId),
+]);
+
+//   kind - pf | esi | pt | lwf | tds
+// A payment of a statutory liability to the authority: Dr the payable account,
+// Cr cash/bank (journal entry) and a withdrawal on the bank account. `run_id`
+// is the payroll run (wage month) it settles; several payments may settle one.
+export const payrollStatutoryPayments = pgTable("payroll_statutory_payments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  runId: uuid("run_id").notNull().references(() => payrollRuns.id, { onDelete: "restrict" }),
+  kind: text("kind").notNull(),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+  paidOn: date("paid_on").notNull(),
+  challanNumber: text("challan_number"),
+  challanDate: date("challan_date"),
+  // TDS challans carry a BSR code; free text for the other kinds' reference (TRRN, payment ref).
+  reference: text("reference"),
+  bankAccountId: uuid("bank_account_id").references(() => bankAccounts.id),
+  journalEntryId: uuid("journal_entry_id").references(() => journalEntries.id),
+  createdByUserId: uuid("created_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("payroll_statutory_payments_run_idx").on(t.runId, t.kind),
+  index("payroll_statutory_payments_business_idx").on(t.businessId),
 ]);
 
 export const payrollDepartments = pgTable("payroll_departments", {
@@ -2611,6 +2683,19 @@ export const employees = pgTable("employees", {
   exitNote: text("exit_note"),
   fnfNote: text("fnf_note"),
   fnfPayrollRunId: uuid("fnf_payroll_run_id"),
+  // Statutory settings (Phase 2). They only matter when the business is
+  // registered for the scheme (payroll_settings): PF off means none of the PF
+  // fields is used or shown.
+  pfApplicable: boolean("pf_applicable").default(true).notNull(),
+  // Excluded employee: wages above the ceiling and never a PF member (opted out).
+  pfExcluded: boolean("pf_excluded").default(false).notNull(),
+  epsEligible: boolean("eps_eligible").default(true).notNull(),
+  pfOnActualWages: boolean("pf_on_actual_wages").default(false).notNull(),
+  vpfPercent: numeric("vpf_percent", { precision: 5, scale: 2 }).default("0").notNull(),
+  internationalWorker: boolean("international_worker").default(false).notNull(),
+  // The date the employee joined PF, when it differs from the joining date (feeds the EPS suggestion).
+  pfJoinDate: date("pf_join_date"),
+  esiApplicable: boolean("esi_applicable").default(true).notNull(),
   createdByUserId: uuid("created_by_user_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -2837,6 +2922,10 @@ export const payrollRuns = pgTable("payroll_runs", {
   employerTotal: numeric("employer_total", { precision: 15, scale: 2 }).default("0").notNull(),
   netTotal: numeric("net_total", { precision: 15, scale: 2 }).default("0").notNull(),
   warnings: jsonb("warnings").$type<Array<{ code: string; message: string; employeeId?: string }>>().default([]).notNull(),
+  // The statutory settings this run was calculated with (Phase 2), frozen at
+  // calculation: the financial year, the registrations (PF, ESI, PT states,
+  // LWF state, TDS) and the rates document. Null for a run with no statutory part.
+  statutory: jsonb("statutory").$type<Record<string, unknown>>(),
   notes: text("notes"),
   attendanceLockedAt: timestamp("attendance_locked_at", { withTimezone: true }),
   attendanceLockedByUserId: uuid("attendance_locked_by_user_id"),
@@ -2899,6 +2988,10 @@ export const payrollRunLines = pgTable("payroll_run_lines", {
   employerContributions: numeric("employer_contributions", { precision: 15, scale: 2 }).default("0").notNull(),
   netPay: numeric("net_pay", { precision: 15, scale: 2 }).notNull(),
   warnings: jsonb("warnings").$type<Array<{ code: string; message: string }>>().default([]).notNull(),
+  // Statutory working of the month (Phase 2: PF wages, EPS wages, ESI coverage,
+  // PT state, TDS projection), in paise integers. Frozen with the line; the
+  // filings (ECR, ESIC, 24Q, Form 16) read it. Null for a line with none.
+  statutory: jsonb("statutory").$type<Record<string, unknown>>(),
   isFinalSettlement: boolean("is_final_settlement").default(false).notNull(),
   // Frozen at approval, for the bank file (sensitive).
   bankAccountNumber: text("bank_account_number"),

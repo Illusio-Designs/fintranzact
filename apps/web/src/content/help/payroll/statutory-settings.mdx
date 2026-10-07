@@ -1,0 +1,56 @@
+---
+title: Statutory settings
+description: "Tell Payroll which schemes your business is registered for (PF, ESI, professional tax, labour welfare fund, TDS on salary) and keep every rate, limit, slab and due date for each financial year. Verify each figure with your CA."
+sidebar:
+  order: 6
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+
+<ForDesktop>
+
+Open **Payroll → Statutory settings**. Everything the statutory part of payroll uses is **data you can edit**, not fixed in the software: the registrations of your business and, for each **financial year** (April to March), every rate, ceiling, slab and due date.
+
+**Verify with your CA.** Rates and limits change, often with the Budget, and they are your responsibility. Fintranzact ships only a few starting figures; each one is listed in the verification checklist your CA can sign off. Review the settings before your first statutory run and again every year.
+
+## Registrations
+
+| Setting | What it does |
+|---|---|
+| **Registered for provident fund (PF)** and the **PF establishment code** | Turns on PF, voluntary PF and EPS. **When it is off, PF and EPS appear nowhere**: not on salary lines, payslips, files, dues or screens |
+| **Registered for ESI** and the **ESI code** | Turns on ESI contributions |
+| **Professional tax states** | The states you deduct professional tax in. An employee's **state of work** decides which state's slabs apply |
+| **Labour welfare fund state** | The state whose labour welfare fund you deduct |
+| **Deduct income tax (TDS) on salary** | Turns on TDS under section 192. Needs the business's TAN and the income-tax slabs below |
+
+Only an owner or admin can change the registrations and the rates; an accountant can read them. A change applies to the next run you **calculate**. A run you already calculated keeps what it used (and an approved run never changes).
+
+## Rates and limits for a financial year
+
+Choose the financial year at the top. A run uses the **latest year saved at or before its own**, so last year's figures carry forward until you save new ones. Add a short **last verified** note (who checked and against what) and the date, then **Save**.
+
+Only the sections for the schemes you are registered for are shown.
+
+- **Provident fund**: employee and employer percentages (12 and 12), the EPS share (8.33), the PF and EPS wage ceilings (₹15,000), the rounding, the date from which a new member earning above the ceiling has no EPS, and the age EPS stops (58)
+- **ESI**: employee and employer percentages (0.75 and 3.25), the wage ceiling (₹21,000) and the rounding
+- **Professional tax, per state**: slabs by monthly gross (above, up to, the tax a month, a different **February** amount where the state needs one, and whether the slab is for men, women or everyone) and the yearly maximum (₹2,500)
+- **Labour welfare fund, per state**: how often, the months it is deducted in, and the employee and employer amounts
+- **Income tax on salary**: for the new and the old regime the slabs, the standard deduction, the section 87A rebate limit and amount, marginal relief, the cess, the rounding, and the old-regime limits for 80C, 80D and home-loan interest
+- **Due dates**: the day of the following month that PF, ESI, TDS, professional tax and labour welfare fund are due, shown on the [Statutory dues](/help/payroll/statutory-files-and-registers) tab
+- **Bonus and gratuity registers**: the parameters the computed registers use
+
+### What is left empty on purpose
+
+Fintranzact does not guess figures it cannot be sure of. **State professional tax slabs** (except the ones it starts with, which you must still check), **labour welfare fund amounts** and the **income-tax slabs** start **empty**:
+
+- the screen says **"Slabs not configured: add your state's slabs"** (or the equivalent for labour welfare fund and income tax),
+- the payroll run deducts **nothing** for that item and shows a **warning**, so you cannot miss it.
+
+Enter the figures your CA gives you, save, and calculate the run again.
+
+## Related
+
+- [PF and ESI](/help/payroll/pf-and-esi), [Professional tax and LWF](/help/payroll/professional-tax-and-lwf), [TDS on salary](/help/payroll/tds-on-salary)
+- [Statutory files and registers](/help/payroll/statutory-files-and-registers) and [Form 16 and Form 24Q](/help/payroll/form-16-and-24q)
+
+</ForDesktop>

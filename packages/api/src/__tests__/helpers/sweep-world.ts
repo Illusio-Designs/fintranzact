@@ -23,6 +23,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, ne } from "drizzle-orm";
 import { businessMembers } from "@fintranzact/db";
+import { defaultStatutoryRates } from "@fintranzact/shared";
 import { createUser, createTenant, addMember, createSession, grantAddon, type TestUser, type TestTenant } from "./fixtures.js";
 import { createTestCaller } from "./create-test-caller.js";
 import { getTenantTestDb, getTestClient } from "./test-db.js";
@@ -231,6 +232,10 @@ export const INPUT_OVERRIDES: Record<string, (ids: Record<string, string>) => un
   "payrollLeave.accrue": () => ({ month: new Date().toISOString().slice(0, 7) }),
   "payrollRun.create": () => ({ month: new Date().toISOString().slice(0, 7) }),
   "payrollRun.markPaid": () => ({ paidOn: new Date().toISOString().slice(0, 10) }),
+  // The statutory rates document is a deeply refined object (percentages, "MM-DD" dates, state codes): send the shipped defaults.
+  "payrollStatutory.saveRates": () => ({ financialYear: 2026, rates: defaultStatutoryRates() }),
+  "payrollStatutory.recordPayment": () => ({ kind: "pf", paidOn: new Date().toISOString().slice(0, 10), amount: 1 }),
+  "payrollStatutory.register": () => ({ register: "wages", month: new Date().toISOString().slice(0, 7) }),
   "payrollEmployee.exit": () => ({ lastWorkingDay: new Date().toISOString().slice(0, 10) }),
   "auth.register": () => ({
     username: "sweeper",

@@ -18,19 +18,19 @@ Choose **+ Add employee**. The form has four parts:
 | Part | What it holds |
 |---|---|
 | **Personal details** | Employee code (unique in the business), name, date of birth, gender, father's or spouse's name, mobile, email, address and a small photo (PNG, JPEG or WebP under 150 KB) |
-| **Statutory IDs** | PAN, Aadhaar, UAN (for PF) and ESIC IP number |
+| **Statutory IDs** | PAN and Aadhaar. The UAN is asked only if the business is registered for PF, and the ESIC IP number only if it is registered for ESI |
 | **Job** | Date of joining, employment type (permanent, contract or intern), department, designation, branch, state of work, manager, shift and tax regime (new or old) |
 | **Bank account for salary** | Account number, IFSC, name as per bank and bank name |
 
 The form checks the formats before it saves: PAN looks like AAAAA9999A, Aadhaar and UAN are 12 digits, an ESIC number is 10 to 17 digits, the IFSC has 11 characters with a 0 as the fifth, and the mobile is an Indian mobile number. Spaces and dashes inside a number are removed for you.
 
-The **state of work** decides which state holidays apply to the employee, and the **branch** which branch holidays apply. The **tax regime** is only a record of the employee's choice for now, because income tax is not calculated yet.
+The **state of work** decides which state holidays apply to the employee, and the **branch** which branch holidays apply. The **tax regime** is the employee's choice (new or old) and decides how TDS on salary is worked out when the business deducts it; see [TDS on salary](/help/payroll/tds-on-salary).
 
 **Departments and designations** are managed from the **Departments and designations** button. A hidden one stays on the employees who already have it.
 
 ## How sensitive numbers are handled
 
-PAN, Aadhaar, UAN, ESIC and bank account numbers are personal data.
+PAN, Aadhaar, UAN, ESIC and bank account numbers are personal data. The **Statutory** button on an employee (shown when the business has a registration) opens their PF, EPS, VPF, ESI and tax-declaration settings; see [PF and ESI](/help/payroll/pf-and-esi).
 
 - **Lists** always show them partly hidden, for example the last four characters only.
 - The **employee page** shows them in full only to **owners and admins**. An accountant sees them partly hidden; typing a new number replaces the stored one, and leaving the field empty keeps it.

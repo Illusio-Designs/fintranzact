@@ -1,0 +1,41 @@
+---
+title: TDS on salary
+description: "How payroll works out income tax deducted from salary (section 192): the projection for the year under the new or old regime, the standard deduction, rebate and cess, declarations, and how the tax is spread over the remaining months."
+sidebar:
+  order: 9
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+
+<ForDesktop>
+
+Turn this on with **Deduct income tax (TDS) on salary** in [Statutory settings](/help/payroll/statutory-settings) and enter the income-tax **slabs** for both regimes (they start empty: **with no slabs, no TDS is deducted and the run warns**). **Verify every rate and the way it is applied with your CA**; the tax rules are the CA's to confirm.
+
+## How each month's TDS is worked out
+
+For each employee, every month, payroll **projects the whole year** and spreads the tax that is still due over the months that remain:
+
+1. **Annual income** = salary paid so far this financial year (approved runs) + this month + the full monthly salary for each remaining month (up to the last working day if the employee is leaving) + income from a previous employer, if declared.
+2. Less the **standard deduction** of the employee's regime (₹75,000 for the new regime is the starting value).
+3. **Old regime only**: less the employee's declarations (80C, 80D, home-loan interest, HRA exemption, other), each within the **limits you set**, and professional tax.
+4. **Tax on the slabs**, then the **section 87A rebate** (and marginal relief where you switch it on), then **cess**, rounded to the nearest ten rupees.
+5. Less the tax already deducted this year (and a previous employer's). The rest is divided by the **months left, including this one**, and rounded to the nearest rupee.
+
+Because it is recalculated every month, a raise, a bonus or a new declaration is spread over the remaining months automatically. TDS is never more than the pay left after the other deductions: any shortfall is spread over the coming months and the run says so.
+
+## Regime and declarations
+
+The employee's **tax regime** is set on their page (new regime by default). Open **Payroll → Employees → Statutory** to enter their **declarations** for the financial year: 80C, 80D, HRA exemption, home-loan interest, other deductions, and income and tax from a previous employer. They matter only under the old regime (a previous employer's income and tax count under both). Keep them minimal and update them when the employee gives proof.
+
+## Warnings to read
+
+- No slabs configured for the regime.
+- The employee has no PAN: TDS is worked out at the normal rates, but a missing PAN may attract a higher rate under section 206AA, which is **not** applied.
+- An earlier month of the year has no approved payroll for the employee, so the tax already deducted may be incomplete.
+- Very high income (the surcharge is **not** computed) and employees aged 60 or more on the old regime (senior-citizen slabs are **not** applied automatically).
+
+## Paying and returning TDS
+
+TDS withheld is booked to **TDS on Salary Payable**. Record the deposit on the **Statutory dues** tab with the challan number and date. See [Form 16 and Form 24Q](/help/payroll/form-16-and-24q) for the quarterly data and the yearly document.
+
+</ForDesktop>

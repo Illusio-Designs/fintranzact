@@ -184,7 +184,7 @@ An add-on is sold only when its feature is built. The single source of truth is 
 - An organisation that already holds an unavailable add-on (admin grant or an earlier subscription) still sees it on the Billing tab, active, with a "Coming soon" note and no purchase controls. Entitlement flags (`addons` in `billing.status`), webhooks, renewals, cancellation and the platform admin add-on on/off keep working; only new purchases are refused.
 - The Full Access Trial still reports add-on caps; the add-ons themselves arrive in the trial when they exist.
 
-## The Payroll add-on (Phase 1)
+## The Payroll add-on (Phase 1 and Phase 2)
 
 Payroll is the add-on `payroll`. Its code is in place and fully gated, but `ADDON_FEATURES.payroll.implemented` is **false**, so it is not on sale (`billing.subscribeAddon` still refuses it, the pricing page does not list it); what exists today is the Full Access Trial (with the employee cap) and add-on subscriptions an admin has granted. Architecture note: [`architecture/payroll.md`](architecture/payroll.md).
 
@@ -196,6 +196,7 @@ Payroll is the add-on `payroll`. Its code is in place and fully gated, but `ADDO
 | Employee cap | During a Full Access Trial, `payrollEmployee.create` / `reactivate` refuse the 11th active employee (`trial.caps.payrollEmployees`) with `plan_limit` |
 | Roles | Owner and admin: everything. Accountant: read, create, update (prepares payroll, cannot approve, delete or see unmasked identity numbers). Every other role, including `auditor` and `ca_filing`: nothing (`Payroll` is not in `ACCOUNTANT_READ_SUBJECTS`) |
 | REST | No new REST route: payslip PDFs and the bank file are tRPC queries (`payrollRun.payslipPdf`, `payrollRun.bankFile`), so `rest-entitlement-policy.md` is unchanged |
+| Phase 2: every procedure of `payrollStatutory` | The same two checks (`assertPayroll`). Reads (`settings`, `employeeSettings`, `dues`) need `Payroll:read`. `updateBusinessSettings` and `saveRates` (the registrations and the rates, compliance-critical) need `Payroll:manage` (owner, admin). `employeeUpdate`, `saveDeclaration`, `recordPayment` and every file and register query (`ecrFile`, `esicFile`, `ptSheets`, `lwfSheets`, `form24q`, `form16Pdf`, `form16Data`, `register`, which carry UAN, ESIC and PAN numbers in full) need `Payroll:update` (owner, admin, accountant). All five mutations are `gated` in `mutation-gate.md`; every other role is refused. No add-on flag or price changes: `ADDON_FEATURES.payroll.implemented` stays **false** until the owner releases it |
 
 Tests grant the add-on the way an admin grant does (`grantAddon` in `__tests__/helpers/fixtures.ts` inserts an active `billing_subscriptions` row); the role and isolation sweeps grant it to both sweep organisations so they reach each procedure's permission checks.
 

@@ -15,7 +15,17 @@ export const payrollTables: TableCoverage[] = [
   {
     table: "payroll_settings",
     rules: [],
-    noExtraRequirements: "One row per business (unique index) holding payroll defaults (weekly offs, standard hours, overtime multiplier, leave year); every column is NOT NULL with a default and nothing else reads across tables.",
+    noExtraRequirements: "One row per business (unique index) holding payroll defaults (weekly offs, standard hours, overtime multiplier, leave year) and the statutory registrations (PF, ESI, PT states, LWF state, TDS); every column is NOT NULL with a default (codes may be empty) and nothing else reads across tables. What a run was calculated with is frozen on the run (payroll_runs.statutory).",
+  },
+  {
+    table: "payroll_statutory_settings",
+    rules: [],
+    noExtraRequirements: "One row per business and financial year (unique index) holding the rates document (PF, ESI, PT and LWF slabs, income-tax slabs, due dates) as validated JSON plus a last-verified note; a payroll run copies what it used onto itself when it is calculated, so editing a row never changes a calculated or approved run.",
+  },
+  {
+    table: "employee_tax_declarations",
+    rules: [],
+    noExtraRequirements: "One row per employee and financial year (unique index) holding the old-regime declaration amounts as validated JSON; the amounts only feed the next TDS calculation, whose result is frozen on the payroll line.",
   },
   {
     table: "payroll_departments",
@@ -182,11 +192,62 @@ export const payrollTables: TableCoverage[] = [
               COALESCE(SUM((c->>'amount')::numeric) FILTER (WHERE c->>'type' = 'employer_contribution'), 0) x
             FROM jsonb_array_elements(l.components) c) s ON true
          WHERE ABS(l.gross_earnings - s.e) > ${MONEY_TOLERANCE} OR ABS(l.total_deductions - s.d) > ${MONEY_TOLERANCE} OR ABS(l.employer_contributions - s.x) > ${MONEY_TOLERANCE}`),
+      rule("payroll_run_lines", "no-pf-without-registration", "error",
+        "A line has PF, VPF or EPS components only when its run was calculated for a business registered for PF: with PF off, PF and EPS appear nowhere.",
+        RUN_WRITERS,
+        `SELECT l.business_id, l.id::text, l.employee_code || ': PF/EPS component in a run calculated without PF registration'
+         FROM payroll_run_lines l JOIN payroll_runs r ON r.id = l.run_id
+         WHERE COALESCE((r.statutory->'flags'->>'pfRegistered')::boolean, false) = false
+           AND EXISTS (SELECT 1 FROM jsonb_array_elements(l.components) c WHERE c->>'statutoryKind' IN ('pf_employee', 'vpf', 'pf_employer', 'eps_employer'))`),
+      rule("payroll_run_lines", "no-esi-without-registration", "error",
+        "A line has ESI components only when its run was calculated for a business registered for ESI.",
+        RUN_WRITERS,
+        `SELECT l.business_id, l.id::text, l.employee_code || ': ESI component in a run calculated without ESI registration'
+         FROM payroll_run_lines l JOIN payroll_runs r ON r.id = l.run_id
+         WHERE COALESCE((r.statutory->'flags'->>'esiRegistered')::boolean, false) = false
+           AND EXISTS (SELECT 1 FROM jsonb_array_elements(l.components) c WHERE c->>'statutoryKind' IN ('esi_employee', 'esi_employer'))`),
+      rule("payroll_run_lines", "statutory-component-types", "error",
+        "Statutory components are typed consistently: employee shares are deductions and employer shares are employer contributions, so the line adds up and the posting is balanced.",
+        RUN_WRITERS,
+        `SELECT l.business_id, l.id::text, l.employee_code || ': ' || (c->>'statutoryKind') || ' typed ' || (c->>'type')
+         FROM payroll_run_lines l, jsonb_array_elements(l.components) c
+         WHERE (c->>'statutoryKind' IN ('pf_employee', 'vpf', 'esi_employee', 'professional_tax', 'income_tax_tds', 'lwf_employee') AND c->>'type' <> 'deduction')
+            OR (c->>'statutoryKind' IN ('pf_employer', 'eps_employer', 'esi_employer', 'lwf_employer', 'gratuity') AND c->>'type' <> 'employer_contribution')`),
       rule("payroll_run_lines", "paid-days-within-month", "error",
         "Paid days plus loss-of-pay days equal the employed days, and never exceed the days in the month.",
         RUN_WRITERS,
         `SELECT l.business_id, l.id::text, l.employee_code || ': paid ' || l.paid_days || ' + LOP ' || l.lop_days || ' vs employed ' || l.employed_days || ' of ' || l.days_in_month
          FROM payroll_run_lines l WHERE ABS(l.paid_days + l.lop_days - l.employed_days) > 0.01 OR l.employed_days > l.days_in_month`),
+    ],
+  },
+  {
+    table: "payroll_statutory_payments",
+    rules: [
+      rule("payroll_statutory_payments", "payments-within-accrued", "error",
+        "What has been paid to an authority for a run (PF, ESI, PT, LWF or TDS) is never more than that run accrued for it.",
+        ["payrollStatutory.recordPayment"],
+        `SELECT p.business_id, p.run_id::text, p.kind || ': paid ' || p.paid || ' vs accrued ' || COALESCE(a.accrued::text, 'none')
+         FROM (SELECT business_id, run_id, kind, SUM(amount) paid FROM payroll_statutory_payments GROUP BY business_id, run_id, kind) p
+         LEFT JOIN (
+           SELECT l.run_id,
+             CASE c->>'statutoryKind'
+               WHEN 'pf_employee' THEN 'pf' WHEN 'vpf' THEN 'pf' WHEN 'pf_employer' THEN 'pf' WHEN 'eps_employer' THEN 'pf'
+               WHEN 'esi_employee' THEN 'esi' WHEN 'esi_employer' THEN 'esi'
+               WHEN 'professional_tax' THEN 'pt'
+               WHEN 'lwf_employee' THEN 'lwf' WHEN 'lwf_employer' THEN 'lwf'
+               WHEN 'income_tax_tds' THEN 'tds' END AS kind,
+             SUM((c->>'amount')::numeric) accrued
+           FROM payroll_run_lines l, jsonb_array_elements(l.components) c
+           WHERE c->>'type' <> 'earning' AND c->>'statutoryKind' IS NOT NULL
+           GROUP BY l.run_id, 2) a ON a.run_id = p.run_id AND a.kind = p.kind
+         WHERE a.accrued IS NULL OR p.paid > a.accrued + ${MONEY_TOLERANCE}`),
+      rule("payroll_statutory_payments", "payment-has-balanced-journal", "error",
+        "Every statutory payment links its journal entry, that entry balances and its debit equals the amount paid.",
+        ["payrollStatutory.recordPayment"],
+        `SELECT p.business_id, p.id::text, p.kind || ' ' || p.amount || ', journal ' || COALESCE(p.journal_entry_id::text, 'NULL') || ', debit ' || COALESCE(j.d::text, 'NULL')
+         FROM payroll_statutory_payments p
+         LEFT JOIN (SELECT journal_entry_id, SUM(debit) d, SUM(credit) c FROM journal_entry_lines GROUP BY journal_entry_id) j ON j.journal_entry_id = p.journal_entry_id
+         WHERE p.journal_entry_id IS NULL OR j.d IS NULL OR ABS(j.d - j.c) > ${MONEY_TOLERANCE} OR ABS(j.d - p.amount) > ${MONEY_TOLERANCE}`),
     ],
   },
   {

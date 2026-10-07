@@ -204,6 +204,9 @@ export async function truncateAllTables(): Promise<void> {
     TRUNCATE TABLE
       -- Tenant schema (leaf tables first)
       payslips,
+      payroll_statutory_payments,
+      employee_tax_declarations,
+      payroll_statutory_settings,
       payroll_run_adjustments,
       payroll_run_lines,
       payroll_runs,

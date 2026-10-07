@@ -30,7 +30,9 @@ For each employee the run takes the salary in force for the month, the paid days
 
 ### Adjustments and statutory deductions
 
-Use **Adjust** on an employee to add a one-off **deduction** (advance recovery, loan instalment, fine) or **earning** (incentive, arrears). Adjustments are kept when you recalculate and shown on the payslip. PF, ESI, professional tax and income tax are not calculated yet: enter them as deductions here if you deduct them.
+Use **Adjust** on an employee to add a one-off **deduction** (advance recovery, loan instalment, fine) or **earning** (incentive, arrears). Adjustments are kept when you recalculate and shown on the payslip.
+
+If the business is registered for them in [Statutory settings](/help/payroll/statutory-settings), **provident fund, ESI, professional tax, labour welfare fund and income-tax TDS are calculated automatically** and appear as their own columns and lines (employee shares as deductions, employer shares listed separately). Do not also enter them as adjustments: the run warns when a manual deduction looks like a statutory one. Missing slabs (for example a state's professional tax slabs) deduct nothing and show up in **things to check**.
 
 ## Approval needs a second person
 
@@ -48,11 +50,11 @@ If you calculated the run yourself, the run page tells you why **Approve** is no
 | Salary - Allowances (HRA, conveyance, special and other earnings) | Payroll Deductions Payable (what was held back from employees) |
 | Salary - Bonus & Incentives | Employer Contributions Payable |
 | Salary - Overtime | |
-| Employer Contributions to Staff | |
+| Employer Contributions to Staff | PF and EPS Payable, ESI Payable, Professional Tax Payable, Labour Welfare Fund Payable, TDS on Salary Payable (each only if the run has that statutory amount, employee and employer shares together) |
 
 The entry always balances. The accounts are created in your chart of accounts the first time you post. Posting twice does nothing the second time. If the month is inside a locked period, posting is refused until the owner unlocks it (see [Period locks](/help/accounting/period-locks)).
 
-**Mark as paid** records the salaries going out of the bank or cash account you choose: Salaries Payable is cleared against the bank, and the account balance goes down by the net pay. Do the bank transfers first (the [bank payment file](/help/payroll/payslips) helps), then mark the run paid. The amounts held back from employees stay as liabilities until you pay them to the authority.
+**Mark as paid** records the salaries going out of the bank or cash account you choose: Salaries Payable is cleared against the bank, and the account balance goes down by the net pay. Do the bank transfers first (the [bank payment file](/help/payroll/payslips) helps), then mark the run paid. The statutory amounts stay as liabilities until you pay them to the authority: record each payment on the **Statutory dues** tab (see [Statutory files and registers](/help/payroll/statutory-files-and-registers)).
 
 A payroll entry cannot be voided from Journal entries, because it belongs to an approved run.
 

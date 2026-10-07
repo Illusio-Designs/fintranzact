@@ -1,0 +1,53 @@
+---
+title: PF and ESI
+description: "How payroll works out provident fund (EPF, EPS and voluntary PF) and ESI for each employee, and the settings that switch them on and off: excluded employees, EPS eligibility, actual or capped wages and the ESI contribution period."
+sidebar:
+  order: 7
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+
+<ForDesktop>
+
+This page applies only if your business is **registered** for PF and/or ESI in [Statutory settings](/help/payroll/statutory-settings). With PF off, none of the PF, voluntary PF or EPS lines, columns, files or fields appear anywhere. Every percentage and ceiling below is a setting per financial year; the figures quoted are the starting values. **Verify them with your CA.**
+
+## How a month is calculated
+
+PF and ESI are worked out in each payroll run from the **earned** amounts of the month (after loss of pay) and added to each employee's pay line as separate lines. The run shows a column for each scheme and the payslip lists them. The employer's shares are shown separately on the payslip and are not part of net pay.
+
+### Provident fund
+
+- **PF wages** are Basic, DA and retaining allowance (and any component you flagged as a wage) for the days paid.
+- By default contributions are on the wages **capped at ₹15,000**. Tick **contribute on actual wages** on the employee to use the whole wage. (International workers have no ceiling.)
+- **Employee**: 12 percent of those wages. **Voluntary PF (VPF)**: the employee's chosen percentage of the **actual** wages, on top.
+- **Employer**: 12 percent in all. **With EPS**, 8.33 percent of the wages (up to ₹15,000) goes to the **pension scheme (EPS)** and the rest to **EPF**; **without EPS** the whole 12 percent goes to EPF.
+- Amounts are rounded to the nearest rupee, and the EPF share is what is left of the employer's rounded 12 percent after EPS, so the two shares always add up.
+
+### Employee settings
+
+Open **Payroll → Employees → Statutory** for a person:
+
+| Setting | Meaning |
+|---|---|
+| **PF applies** | Off: no PF lines for this employee |
+| **Excluded employee** | Wages above the ceiling and never a PF member (opted out): no PF at all. A warning appears if the wages are within the ceiling |
+| **EPS eligible** | Whether the employer's 8.33 percent goes to EPS. The screen **suggests** an answer: joined PF on or after 1 September 2014 with wages above ₹15,000 means no EPS; age 58 or more means EPS stops (payroll switches it off from that age); an **international worker** is a special case to confirm with your CA. You decide; **Use the suggestion** applies it |
+| **Contribute on actual wages** | No ₹15,000 cap on the 12 percent |
+| **VPF percent** | Voluntary PF |
+| **International worker** | No wage ceiling; confirm EPS with your CA |
+| **Joined PF on** | Only if different from the joining date; feeds the suggestion |
+
+An employee without a **UAN** is still calculated, but a warning tells you they cannot be in the ECR file until a UAN is added.
+
+### ESI
+
+- ESI applies to an employee while the **full-month wages of their salary structure are at or below ₹21,000**. Exactly ₹21,000 is covered.
+- **Employee** 0.75 percent and **employer** 3.25 percent of the earned wages (all earnings of the structure except overtime and one-off adjustments), each **rounded up to the next rupee**.
+- **Contribution-period rule.** ESI contribution periods are **April to September** and **October to March**. An employee who contributed in an earlier month of the current period **stays covered until the period ends**, even if wages rise above the ceiling, and is tested again at the start of the next period. This uses your **approved** earlier runs.
+- **ESI applies** on the employee's page switches ESI off for that person.
+
+## Check before you rely on it
+
+Rounding, the wages that count for ESI and the contribution-period rule are assumptions listed for your CA. Do not rely on the figures until your CA has confirmed them.
+
+</ForDesktop>

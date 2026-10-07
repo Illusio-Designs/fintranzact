@@ -8,6 +8,25 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { InputField, SelectField } from "@/components/ui/FormField";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Panel, RunStatusBadge, TABLE, currentMonth, downloadBase64, downloadText, errorMessage, monthLabel, onError, shiftMonth } from "./payroll-ui";
+import { statutoryRegistrations } from "./statutory-ui";
+
+type Component = { type: string; statutoryKind: string | null; amount: string };
+
+/** The sum of a line's components of the given statutory kinds (rupees as a number). */
+export function kindSum(components: readonly Component[], kinds: readonly string[]): number {
+  return components.filter((c) => c.statutoryKind && kinds.includes(c.statutoryKind)).reduce((s, c) => s + Number(c.amount), 0);
+}
+
+/** Statutory columns of the run table: only schemes the run was calculated with. PF and EPS are never listed when PF was off. */
+export function statutoryColumns(reg: ReturnType<typeof statutoryRegistrations>): Array<{ key: string; label: string; kinds: string[] }> {
+  return [
+    ...(reg.pf ? [{ key: "pf", label: "PF", kinds: ["pf_employee", "vpf"] }] : []),
+    ...(reg.esi ? [{ key: "esi", label: "ESI", kinds: ["esi_employee"] }] : []),
+    ...(reg.pt ? [{ key: "pt", label: "PT", kinds: ["professional_tax"] }] : []),
+    ...(reg.lwf ? [{ key: "lwf", label: "LWF", kinds: ["lwf_employee"] }] : []),
+    ...(reg.tds ? [{ key: "tds", label: "TDS", kinds: ["income_tax_tds"] }] : []),
+  ];
+}
 
 export function RunsTab() {
   const [selected, setSelected] = useState<string | null>(null);
@@ -146,6 +165,8 @@ function RunDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const editable = ["draft", "attendance_locked", "calculated", "pending_approval"].includes(status);
   const busy = lock.isPending || calculate.isPending || submit.isPending || approve.isPending || reopen.isPending || post.isPending;
   const warnings = (run.warnings ?? []) as Array<{ code: string; message: string }>;
+  // The schemes this run was calculated with decide which statutory columns exist at all.
+  const statCols = statutoryColumns(statutoryRegistrations(run.statutory?.flags as Parameters<typeof statutoryRegistrations>[0]));
 
   async function downloadPayslip(employeeId: string, name: string) {
     try {
@@ -231,7 +252,7 @@ function RunDetail({ id, onBack }: { id: string; onBack: () => void }) {
         ) : (
           <div className="overflow-x-auto">
             <table className={TABLE}>
-              <thead><tr><th>Employee</th><th className="text-right">Paid days</th><th className="text-right">LOP</th><th className="text-right">Gross</th><th className="text-right">Deductions</th><th className="text-right">Net pay</th><th className="text-right"><span className="sr-only">Actions</span></th></tr></thead>
+              <thead><tr><th>Employee</th><th className="text-right">Paid days</th><th className="text-right">LOP</th><th className="text-right">Gross</th>{statCols.map((c) => <th key={c.key} className="text-right">{c.label}</th>)}<th className="text-right">Deductions</th><th className="text-right">Net pay</th><th className="text-right"><span className="sr-only">Actions</span></th></tr></thead>
               <tbody>
                 {lines.map((l) => {
                   const open = expanded === l.id;
@@ -247,6 +268,7 @@ function RunDetail({ id, onBack }: { id: string; onBack: () => void }) {
                         <td className="text-right tabular-nums">{Number(l.paidDays)}</td>
                         <td className="text-right tabular-nums">{Number(l.lopDays)}</td>
                         <td className="text-right tabular-nums">{formatCurrency(l.grossEarnings)}</td>
+                        {statCols.map((c) => <td key={c.key} className="text-right tabular-nums" data-testid={`stat-${c.key}`}>{formatCurrency(kindSum(l.components, c.kinds))}</td>)}
                         <td className="text-right tabular-nums">{formatCurrency(l.totalDeductions)}</td>
                         <td className={Number(l.netPay) < 0 ? "text-right tabular-nums font-semibold text-red-600" : "text-right tabular-nums font-semibold text-text-primary"}>{formatCurrency(l.netPay)}</td>
                         <td className="whitespace-nowrap text-right">
@@ -257,7 +279,7 @@ function RunDetail({ id, onBack }: { id: string; onBack: () => void }) {
                       </tr>
                       {open && (
                         <tr>
-                          <td colSpan={7} className="bg-surface-1">
+                          <td colSpan={7 + statCols.length} className="bg-surface-1">
                             <table className="w-full text-xs" aria-label={`${l.employeeName} pay breakdown`}>
                               <tbody>
                                 {l.components.filter((c) => Number(c.amount) > 0 || Number(c.full) > 0).map((c, i) => (
@@ -299,6 +321,11 @@ function RunDetail({ id, onBack }: { id: string; onBack: () => void }) {
         </Panel>
       )}
 
+      {statCols.length > 0 && lines.length > 0 && (
+        <p data-testid="statutory-note" className="text-xs text-text-tertiary">
+          Statutory amounts (employee and employer shares) are booked to their own payable accounts when the run is posted. Pay them from the Statutory dues tab.
+        </p>
+      )}
       {run.accrualJournalEntryId && (
         <p className="text-xs text-text-tertiary">
           Posted to the books on {formatDate(run.postedAt)} as one journal entry{run.paymentJournalEntryId ? ", and the payment as a second" : ""}. See Journal entries.
@@ -357,7 +384,7 @@ function AdjustDialog({ runId, target, onClose, onSaved }: { runId: string; targ
         </SelectField>
         <InputField label="Name on the payslip" required value={name} onChange={(e) => setName(e.target.value)} />
         <InputField label="Amount" required inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
-        <p className="text-xs text-text-tertiary">PF, ESI, professional tax and income tax are not calculated yet: enter them here as deductions if you deduct them.</p>
+        <p className="text-xs text-text-tertiary">Statutory deductions are calculated automatically from Statutory settings: do not enter them here.</p>
         <div className="flex justify-end gap-2">
           <button className="btn-secondary" onClick={onClose}>Cancel</button>
           <button className="btn-primary" disabled={add.isPending || !name.trim() || !(Number(amount) > 0)} onClick={() => add.mutate({ runId, employeeId: target.employeeId, name: name.trim(), type, amount: Number(amount) })}>Add</button>

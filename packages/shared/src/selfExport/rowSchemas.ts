@@ -980,7 +980,54 @@ export const payrollSettingsRowSchema = z.object({
   standardHoursPerDay: numericString,
   overtimeMultiplier: numericString,
   leaveYearStartMonth: z.number().int(),
+  // Statutory registrations (Phase 2): optional so a Phase 1 export still imports.
+  pfRegistered: z.boolean().optional(),
+  pfEstablishmentCode: z.string().nullable().optional(),
+  esiRegistered: z.boolean().optional(),
+  esiCode: z.string().nullable().optional(),
+  ptStates: z.array(z.string()).optional(),
+  lwfState: z.string().nullable().optional(),
+  tdsEnabled: z.boolean().optional(),
   updatedAt: isoDatetime,
+});
+
+export const payrollStatutorySettingRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  financialYear: z.number().int(),
+  rates: z.unknown(),
+  verifiedNote: z.string().nullable(),
+  verifiedOn: dateStringNullable,
+  updatedByUserId: uuidNullable,
+  createdAt: isoDatetime,
+  updatedAt: isoDatetime,
+});
+
+export const employeeTaxDeclarationRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  employeeId: uuid,
+  financialYear: z.number().int(),
+  amounts: z.unknown(),
+  updatedByUserId: uuidNullable,
+  createdAt: isoDatetime,
+  updatedAt: isoDatetime,
+});
+
+export const payrollStatutoryPaymentRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  runId: uuid,
+  kind: z.string(),
+  amount: money2,
+  paidOn: dateString,
+  challanNumber: z.string().nullable(),
+  challanDate: dateStringNullable,
+  reference: z.string().nullable(),
+  bankAccountId: uuidNullable,
+  journalEntryId: uuidNullable,
+  createdByUserId: uuidNullable,
+  createdAt: isoDatetime,
 });
 
 const nameRow = {
@@ -1037,6 +1084,15 @@ export const employeeRowSchema = z.object({
   exitNote: z.string().nullable(),
   fnfNote: z.string().nullable(),
   fnfPayrollRunId: uuidNullable,
+  // Statutory settings (Phase 2): optional so a Phase 1 export still imports.
+  pfApplicable: z.boolean().optional(),
+  pfExcluded: z.boolean().optional(),
+  epsEligible: z.boolean().optional(),
+  pfOnActualWages: z.boolean().optional(),
+  vpfPercent: numericString.optional(),
+  internationalWorker: z.boolean().optional(),
+  pfJoinDate: dateStringNullable.optional(),
+  esiApplicable: z.boolean().optional(),
   createdByUserId: uuidNullable,
   createdAt: isoDatetime,
   updatedAt: isoDatetime,
@@ -1196,6 +1252,7 @@ export const payrollRunRowSchema = z.object({
   employerTotal: money2,
   netTotal: money2,
   warnings: z.unknown(),
+  statutory: z.unknown().optional(),
   notes: z.string().nullable(),
   attendanceLockedAt: isoDatetimeNullable,
   attendanceLockedByUserId: uuidNullable,
@@ -1242,6 +1299,7 @@ export const payrollRunLineRowSchema = z.object({
   employerContributions: money2,
   netPay: money2,
   warnings: z.unknown(),
+  statutory: z.unknown().optional(),
   isFinalSettlement: z.boolean(),
   // Frozen at approval for the bank file (sensitive): optional.
   bankAccountNumber: z.string().nullable().optional(),
@@ -1326,10 +1384,12 @@ export const ROW_SCHEMAS: Record<string, z.ZodTypeAny> = {
   gstr2b_uploads: gstr2bUploadRowSchema,
   gstr2b_records: gstr2bRecordRowSchema,
   payroll_settings: payrollSettingsRowSchema,
+  payroll_statutory_settings: payrollStatutorySettingRowSchema,
   payroll_departments: payrollDepartmentRowSchema,
   payroll_designations: payrollDesignationRowSchema,
   payroll_shifts: payrollShiftRowSchema,
   employees: employeeRowSchema,
+  employee_tax_declarations: employeeTaxDeclarationRowSchema,
   salary_components: salaryComponentRowSchema,
   salary_templates: salaryTemplateRowSchema,
   salary_template_lines: salaryTemplateLineRowSchema,
@@ -1342,6 +1402,7 @@ export const ROW_SCHEMAS: Record<string, z.ZodTypeAny> = {
   leave_encashments: leaveEncashmentRowSchema,
   payroll_runs: payrollRunRowSchema,
   payroll_run_lines: payrollRunLineRowSchema,
+  payroll_statutory_payments: payrollStatutoryPaymentRowSchema,
   payroll_run_adjustments: payrollRunAdjustmentRowSchema,
   payslips: payslipRowSchema,
 };
