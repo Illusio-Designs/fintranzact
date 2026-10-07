@@ -127,8 +127,15 @@ export const AI_ROLE_LABELS: Record<AiSwitchableRole, string> = {
 export const aiSettingsSchema = z.object({
   enabled: z.boolean(),
   disabledRoles: z.array(z.enum(AI_SWITCHABLE_ROLES)).max(AI_SWITCHABLE_ROLES.length),
+  /**
+   * Phase 2: may the assistant PREPARE actions (invoices, payments, parties...)
+   * for the person to confirm? Default on. Omitted on an update = unchanged.
+   */
+  actionsEnabled: z.boolean().optional(),
+  /** Roles the actions are off for. Omitted on an update = unchanged. */
+  actionsDisabledRoles: z.array(z.enum(AI_SWITCHABLE_ROLES)).max(AI_SWITCHABLE_ROLES.length).optional(),
 });
-export type AiSettings = z.infer<typeof aiSettingsSchema>;
+export type AiSettings = Required<z.infer<typeof aiSettingsSchema>>;
 
 // ── Prices and cost ──────────────────────────────────────────────────────────
 
@@ -207,7 +214,7 @@ export function stripControlChars(text: string, angle = false): string {
 }
 
 /** Strip control characters and cap the length: card text comes from the model and is shown as plain text only. */
-function clean(max: number) {
+export function aiCleanText(max: number) {
   return z
     .union([z.string(), z.number()])
     .transform((v) => stripControlChars(String(v), true).replace(/\s+/g, " ").trim())
@@ -245,22 +252,22 @@ const linkTargetSchema = z.discriminatedUnion("kind", [
 export const aiTableCardSchema = z
   .object({
     type: z.literal("table"),
-    title: clean(80).optional(),
-    columns: z.array(clean(40)).min(1).max(6),
-    rows: z.array(z.array(clean(120)).max(6)).max(20),
+    title: aiCleanText(80).optional(),
+    columns: z.array(aiCleanText(40)).min(1).max(6),
+    rows: z.array(z.array(aiCleanText(120)).max(6)).max(20),
   })
   .refine((c) => c.rows.every((r) => r.length <= c.columns.length), "A row has more cells than columns");
 
 export const aiBarChartCardSchema = z.object({
   type: z.literal("bar_chart"),
-  title: clean(80).optional(),
-  unit: clean(12).optional(),
-  bars: z.array(z.object({ label: clean(30), value: z.number().finite() })).min(1).max(12),
+  title: aiCleanText(80).optional(),
+  unit: aiCleanText(12).optional(),
+  bars: z.array(z.object({ label: aiCleanText(30), value: z.number().finite() })).min(1).max(12),
 });
 
 export const aiLinkCardSchema = z.object({
   type: z.literal("link"),
-  label: clean(60),
+  label: aiCleanText(60),
   target: linkTargetSchema,
 });
 

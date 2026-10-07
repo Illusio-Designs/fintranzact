@@ -13,11 +13,12 @@
  * while the organisation is read-only or suspended (add-ons are off then), with
  * the standard 403 { error, entitlement } body.
  *
- * Request  { conversationId?: uuid, message: string (1..1000) }
+ * Request  { conversationId?: uuid, message: string (1..1000), context?: page context (allowlisted, verified server-side) }
  * Events   meta  { conversationId, model, tier }
  *          tool  { name, status: "start" | "ok" | "denied" | ... }
  *          text  { delta }
- *          done  { conversationId, messageId, text, cards, remaining }
+ *          done  { conversationId, messageId, text, cards, remaining }   (cards include any confirmation cards for
+ *                prepared actions; confirming is NOT part of this stream: it is ai.confirmAction, called by the person's tap)
  *          error { code, message }     (the question is given back unless text was already produced)
  * Failures before the stream starts are plain JSON { error, code, entitlement? } with an HTTP status.
  */
@@ -39,7 +40,9 @@ import { logger } from "../lib/logger.js";
 import { AiProviderError, getAiClient, type AiClient } from "../lib/ai/client.js";
 import { chooseAiModel, resolveAiModels } from "../lib/ai/model-router.js";
 import { buildSystemPrompt } from "../lib/ai/prompt.js";
-import { aiToolDefs, runAiTool } from "../lib/ai/tools.js";
+import { aiToolDefs, runAiTool, type AiActionToolContext } from "../lib/ai/tools.js";
+import { resolvePageContext } from "../lib/ai/page-context.js";
+import { defineAbilityFor } from "../lib/permissions.js";
 import { newAiLoopState, runAiLoop } from "../lib/ai/loop.js";
 import { auditToolCall, finishQuestion, refundPending } from "../lib/ai/service.js";
 import { loadAiAccount } from "../lib/ai/quota.js";
@@ -50,6 +53,8 @@ import { eq } from "drizzle-orm";
 const bodySchema = z.object({
   conversationId: z.string().uuid().optional(),
   message: z.string().trim().min(1).max(AI_MAX_QUESTION_CHARS),
+  /** The page the person is on. Validated and verified later; anything invalid is dropped, never an error. */
+  context: z.unknown().optional(),
 });
 
 const createCaller = createCallerFactory(appRouter);
@@ -132,6 +137,7 @@ export function registerAiStreamRoute(app: Hono, opts: AiStreamOptions = {}): vo
     const tenantId = ctx.tenantId;
     const businessId = ctx.businessId;
     const userId = ctx.user.id;
+    const userName = ctx.user.name ?? null;
     const ipAddress = ctx.ipAddress;
     const db = await getTenantDb(tenantId);
     const models = resolveAiModels();
@@ -159,22 +165,35 @@ export function registerAiStreamRoute(app: Hono, opts: AiStreamOptions = {}): vo
 
         const [biz] = await db.select({ name: businesses.name }).from(businesses).where(eq(businesses.id, businessId)).limit(1);
         const today = istDateParts(new Date());
+        // Page context: verified through the person's own permissions; dropped silently when it does not check out.
+        const pageContext = await resolvePageContext(caller as never, parsed.context).catch(() => null);
+        // Actions: the propose tools exist only for the kinds this person may do, with the owner's switches on.
+        const actionCtx: AiActionToolContext | undefined =
+          begun.actionKinds.length > 0
+            ? {
+                db, tenantId, businessId, user: { id: userId, name: userName }, role: begun.role,
+                ability: defineAbilityFor({ userId, role: begun.role }), ipAddress, caller: caller as never,
+                conversationId: begun.conversationId, kinds: begun.actionKinds, proposed: { count: 0 },
+              }
+            : undefined;
         const system = buildSystemPrompt({
           today: `${today.year}-${String(today.month).padStart(2, "0")}-${String(today.day).padStart(2, "0")}`,
           businessName: biz?.name ?? "this business",
+          actions: begun.actionKinds,
+          pageContext,
         });
 
         const result = await runAiLoop({
           client,
           model: choice.model,
           system,
-          tools: aiToolDefs(),
+          tools: aiToolDefs(begun.actionKinds),
           history: begun.history,
           question: parsed.message,
           signal: controller.signal,
           state,
           runTool: async (name, input) => {
-            const outcome = await runAiTool(caller, name, input, (err) => logger.warn({ err, tool: name }, "[ai] tool failed"));
+            const outcome = await runAiTool(caller, name, input, (err) => logger.warn({ err, tool: name }, "[ai] tool failed"), actionCtx);
             // One audit entry per tool call: the tool's name and outcome, never the data.
             await auditToolCall({ db, businessId, userId, ipAddress }, begun.conversationId, { name, status: outcome.status });
             return outcome;
@@ -184,7 +203,9 @@ export function registerAiStreamRoute(app: Hono, opts: AiStreamOptions = {}): vo
           onToolEnd: (name, status) => void send("tool", { name, status }),
         });
 
-        const { cards } = result.cardsRaw === null ? { cards: [] } : parseAiCards(result.cardsRaw);
+        // The model's own cards (never a confirmation card) after the confirmation cards the server built.
+        const modelCards = result.cardsRaw === null ? [] : parseAiCards(result.cardsRaw).cards;
+        const cards = [...result.actionCards, ...modelCards];
         const text = result.text || (cards.length ? "" : "I could not put an answer together. Please try asking in a different way.");
         const saved = await finishQuestion({
           tenantId, businessId, userId, ipAddress, db,
@@ -208,7 +229,7 @@ export function registerAiStreamRoute(app: Hono, opts: AiStreamOptions = {}): vo
           await finishQuestion({
             tenantId, businessId, userId, ipAddress, db,
             conversationId: begun.conversationId, usageId: begun.usageId, model: choice.model,
-            text: state.visible.trim(), cards: [], toolCalls: state.toolCalls, usage: state.usage, status: "aborted",
+            text: state.visible.trim(), cards: state.actionCards, toolCalls: state.toolCalls, usage: state.usage, status: "aborted",
           }).catch((e) => logger.error({ err: e }, "[ai] could not save a stopped answer"));
           await send("error", { code: "stopped", message: "Stopped." });
         } else {

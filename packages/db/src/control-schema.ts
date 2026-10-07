@@ -730,6 +730,10 @@ export const aiSettings = pgTable("ai_settings", {
   enabled: boolean("enabled").default(true).notNull(),
   /** Permission role names the assistant is off for (AI_SWITCHABLE_ROLES). */
   disabledRoles: jsonb("disabled_roles").$type<string[]>().default([]).notNull(),
+  /** Phase 2: may the assistant PREPARE actions (invoices, payments...) for confirmation? Default on. */
+  actionsEnabled: boolean("actions_enabled").default(true).notNull(),
+  /** Permission role names the actions are off for (AI_SWITCHABLE_ROLES). */
+  actionsDisabledRoles: jsonb("actions_disabled_roles").$type<string[]>().default([]).notNull(),
   updatedByUserId: uuid("updated_by_user_id"),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });

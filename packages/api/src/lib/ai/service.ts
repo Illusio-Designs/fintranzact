@@ -14,11 +14,13 @@ import { TRPCError } from "@trpc/server";
 import { aiConversations, aiMessages, aiUsage, controlDb, type TenantDatabase } from "@fintranzact/db";
 import {
   AI_MAX_QUESTION_CHARS,
+  aiActionKindsFor,
   aiQuotaExhaustedMessage,
   estimateAiCostPaise,
-  parseAiCards,
+  parseTrustedAiCards,
+  type AiActionKind,
   type AiAllowance,
-  type AiCard,
+  type AiAnyCard,
   type AiTier,
   type AiTokenUsage,
 } from "@fintranzact/shared";
@@ -30,7 +32,8 @@ import { assertAi, assertAiSwitchedOn, AI_NOT_CONFIGURED_MESSAGE } from "./acces
 import { isAiConfigured } from "./client.js";
 import { clip } from "./format.js";
 import { consumeQuestion, loadAiAccount, refundQuestion } from "./quota.js";
-import { aiDisabledReason, getAiPrices, getAiSettings } from "./settings.js";
+import { aiActionsDisabledReason, aiDisabledReason, getAiPrices, getAiSettings } from "./settings.js";
+import { loadActionCards } from "./actions/service.js";
 import type { AiMessage } from "./client.js";
 
 export interface AiCtx {
@@ -59,22 +62,31 @@ export interface AiStatus {
   isOwner: boolean;
   tier: AiTier | null;
   allowance: Omit<AiAllowance, "tier"> | null;
+  /** Phase 2: the action kinds the assistant may prepare for this person right now (empty when switched off or not permitted). */
+  actionKinds: AiActionKind[];
 }
 
 /** What the panel needs to decide between the chat, the add-on notice and an "off" message. Never throws for a missing add-on. */
-export async function aiStatus(ctx: Pick<AiCtx, "tenantId" | "role">): Promise<AiStatus> {
+export async function aiStatus(ctx: Pick<AiCtx, "tenantId" | "role"> & { ability?: AppAbility }): Promise<AiStatus> {
   const ent = await getEntitlements(ctx.tenantId);
   const isOwner = ctx.role === "superadmin";
   const configured = isAiConfigured();
-  const off = (access: AiAccess): AiStatus => ({ configured, access, isOwner, tier: null, allowance: null });
+  const off = (access: AiAccess): AiStatus => ({ configured, access, isOwner, tier: null, allowance: null, actionKinds: [] });
   if (ent.reason === "tenant_suspended") return off("suspended");
   if (ent.readOnly) return off("read_only");
   const account = await loadAiAccount(ctx.tenantId, ent);
   if (!account) return off("addon_required");
   const a = account.allowance;
   const allowance = { scope: a.scope, limit: a.limit, used: a.used, includedRemaining: a.includedRemaining, creditsRemaining: a.creditsRemaining, remaining: a.remaining, exhausted: a.exhausted };
-  const reason = aiDisabledReason(await getAiSettings(ctx.tenantId), ctx.role);
-  return { configured, access: reason ?? "ok", isOwner, tier: account.tier, allowance };
+  const settings = await getAiSettings(ctx.tenantId);
+  const reason = aiDisabledReason(settings, ctx.role);
+  const actionKinds = reason || !ctx.ability || aiActionsDisabledReason(settings, ctx.role) ? [] : actionKindsOf(ctx.ability);
+  return { configured, access: reason ?? "ok", isOwner, tier: account.tier, allowance, actionKinds };
+}
+
+/** The action kinds this person's abilities allow (the switches are checked by the caller). */
+export function actionKindsOf(ability: AppAbility): AiActionKind[] {
+  return aiActionKindsFor((action, subject) => ability.can(action, subject));
 }
 
 // ── Starting a question ──────────────────────────────────────────────────────
@@ -86,6 +98,10 @@ export interface BeginResult {
   isNewConversation: boolean;
   /** Earlier turns, text only, oldest first (for the model). */
   history: AiMessage[];
+  /** The action kinds the assistant may prepare for this person (permission and the owner's switches resolved). Empty = read-only chat. */
+  actionKinds: AiActionKind[];
+  /** The person's permission role, so the streaming route can build the same abilities for the propose tools. */
+  role: string;
 }
 
 /**
@@ -161,7 +177,9 @@ export async function beginQuestion(ctx: AiCtx, input: { conversationId?: string
       ipAddress: ctx.ipAddress ?? null,
       role: ctx.role,
     });
-    return { conversationId, usageId, tier: account.tier, isNewConversation: isNew, history };
+    const settings = await getAiSettings(ctx.tenantId);
+    const actionKinds = aiActionsDisabledReason(settings, ctx.role) ? [] : actionKindsOf(ctx.ability);
+    return { conversationId, usageId, tier: account.tier, isNewConversation: isNew, history, actionKinds, role: ctx.role };
   } catch (err) {
     if (usageId) await controlDb.update(aiUsage).set({ status: "refunded", completedAt: new Date() }).where(eq(aiUsage.id, usageId));
     await refundQuestion(ctx.tenantId, account.counterKey, consumed.source, consumed.source === "credit" ? consumed.grantId : null);
@@ -191,7 +209,7 @@ export interface FinishInput {
   usageId: string;
   model: string;
   text: string;
-  cards: AiCard[];
+  cards: AiAnyCard[];
   toolCalls: Array<{ name: string; status: string }>;
   usage: Required<AiTokenUsage>;
   /** ok, or aborted when the person stopped it after text began (still counted). */
@@ -341,17 +359,22 @@ export async function getConversation(ctx: AiCtx, id: string) {
     .from(aiMessages)
     .where(and(eq(aiMessages.conversationId, id), eq(aiMessages.businessId, ctx.businessId)))
     .orderBy(asc(aiMessages.createdAt));
+  // Validated again on the way out: only known card types ever reach a client. A confirmation
+  // card is rebuilt from the stored action as it is NOW (its status, result and edits); one whose
+  // action is gone or is not this person's is dropped.
+  const parsed = rows.map((m) => (m.role === "assistant" && m.cards ? parseTrustedAiCards(m.cards) : []));
+  const actionIds = [...new Set(parsed.flat().flatMap((c) => (c.type === "confirmation" ? [c.actionId] : [])))];
+  const live = await loadActionCards(ctx, actionIds);
   return {
     id: conv.id,
     title: conv.title,
     createdAt: conv.createdAt.toISOString(),
     updatedAt: conv.updatedAt.toISOString(),
-    messages: rows.map((m) => ({
+    messages: rows.map((m, i) => ({
       id: m.id,
       role: m.role as "user" | "assistant",
       content: m.content,
-      // Validated again on the way out: only known card types ever reach a client.
-      cards: m.role === "assistant" && m.cards ? parseAiCards(m.cards).cards : [],
+      cards: parsed[i]!.flatMap((c): AiAnyCard[] => (c.type === "confirmation" ? (live.get(c.actionId) ? [live.get(c.actionId)!] : []) : [c])),
       toolCalls: m.toolCalls ?? [],
       createdAt: m.createdAt.toISOString(),
     })),

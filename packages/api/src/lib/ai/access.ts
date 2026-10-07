@@ -15,7 +15,8 @@ import { TRPCError } from "@trpc/server";
 import { requireCan, type Action, type AppAbility } from "../permissions.js";
 import { getEntitlements, requireAddon, type Entitlements } from "../entitlements.js";
 import { entitlementError } from "../entitlement-error.js";
-import { aiDisabledReason, getAiSettings } from "./settings.js";
+import { AI_ACTIONS_OFF_MESSAGE, AI_ACTIONS_ROLE_OFF_MESSAGE } from "@fintranzact/shared";
+import { aiActionsDisabledReason, aiDisabledReason, getAiSettings } from "./settings.js";
 
 interface AiAccessCtx {
   ability: AppAbility;
@@ -43,4 +44,10 @@ export const AI_NOT_CONFIGURED_MESSAGE = "The AI assistant is not set up on this
 export async function assertAiSwitchedOn(ctx: { tenantId: string; role: string }): Promise<void> {
   const reason = aiDisabledReason(await getAiSettings(ctx.tenantId), ctx.role);
   if (reason) throw new TRPCError({ code: "FORBIDDEN", message: reason === "org_disabled" ? AI_ORG_OFF_MESSAGE : AI_ROLE_OFF_MESSAGE });
+}
+
+/** The owner's switches for ACTIONS (Phase 2), on top of the assistant's own: the person gets a plain refusal. */
+export async function assertAiActionsOn(ctx: { tenantId: string; role: string }): Promise<void> {
+  const reason = aiActionsDisabledReason(await getAiSettings(ctx.tenantId), ctx.role);
+  if (reason) throw new TRPCError({ code: "FORBIDDEN", message: reason === "actions_org_disabled" ? AI_ACTIONS_OFF_MESSAGE : AI_ACTIONS_ROLE_OFF_MESSAGE });
 }
