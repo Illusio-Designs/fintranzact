@@ -5,7 +5,7 @@ import { controlDb, getTenantDb, securityEvents, tenants, tenantMembers, users, 
 import { ensureReferralCode, getPartnerStats, payingTenantIds } from "../lib/partner-program.js";
 import { emailService } from "../lib/email.js";
 import { logger } from "../lib/logger.js";
-import { aiPriceTableSchema, aiQuotaPeriod, RESET_VERIFICATION_METHODS, SECURITY_EVENT_TYPES, PLAN_DEFAULTS, planIdSchema, planSettingsWarnings, effectiveYearlyPriceInr, SUBSCRIPTION_STATUSES, YEARLY_CYCLE_MONTHS, limitsToStored, partnerStatuses, planSettingsSchema, partnerTypes, partnerPayoutStatuses, payoutPeriodSchema, trialSettingsSchema, trialDaysLeftAt, TRIAL_ADMIN_MAX_DAYS } from "@fintranzact/shared";
+import { ADDONS, ADDON_IDS, AI_PACK_PRICE_INR, aiPriceTableSchema, aiQuotaPeriod, RESET_VERIFICATION_METHODS, SECURITY_EVENT_TYPES, PLAN_DEFAULTS, planIdSchema, planSettingsWarnings, effectiveYearlyPriceInr, SUBSCRIPTION_STATUSES, YEARLY_CYCLE_MONTHS, limitsToStored, partnerStatuses, planSettingsSchema, partnerTypes, partnerPayoutStatuses, payoutPeriodSchema, trialSettingsSchema, trialDaysLeftAt, TRIAL_ADMIN_MAX_DAYS } from "@fintranzact/shared";
 import {
   roadmapStatuses,
   roadmapListSchema,
@@ -36,6 +36,9 @@ import { grantCredits } from "../lib/ai/quota.js";
 import { resolveAiModels } from "../lib/ai/model-router.js";
 import { recordBillingEvent } from "../lib/billing/service.js";
 import { getEntitlements } from "../lib/entitlements.js";
+import { getAddonPrices, saveAddonPrices } from "../lib/billing/addon-prices.js";
+import { grantAddonByAdmin, revokeAddonGrant } from "../lib/billing/addon-service.js";
+import { listPackPurchases } from "../lib/billing/ai-packs.js";
 import { resetTwoFactorByAdmin } from "../lib/two-factor-reset.js";
 import { drizzleResetStore } from "../lib/two-factor-store.js";
 import { invalidateTwoFactorGateUser } from "../lib/two-factor-gate-cache.js";
@@ -401,6 +404,82 @@ export const platformRouter = router({
     }),
 
   /** Add days to an organisation trial (from its end when running, from now when over). */
+  /**
+   * The add-on price table: the price in force next to the built-in one, for every add-on and the
+   * extra AI pack. An entry the admin never edited shows the built-in price with `edited: false`.
+   */
+  addonPrices: platformAdminProcedure.query(async () => {
+    const o = await getAddonPrices();
+    return {
+      addons: ADDONS.map((a) => ({
+        id: a.id,
+        name: a.name,
+        builtInMonthlyPriceInr: a.monthlyPriceInr,
+        monthlyPriceInr: o.addons[a.id]?.monthlyPriceInr ?? a.monthlyPriceInr,
+        yearlyPriceInr: o.addons[a.id]?.yearlyPriceInr ?? null,
+        edited: !!o.addons[a.id],
+      })),
+      aiPack: { builtInPriceInr: AI_PACK_PRICE_INR, priceInr: o.aiPackPriceInr ?? AI_PACK_PRICE_INR, edited: o.aiPackPriceInr !== null },
+    };
+  }),
+
+  /**
+   * Save the add-on prices (ex-GST rupees; an empty yearly price means ten months, "2 months free").
+   * An add-on left out of `addons` goes back to its built-in price. Applies to new purchases only.
+   * Recorded in the billing event log with the acting admin.
+   */
+  saveAddonPrices: platformAdminProcedure
+    .input(z.object({
+      addons: z.record(z.enum(ADDON_IDS), z.object({
+        monthlyPriceInr: z.number().int().min(1).max(1_000_000),
+        yearlyPriceInr: z.number().int().min(1).max(1_000_000).nullable(),
+      })),
+      aiPackPriceInr: z.number().int().min(1).max(1_000_000).nullable(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const before = await getAddonPrices();
+      await saveAddonPrices({ addons: input.addons, aiPackPriceInr: input.aiPackPriceInr });
+      await recordBillingEvent({ provider: "local", type: "platform.addon_prices_changed", payload: { from: before, to: input, actorUserId: ctx.user.id } });
+      return { ok: true };
+    }),
+
+  /** Give an add-on free to an organisation (it runs until revoked, is never billed). Another tier of the same add-on must be removed first. */
+  grantAddon: platformAdminProcedure
+    .input(z.object({ tenantId: z.string().uuid(), addon: z.enum(ADDON_IDS), reason: z.string().trim().min(3).max(300) }))
+    .mutation(async ({ input, ctx }) => grantAddonByAdmin({ ...input, actorUserId: ctx.user.id })),
+
+  /** Take back an add-on an admin granted. A paid subscription is not touched. */
+  revokeAddon: platformAdminProcedure
+    .input(z.object({ tenantId: z.string().uuid(), addon: z.enum(ADDON_IDS) }))
+    .mutation(async ({ input, ctx }) => {
+      await revokeAddonGrant({ ...input, actorUserId: ctx.user.id });
+      return { ok: true };
+    }),
+
+  /** An organisation's extra-question purchases: orders, credits bought, what is left, and the GST invoice of each. */
+  aiPurchases: platformAdminProcedure
+    .input(z.object({ tenantId: z.string().uuid() }))
+    .query(async ({ input }) => {
+      const subs = await controlDb
+        .select({
+          id: billingSubscriptions.id,
+          addon: billingSubscriptions.addon,
+          status: billingSubscriptions.status,
+          provider: billingSubscriptions.provider,
+          cycle: billingSubscriptions.cycle,
+          basePaise: billingSubscriptions.basePaise,
+          currentPeriodEnd: billingSubscriptions.currentPeriodEnd,
+          graceUntil: billingSubscriptions.graceUntil,
+        })
+        .from(billingSubscriptions)
+        .where(and(eq(billingSubscriptions.tenantId, input.tenantId), eq(billingSubscriptions.kind, "addon"), inArray(billingSubscriptions.status, ["active", "past_due", "halted"])));
+      return {
+        purchases: await listPackPurchases(input.tenantId, 50),
+        /** The live add-on subscriptions (a row with provider "admin" is a free grant). */
+        addons: subs.map((r) => ({ ...r, currentPeriodEnd: r.currentPeriodEnd?.toISOString() ?? null, graceUntil: r.graceUntil?.toISOString() ?? null })),
+      };
+    }),
+
   extendTrial: platformAdminProcedure
     .input(z.object({ tenantId: z.string().uuid(), days: z.number().int().min(1).max(TRIAL_ADMIN_MAX_DAYS), reason: z.string().trim().min(3).max(500) }))
     .mutation(({ input, ctx }) => extendTrial(input.tenantId, input.days, { actorUserId: ctx.user.id, reason: input.reason })),

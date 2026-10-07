@@ -2,6 +2,11 @@ import { Link } from "@tanstack/react-router";
 import { isAddonAvailable } from "@fintranzact/shared";
 import { useEntitlements } from "@/hooks/useEntitlements";
 
+/** An AI add-on (and so extra question packs) can be bought today. False while neither tier is on sale. */
+export function aiCanBuy(): boolean {
+  return isAddonAvailable("ai_assistant") || isAddonAvailable("ai_plus");
+}
+
 /**
  * Whether the organisation has the AI assistant add-on right now, from
  * `billing.status` (a mirror for the page: the server refuses every question
@@ -18,7 +23,7 @@ export function useAiAccess() {
     loading: isLoading && !status,
     active,
     /** An AI add-on can be bought today (false while neither is on sale). */
-    canBuy: isAddonAvailable("ai_assistant") || isAddonAvailable("ai_plus"),
+    canBuy: aiCanBuy(),
     canManageBilling,
     trialCap,
     readOnly: !!status?.readOnly,

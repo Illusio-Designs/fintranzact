@@ -12,12 +12,20 @@
  *   subscription.pending     renewal failing, Razorpay retrying → past_due + grace
  *   subscription.halted      Razorpay gave up → halted (read-only)
  *   subscription.cancelled / subscription.completed → cancelled
+ * One-time payments for extra AI question packs (an Order on the platform account) arrive on the
+ * same endpoint and are matched by their order id (lib/billing/ai-packs.ts):
+ *   payment.captured / order.paid   the order is paid → GST invoice and the credit grant (once)
+ *   payment.failed                  the order is marked failed, nothing is granted
+ *   refund.processed                the unused credits are taken back and a credit note is raised
+ * Those are made idempotent by the order itself (a row lock and unique payment ids), not by the
+ * event id, so a delivery that failed half way is simply handled again when Razorpay redelivers.
  * Anything else is stored for the audit trail and acknowledged.
  */
 
 import type { Hono } from "hono";
+import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
-import { controlDb, billingEvents, billingSubscriptions } from "@fintranzact/db";
+import { controlDb, aiPackOrders, billingEvents, billingSubscriptions } from "@fintranzact/db";
 import { verifyRazorpayWebhookSignature } from "../lib/billing/gateway.js";
 import {
   activateSubscription,
@@ -27,19 +35,102 @@ import {
   recordRenewal,
   recordRenewalFailure,
 } from "../lib/billing/service.js";
+import { failPackPayment, fulfilPackPayment, refundPackPayment } from "../lib/billing/ai-packs.js";
 import { logger } from "../lib/logger.js";
 
 interface RazorpayEvent {
   event: string;
   payload?: {
     subscription?: { entity?: { id?: string } };
-    payment?: { entity?: { id?: string; method?: string; invoice_id?: string; error_description?: string } };
+    payment?: { entity?: { id?: string; order_id?: string; amount?: number; method?: string; invoice_id?: string; error_description?: string } };
+    order?: { entity?: { id?: string } };
+    refund?: { entity?: { id?: string; payment_id?: string; amount?: number } };
   };
+}
+
+const PACK_EVENTS = new Set(["payment.captured", "order.paid", "payment.failed", "refund.processed"]);
+
+/**
+ * A payment or refund event for an extra-AI-pack order. Returns true when the event belongs to
+ * one (it is then fully handled here), false to let the subscription handling carry on.
+ */
+async function handlePackEvent(event: RazorpayEvent, eventId: string | null): Promise<boolean> {
+  if (!PACK_EVENTS.has(event.event)) return false;
+  const payment = event.payload?.payment?.entity;
+  const refund = event.payload?.refund?.entity;
+
+  let orderRow: { providerOrderId: string; tenantId: string } | null = null;
+  if (event.event === "refund.processed") {
+    const paymentId = refund?.payment_id;
+    if (!paymentId) return false;
+    [orderRow] = await controlDb
+      .select({ providerOrderId: aiPackOrders.providerOrderId, tenantId: aiPackOrders.tenantId })
+      .from(aiPackOrders)
+      .where(eq(aiPackOrders.providerPaymentId, paymentId))
+      .limit(1);
+  } else {
+    const orderId = payment?.order_id ?? event.payload?.order?.entity?.id;
+    if (!orderId) return false;
+    [orderRow] = await controlDb
+      .select({ providerOrderId: aiPackOrders.providerOrderId, tenantId: aiPackOrders.tenantId })
+      .from(aiPackOrders)
+      .where(eq(aiPackOrders.providerOrderId, orderId))
+      .limit(1);
+  }
+  if (!orderRow) return false;
+
+  switch (event.event) {
+    case "payment.captured":
+    case "order.paid":
+      if (!payment?.id) {
+        logger.warn({ event: event.event }, "[billing] pack payment event without a payment id");
+        break;
+      }
+      try {
+        await fulfilPackPayment({
+          providerOrderId: orderRow.providerOrderId,
+          providerPaymentId: payment.id,
+          method: payment.method ?? null,
+          amountPaise: typeof payment.amount === "number" ? payment.amount : null,
+        });
+      } catch (err) {
+        // A payment whose amount is not the order's: nothing is granted, and the event is acknowledged
+        // (a redelivery would fail the same way); the audit trail carries the error for follow-up.
+        if (err instanceof TRPCError && err.code === "BAD_REQUEST") {
+          await recordBillingEvent({ provider: "razorpay", type: "ai_pack.payment_rejected", tenantId: orderRow.tenantId, payload: event, error: err.message });
+          return true;
+        }
+        throw err;
+      }
+      break;
+    case "payment.failed":
+      await failPackPayment(orderRow.providerOrderId, payment?.error_description ?? null);
+      break;
+    case "refund.processed":
+      if (refund?.id && refund.payment_id) {
+        await refundPackPayment({ providerPaymentId: refund.payment_id, refundId: refund.id, amountPaise: refund.amount ?? 0 });
+      }
+      break;
+  }
+
+  // The audit row, after the work succeeded (a redelivery of a duplicate inserts nothing).
+  if (eventId) {
+    await controlDb
+      .insert(billingEvents)
+      .values({ provider: "razorpay", eventId, type: event.event, tenantId: orderRow.tenantId, payload: event })
+      .onConflictDoNothing();
+  } else {
+    await recordBillingEvent({ provider: "razorpay", type: event.event, tenantId: orderRow.tenantId, payload: event });
+  }
+  return true;
 }
 
 export async function handleRazorpayEvent(event: RazorpayEvent, eventId: string | null): Promise<void> {
   const providerSubId = event.payload?.subscription?.entity?.id ?? null;
   const payment = event.payload?.payment?.entity;
+
+  // Extra AI question packs are one-time orders, not subscriptions.
+  if (await handlePackEvent(event, eventId)) return;
 
   const sub = providerSubId
     ? (await controlDb

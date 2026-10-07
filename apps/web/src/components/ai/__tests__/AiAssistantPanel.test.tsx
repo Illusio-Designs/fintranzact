@@ -230,6 +230,55 @@ describe("asking", () => {
     expect(h.invalidate).toHaveBeenCalled();
   });
 
+  describe("when the questions run out: buying more", () => {
+    const exhausted = { scope: "month", limit: 150, used: 150, includedRemaining: 0, creditsRemaining: 0, remaining: 0, exhausted: true };
+
+    it("an owner gets a Buy more questions link to Billing, once extra packs are on sale", () => {
+      h.onSale.current = true;
+      h.aiStatus.current = okStatus({ isOwner: true, allowance: exhausted });
+      openAiPanel();
+      render(<AiAssistantPanel />);
+      expect(screen.getByTestId("ai-remaining")).toHaveTextContent("No questions left");
+      expect(screen.getByRole("link", { name: "Buy more questions" })).toHaveAttribute("href", "/settings?tab=billing");
+      expect(screen.queryByTestId("ai-ask-owner")).not.toBeInTheDocument();
+    });
+
+    it("everyone else is told to ask their owner, with no link", () => {
+      h.onSale.current = true;
+      h.aiStatus.current = okStatus({ isOwner: false, allowance: exhausted });
+      openAiPanel();
+      render(<AiAssistantPanel />);
+      expect(screen.getByTestId("ai-ask-owner")).toHaveTextContent("Ask your owner");
+      expect(screen.queryByRole("link", { name: "Buy more questions" })).not.toBeInTheDocument();
+    });
+
+    it("shows neither while extra packs are not on sale", () => {
+      h.onSale.current = false;
+      h.aiStatus.current = okStatus({ isOwner: true, allowance: exhausted });
+      openAiPanel();
+      render(<AiAssistantPanel />);
+      expect(screen.queryByTestId("ai-buy-more")).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Buy more questions" })).not.toBeInTheDocument();
+    });
+
+    it("shows nothing while there are questions left", () => {
+      h.onSale.current = true;
+      openAiPanel();
+      render(<AiAssistantPanel />);
+      expect(screen.queryByTestId("ai-buy-more")).not.toBeInTheDocument();
+    });
+
+    it("a refused question (quota_exhausted) shows the action even before the status refreshes", async () => {
+      h.onSale.current = true;
+      h.stream.mockRejectedValue(new AiRequestError("Your organisation has used all its AI questions for this month. You can add more from Billing when extra packs are available.", 403, "quota_exhausted"));
+      openAiPanel();
+      render(<AiAssistantPanel />);
+      await userEvent.type(screen.getByLabelText("Your question"), "hello there{Enter}");
+      expect(await screen.findByTestId("ai-notice-quota")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Buy more questions" })).toBeInTheDocument();
+    });
+  });
+
   it("shows a provider error inline, in the answer, with the reassurance from the server", async () => {
     answerWith([{ event: "error", data: { code: "provider_error", message: "The AI service had a problem just now. Your question was not counted. Please try again in a moment." } }]);
     openAiPanel();

@@ -257,6 +257,15 @@ export function availableAddonIds(): AddonId[] {
   return ADDON_IDS.filter((id) => isAddonAvailable(id));
 }
 
+/**
+ * Extra AI question packs are sold with the AI add-on: on sale when either AI
+ * tier is. One switch, the `implemented` flags above, so nothing about the AI
+ * purchase flow can be reached before the owner releases the add-on.
+ */
+export function isAiPackAvailable(): boolean {
+  return isAddonAvailable("ai_assistant") || isAddonAvailable("ai_plus");
+}
+
 /** Shown wherever a purchase of an add-on that does not exist yet is refused or replaced. */
 export const ADDON_COMING_SOON_MESSAGE = "This add-on is coming soon and cannot be purchased yet.";
 

@@ -58,6 +58,12 @@ export const READ_ONLY_EXEMPT: ReadonlySet<string> = new Set([
   "billing.updateBillingDetails",
   "billing.changePlan",
   "billing.cancelSubscription",
+  // Extra AI question packs and AI tier changes: billing, owner only. A read-only organisation has
+  // no AI add-on (they are off while read-only), so createPackOrder refuses it; changeAddon and the
+  // order callback are the same billing actions as the ones above.
+  "billing.changeAddon",
+  "billing.buyAiPack",
+  "billing.verifyAiPackPayment",
 
   // Organisation membership: choosing/accepting an organisation, and
   // REDUCING access (removing a member, revoking an invitation) which also
@@ -100,6 +106,9 @@ export const READ_ONLY_EXEMPT: ReadonlySet<string> = new Set([
   "platform.saveTrialSettings",
   "platform.saveAiPrices",
   "platform.grantAiCredits",
+  "platform.saveAddonPrices",
+  "platform.grantAddon",
+  "platform.revokeAddon",
   "platform.resetTwoFactor",
   "platform.savePlan",
   "platform.resetPlan",

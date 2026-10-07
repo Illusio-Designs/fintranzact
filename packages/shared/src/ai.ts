@@ -11,14 +11,59 @@
 
 import { z } from "zod";
 import { istDateParts } from "./dates.js";
+import { gstOnPaise } from "./billing.js";
 
 // ── Tiers and quotas ─────────────────────────────────────────────────────────
 
 /** Questions included per calendar month (IST) by add-on tier. */
 export const AI_INCLUDED_QUESTIONS = { assistant: 150, plus: 500 } as const;
 
-/** Questions in one extra pack (credits an admin can grant; the purchase flow is the AI add-on billing work). */
+/** Questions in one extra pack (credits an owner buys, or an admin grants). */
 export const AI_PACK_QUESTIONS = 100;
+
+/** Price of one extra pack in rupees, ex-GST (the admin console can override it: system_config `billing.addon_prices`). */
+export const AI_PACK_PRICE_INR = 199;
+
+/** Most packs in one order. */
+export const AI_PACK_MAX_PER_ORDER = 50;
+
+export interface AiPackAmount {
+  packs: number;
+  /** Questions the order adds. */
+  credits: number;
+  basePaise: number;
+  gstPaise: number;
+  totalPaise: number;
+}
+
+/**
+ * What `packs` extra packs cost: price x packs ex-GST, then 18% GST on the total
+ * (the same math as a plan or add-on cycle, so the invoice and the checkout agree).
+ * Throws for a count outside 1..AI_PACK_MAX_PER_ORDER or a non-integer.
+ */
+export function aiPackAmount(packs: number, packPriceInr: number = AI_PACK_PRICE_INR): AiPackAmount {
+  if (!Number.isInteger(packs) || packs < 1 || packs > AI_PACK_MAX_PER_ORDER) {
+    throw new RangeError(`Packs must be a whole number from 1 to ${AI_PACK_MAX_PER_ORDER}`);
+  }
+  if (!Number.isInteger(packPriceInr) || packPriceInr < 1) throw new RangeError("Pack price must be a whole number of rupees");
+  const basePaise = packs * packPriceInr * 100;
+  const gstPaise = gstOnPaise(basePaise);
+  return { packs, credits: packs * AI_PACK_QUESTIONS, basePaise, gstPaise, totalPaise: basePaise + gstPaise };
+}
+
+/** The instant the monthly allowance resets: midnight IST at the start of the next calendar month. */
+export function aiQuotaResetsAt(now: Date): Date {
+  const { year, month } = istDateParts(now);
+  const ny = month === 12 ? year + 1 : year;
+  const nm = month === 12 ? 1 : month + 1;
+  return new Date(`${ny}-${String(nm).padStart(2, "0")}-01T00:00:00+05:30`);
+}
+
+/** Which of two AI tiers is the bigger one: +1 when `to` is an upgrade from `from`, -1 a downgrade, 0 the same. */
+export function aiTierDirection(from: "ai_assistant" | "ai_plus", to: "ai_assistant" | "ai_plus"): 1 | 0 | -1 {
+  if (from === to) return 0;
+  return to === "ai_plus" ? 1 : -1;
+}
 
 /**
  * Which allowance an organisation is on: "trial" (Full Access Trial, a cap for

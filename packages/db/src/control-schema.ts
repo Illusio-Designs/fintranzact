@@ -421,6 +421,13 @@ export const billingSubscriptions = pgTable("billing_subscriptions", {
   /** Downgrade scheduled for the period end (plan subscriptions only). */
   scheduledPlan: text("scheduled_plan"),
   scheduledCycle: billingCycleEnum("scheduled_cycle"),
+  /** Add-on switch scheduled for the period end (AI Plus down to AI Assistant). Add-on subscriptions only. */
+  scheduledAddon: text("scheduled_addon"),
+  /**
+   * The add-on subscription this one replaces (AI Assistant to AI Plus): it is retired, with a credit
+   * note for its unused time, when this one activates, so the organisation is never billed for both.
+   */
+  replacesSubscriptionId: uuid("replaces_subscription_id"),
   /** Set when a renewal fails; past it the organisation goes read-only. */
   graceUntil: timestamp("grace_until", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -754,13 +761,49 @@ export const aiCreditGrants = pgTable("ai_credit_grants", {
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
   credits: integer("credits").notNull(),
   used: integer("used").default(0).notNull(),
-  /** admin_grant now; purchase later. */
+  /** admin_grant | purchase. */
   source: text("source").default("admin_grant").notNull(),
   reason: text("reason").notNull(),
   grantedByUserId: uuid("granted_by_user_id"),
+  /** The captured billing_payments row (the GST invoice) a purchase was paid with; unique, so one payment can never grant twice. */
+  paymentId: uuid("payment_id"),
+  /** The ai_pack_orders row of a purchase. */
+  orderId: uuid("order_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   index("ai_credit_grants_tenant_idx").on(t.tenantId, t.createdAt),
+  uniqueIndex("ai_credit_grants_payment_idx").on(t.paymentId).where(sql`${t.paymentId} IS NOT NULL`),
+]);
+
+/**
+ * A one-time purchase of extra question packs, paid through the platform Razorpay (an Order) or the
+ * demo gateway. `created` until the payment is confirmed (by the checkout callback or the
+ * payment.captured webhook, whichever first); `paid` once the GST invoice and the credit grant
+ * exist; `failed` when the payment failed; `refunded` when a refund took the unused credits back.
+ */
+export const aiPackOrders = pgTable("ai_pack_orders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id, { onDelete: "cascade" }),
+  /** Packs bought and the questions they hold (packs x pack size when bought). */
+  packs: integer("packs").notNull(),
+  credits: integer("credits").notNull(),
+  /** Price before GST, in paise, frozen when the order was made. */
+  basePaise: integer("base_paise").notNull(),
+  totalPaise: integer("total_paise").notNull(),
+  provider: text("provider").notNull(),
+  providerOrderId: text("provider_order_id").notNull(),
+  providerPaymentId: text("provider_payment_id"),
+  status: text("status").default("created").notNull(),
+  paymentId: uuid("payment_id"),
+  grantId: uuid("grant_id"),
+  failureReason: text("failure_reason"),
+  createdByUserId: uuid("created_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+}, (t) => [
+  uniqueIndex("ai_pack_orders_provider_order_idx").on(t.providerOrderId),
+  uniqueIndex("ai_pack_orders_provider_payment_idx").on(t.providerPaymentId).where(sql`${t.providerPaymentId} IS NOT NULL`),
+  index("ai_pack_orders_tenant_idx").on(t.tenantId, t.createdAt),
 ]);
 
 /**

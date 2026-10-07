@@ -6,6 +6,14 @@ import { controlDb, getTenantDb, billingPayments, billingSubscriptions, invoices
 import {
   ADDONS,
   ADDON_IDS,
+  AI_PACK_MAX_PER_ORDER,
+  AI_PACK_PRICE_INR,
+  AI_PACK_QUESTIONS,
+  effectiveAddonPrice,
+  addonCycleAmount,
+  aiPackAmount,
+  aiQuotaResetsAt,
+  isAiPackAvailable,
   ADDON_COMING_SOON_MESSAGE,
   isAddonAvailable,
   BILLING_UPGRADE_PATH,
@@ -14,7 +22,6 @@ import {
   effectiveYearlyPriceInr,
   isStateCode,
   SUBSCRIPTION_STATUS_LABELS,
-  cycleAmount,
   entitlementMessage,
   planCheckoutAmount,
   TRIAL_ALREADY_USED_MESSAGE,
@@ -26,7 +33,11 @@ import { featureCatalogInfo } from "../lib/feature-gate.js";
 import { PLAN_MANAGER_ROLES } from "../lib/plan-manager.js";
 import { getPlanCatalog } from "../lib/plan-catalog.js";
 import { requirePlanManagerTenant } from "../lib/plan-manager.js";
-import { razorpayConfigured, razorpayKeyId, verifyRazorpayCheckoutSignature } from "../lib/billing/gateway.js";
+import { razorpayConfigured, razorpayKeyId, verifyRazorpayCheckoutSignature, verifyRazorpayOrderSignature } from "../lib/billing/gateway.js";
+import { getAddonPrices, getAiPackPriceInr } from "../lib/billing/addon-prices.js";
+import { changeAddon } from "../lib/billing/addon-service.js";
+import { createPackOrder, fulfilPackPayment, getPackOrderForTenant, listPackPurchases } from "../lib/billing/ai-packs.js";
+import { creditsRemaining, loadAiAccount } from "../lib/ai/quota.js";
 import {
   activateSubscription,
   cancelAtPeriodEnd,
@@ -64,6 +75,7 @@ function subscriptionForOwner(sub: SubscriptionRow) {
     currentPeriodEnd: sub.currentPeriodEnd,
     cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
     scheduledPlan: sub.scheduledPlan,
+    scheduledAddon: sub.scheduledAddon,
     scheduledCycle: sub.scheduledCycle,
     graceUntil: sub.graceUntil,
     provider: sub.provider,
@@ -71,13 +83,21 @@ function subscriptionForOwner(sub: SubscriptionRow) {
 }
 
 export const billingRouter = router({
-  config: publicProcedure.query(() => ({
+  config: publicProcedure.query(async () => {
+    const prices = await getAddonPrices();
+    return {
     demoPayments: demoPaymentsEnabled(),
     provider: razorpayConfigured() ? ("razorpay" as const) : ("demo" as const),
     razorpayKeyId: razorpayConfigured() ? razorpayKeyId() : null,
     /** Which add-ons can be bought today (ADDON_FEATURES[id].implemented); additive. */
     addonAvailability: Object.fromEntries(ADDON_IDS.map((id) => [id, isAddonAvailable(id)])) as Record<(typeof ADDON_IDS)[number], boolean>,
-  })),
+    /** Extra AI question packs can be bought (true when either AI tier is on sale); additive. */
+    aiPackAvailable: isAiPackAvailable(),
+    /** The add-on prices in force (the admin's overrides, else the built-in ones), ex-GST rupees; the pricing page reads them. Additive. */
+    addonPrices: Object.fromEntries(ADDON_IDS.map((id) => [id, effectiveAddonPrice(id, prices)])) as Record<(typeof ADDON_IDS)[number], { monthlyPriceInr: number; yearlyPriceInr: number | null }>,
+    aiPack: { questions: AI_PACK_QUESTIONS, priceInr: prices.aiPackPriceInr ?? AI_PACK_PRICE_INR },
+    };
+  }),
 
   /**
    * Demo plan checkout (sign-up flow and Billing tab while no gateway is
@@ -187,6 +207,72 @@ export const billingRouter = router({
     }),
 
   /**
+   * Move between the tiers of one add-on (AI Assistant to AI Plus and back) or change its billing
+   * cycle. Upgrade now (the old tier is retired with a credit note once the new one is paid),
+   * downgrade at the period end; never billed for both. Refused for an add-on that is not on sale.
+   */
+  changeAddon: protectedProcedure
+    .input(z.object({ addon: z.enum(ADDON_IDS), cycle: z.enum(BILLING_CYCLES) }))
+    .mutation(async ({ input, ctx }) => {
+      const tenantId = await requirePlanManagerTenant(ctx);
+      if (!isAddonAvailable(input.addon)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: ADDON_COMING_SOON_MESSAGE });
+      }
+      if (!razorpayConfigured() && !demoPaymentsEnabled()) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Online payments are not available yet. Contact us to upgrade." });
+      }
+      return changeAddon({ tenantId, addon: input.addon, cycle: input.cycle });
+    }),
+
+  /**
+   * Buy extra AI question packs (a one-time payment, not a subscription). Demo: paid at once.
+   * Razorpay: returns the order the checkout popup needs; verifyAiPackPayment (or the
+   * payment.captured webhook) then grants the questions. Refused while the AI add-on is not on sale.
+   */
+  buyAiPack: protectedProcedure
+    .input(z.object({ packs: z.number().int().min(1).max(AI_PACK_MAX_PER_ORDER) }))
+    .mutation(async ({ input, ctx }) => {
+      const tenantId = await requirePlanManagerTenant(ctx);
+      if (!isAiPackAvailable()) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: ADDON_COMING_SOON_MESSAGE });
+      }
+      if (!razorpayConfigured() && !demoPaymentsEnabled()) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Online payments are not available yet. Contact us to upgrade." });
+      }
+      const order = await createPackOrder({ tenantId, userId: ctx.user.id, packs: input.packs });
+      return {
+        status: order.status,
+        orderId: order.orderId,
+        providerOrderId: order.providerOrderId,
+        razorpayKeyId: order.status === "checkout" ? razorpayKeyId() : null,
+        packs: order.packs,
+        credits: order.credits,
+        totalPaise: order.totalPaise,
+      };
+    }),
+
+  /** Razorpay checkout callback for a pack order: verify the signature on the server, then grant the questions (once). */
+  verifyAiPackPayment: protectedProcedure
+    .input(z.object({
+      orderId: z.string().uuid(),
+      razorpayPaymentId: z.string().min(1).max(100),
+      razorpaySignature: z.string().min(1).max(200),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const tenantId = await requirePlanManagerTenant(ctx);
+      const order = await getPackOrderForTenant(tenantId, input.orderId);
+      if (order.provider !== "razorpay") throw new TRPCError({ code: "BAD_REQUEST", message: "This order is not paid through Razorpay." });
+      const ok = verifyRazorpayOrderSignature({
+        orderId: order.providerOrderId,
+        paymentId: input.razorpayPaymentId,
+        signature: input.razorpaySignature,
+      });
+      if (!ok) throw new TRPCError({ code: "BAD_REQUEST", message: "Payment could not be verified." });
+      const res = await fulfilPackPayment({ providerOrderId: order.providerOrderId, providerPaymentId: input.razorpayPaymentId });
+      return { status: "paid" as const, credits: order.credits, alreadyApplied: !res.granted };
+    }),
+
+  /**
    * Lightweight status for the banners every member sees (trial countdown,
    * read-only, past-due grace, suspended). Open to every member of the
    * organisation, unlike overview, and allowed while read-only or suspended.
@@ -248,6 +334,10 @@ export const billingRouter = router({
 
     const catalog = await getPlanCatalog();
     const currentPlan = catalog.find((p) => p.id === tenant.plan);
+    const addonPrices = await getAddonPrices();
+    const packPriceInr = await getAiPackPriceInr();
+    const ent = await getEntitlements(tenantId);
+    const aiAccount = await loadAiAccount(tenantId, ent);
 
     const payRows = await controlDb
       .select()
@@ -291,9 +381,31 @@ export const billingRouter = router({
         ...a,
         /** False until the feature is built: clients hide purchase controls (held add-ons still show). */
         available: isAddonAvailable(a.id),
-        monthly: cycleAmount(a.monthlyPriceInr, "monthly"),
-        yearly: cycleAmount(a.monthlyPriceInr, "yearly"),
+        monthly: addonCycleAmount(a.id, "monthly", addonPrices),
+        yearly: addonCycleAmount(a.id, "yearly", addonPrices),
       })),
+      /**
+       * Extra AI question packs and where the AI allowance stands (additive). `packAvailable` is false
+       * until the AI add-on is on sale: clients hide the buy controls then.
+       */
+      ai: {
+        packAvailable: isAiPackAvailable(),
+        pack: { questions: AI_PACK_QUESTIONS, priceInr: packPriceInr, maxPacks: AI_PACK_MAX_PER_ORDER, amount: aiPackAmount(1, packPriceInr) },
+        creditsRemaining: await creditsRemaining(tenantId),
+        allowance: aiAccount
+          ? {
+              tier: aiAccount.tier,
+              scope: aiAccount.allowance.scope,
+              limit: aiAccount.allowance.limit,
+              used: aiAccount.allowance.used,
+              includedRemaining: aiAccount.allowance.includedRemaining,
+              creditsRemaining: aiAccount.allowance.creditsRemaining,
+              remaining: aiAccount.allowance.remaining,
+              resetsAt: aiAccount.allowance.scope === "month" ? aiQuotaResetsAt(new Date()) : null,
+            }
+          : null,
+        purchases: await listPackPurchases(tenantId, 10),
+      },
       plans: catalog
         .filter((p) => p.visible && p.monthlyPriceInr !== null && p.monthlyPriceInr > 0)
         .map((p) => ({
@@ -317,7 +429,7 @@ export const billingRouter = router({
       },
       usage: {
         invoicesThisMonth,
-        aiQuestions: null as number | null,
+        aiQuestions: (aiAccount?.allowance.used ?? null) as number | null,
         payrollEmployees: null as number | null,
       },
       payments: payRows.map((p) => ({

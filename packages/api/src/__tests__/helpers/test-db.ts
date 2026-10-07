@@ -267,6 +267,7 @@ export async function truncateAllTables(): Promise<void> {
       -- Control schema
       ai_usage,
       ai_credit_grants,
+      ai_pack_orders,
       ai_quota_counters,
       ai_settings,
       billing_events,

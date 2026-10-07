@@ -169,6 +169,13 @@
       "when": 1791361804565,
       "tag": "0023_ai_assistant",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791375077497,
+      "tag": "0024_ai_billing",
+      "breakpoints": true
     }
   ]
 }

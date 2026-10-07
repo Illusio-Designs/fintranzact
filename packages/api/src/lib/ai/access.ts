@@ -12,6 +12,8 @@
  */
 
 import { TRPCError } from "@trpc/server";
+import { and, eq, inArray, ne } from "drizzle-orm";
+import { billingSubscriptions, controlDb } from "@fintranzact/db";
 import { requireCan, type Action, type AppAbility } from "../permissions.js";
 import { getEntitlements, requireAddon, type Entitlements } from "../entitlements.js";
 import { entitlementError } from "../entitlement-error.js";
@@ -23,6 +25,21 @@ interface AiAccessCtx {
   role?: string;
 }
 
+/** True when the organisation ever bought or was granted an AI add-on (a checkout that never completed does not count). */
+async function everHeldAiAddon(tenantId: string): Promise<boolean> {
+  const [row] = await controlDb
+    .select({ id: billingSubscriptions.id })
+    .from(billingSubscriptions)
+    .where(and(
+      eq(billingSubscriptions.tenantId, tenantId),
+      eq(billingSubscriptions.kind, "addon"),
+      inArray(billingSubscriptions.addon, ["ai_assistant", "ai_plus"]),
+      ne(billingSubscriptions.status, "created"),
+    ))
+    .limit(1);
+  return !!row;
+}
+
 /** Permission and add-on check. `action` "read" is history; anything else is asking or deleting. */
 export async function assertAi(ctx: AiAccessCtx, action: Action): Promise<Entitlements> {
   requireCan(ctx.ability, action, "Ai");
@@ -32,6 +49,9 @@ export async function assertAi(ctx: AiAccessCtx, action: Action): Promise<Entitl
   if (ent.reason === "tenant_suspended") throw entitlementError(ent.reason);
   // Read-only organisation: the add-on is off, but the history it already has stays readable.
   if (ent.readOnly) return ent;
+  // An add-on that lapsed (unpaid after the grace period, or cancelled): the chats are the person's
+  // own data and nothing is deleted, so they stay readable. Asking needs the add-on again.
+  if (await everHeldAiAddon(ctx.tenantId)) return ent;
   throw entitlementError("addon_required", { addon: "ai_assistant" });
 }
 

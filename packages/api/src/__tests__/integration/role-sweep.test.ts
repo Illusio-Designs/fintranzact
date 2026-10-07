@@ -100,6 +100,9 @@ const NON_CASL_GATES: Record<string, { allow: Column[]; why: string }> = {
   "billing.updateBillingDetails": { allow: ["owner"], why: "org owner only" },
   "billing.changePlan": { allow: ["owner"], why: "org owner only" },
   "billing.cancelSubscription": { allow: ["owner"], why: "org owner only" },
+  "billing.changeAddon": { allow: ["owner"], why: "org owner only" },
+  "billing.buyAiPack": { allow: ["owner"], why: "org owner only" },
+  "billing.verifyAiPackPayment": { allow: ["owner"], why: "org owner only" },
   "tenant.setSecurityPolicy": { allow: ["owner"], why: "org owner only" },
   // AI assistant switches: the owner decides who in the organisation may use it.
   "ai.settings": { allow: ["owner"], why: "org owner only" },

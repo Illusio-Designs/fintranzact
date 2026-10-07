@@ -56,6 +56,7 @@ import { SecurityActivitySection } from "@/components/platform/SecurityActivityS
 import { TrialSection, trialListLabel } from "@/components/platform/TrialSection";
 import { TrialSettingsCard } from "@/components/platform/TrialSettingsCard";
 import { AiAdminSection, AiCreditsSection } from "@/components/platform/AiAdminSection";
+import { AddonPriceEditor, AiPurchasesSection } from "@/components/platform/AddonBillingAdmin";
 
 type View = "overview" | "organisations" | "plans" | "subscriptions" | "partners" | "roadmap";
 const VIEWS: View[] = ["overview", "organisations", "plans", "subscriptions", "partners", "roadmap"];
@@ -561,6 +562,8 @@ function PlansView() {
           ))}
         </div>
       )}
+
+      <AddonPriceEditor />
 
       <PlanEditor plan={editing} onClose={() => setEditing(null)} />
     </>
@@ -1386,6 +1389,8 @@ function OrganisationPanel({ id, onClose }: { id: string | null; onClose: () => 
           <TrialSection detail={detail} />
 
           <AiCreditsSection tenantId={detail.id} />
+
+          <AiPurchasesSection tenantId={detail.id} />
 
           <section className="space-y-2">
             <h3 className="text-xs font-bold uppercase tracking-wide text-text-tertiary">Members · {detail.members.length}</h3>
