@@ -60,6 +60,9 @@ const perIp = createFixedWindowLimiter({ limit: 60, windowMs: 60_000 });
 
 export const AI_STREAM_TIMEOUT_MS = 100_000;
 
+/** Same escape hatch as the tRPC limiter in server.ts: honoured only outside production. */
+const rateLimitDisabled = () => process.env.DISABLE_RATE_LIMIT === "1" && process.env.NODE_ENV !== "production";
+
 export interface AiStreamOptions {
   /** The provider client (default: Anthropic from ANTHROPIC_API_KEY). Tests inject a scripted fake. */
   getClient?: () => AiClient | null;
@@ -89,14 +92,14 @@ export function registerAiStreamRoute(app: Hono, opts: AiStreamOptions = {}): vo
 
   app.post("/api/ai/stream", bodyLimit({ maxSize: 16 * 1024 }), async (c: Context) => {
     const ip = c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for")?.split(",").pop()?.trim() ?? "unknown";
-    if (!perIp.hit(ip)) return c.json({ error: "Too many requests", code: "rate_limited" satisfies ErrorCode }, 429);
+    if (!rateLimitDisabled() && !perIp.hit(ip)) return c.json({ error: "Too many requests", code: "rate_limited" satisfies ErrorCode }, 429);
 
     // Same identity, tenant and business resolution as tRPC.
     const ctx = await createContext({ req: c.req.raw, resHeaders: new Headers(), info: {} as never });
     if (!ctx.user) return c.json({ error: "You must be logged in", code: "unauthorized" satisfies ErrorCode }, 401);
     if (!ctx.tenantId) return c.json({ error: "No organization selected", code: "no_business" satisfies ErrorCode }, 400);
     if (!ctx.businessId) return c.json({ error: "No business selected", code: "no_business" satisfies ErrorCode }, 400);
-    if (!perUser.hit(`${ctx.tenantId}:${ctx.user.id}`)) return c.json({ error: "You are asking too fast. Wait a moment and try again.", code: "rate_limited" satisfies ErrorCode }, 429);
+    if (!rateLimitDisabled() && !perUser.hit(`${ctx.tenantId}:${ctx.user.id}`)) return c.json({ error: "You are asking too fast. Wait a moment and try again.", code: "rate_limited" satisfies ErrorCode }, 429);
 
     const refused = await refuseIfReadOnly(c, ctx.tenantId);
     if (refused) return refused;

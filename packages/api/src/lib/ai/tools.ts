@@ -192,7 +192,7 @@ export const AI_TOOLS: AiTool[] = [
     properties: { limit: { type: "integer", description: "1-20, default 10." } },
     schema: z.object({ limit: limitOf(10) }),
     async run(caller, input) {
-      const r = await caller.invoice.list({ type: "sale", status: "overdue", documentType: "invoice", page: 1, limit: input.limit, sortBy: "dueDate", sortDir: "asc" } as never);
+      const r = await caller.invoice.list({ type: "sale", status: "overdue", documentType: "invoice", page: 1, limit: input.limit, sortBy: "due", sortDir: "asc" });
       return {
         report: "Overdue sales invoices",
         total: r.total,

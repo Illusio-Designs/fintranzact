@@ -8,6 +8,13 @@
 | account.delete | mutation | authorized | delete:Account | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | account.list | query | authorized | read:Account | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ |
 | account.update | mutation | authorized | update:Account | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| ai.begin | mutation | authorized | create:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| ai.conversation | query | authorized | read:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| ai.conversations | query | authorized | read:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| ai.deleteConversation | mutation | authorized | create:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| ai.settings | query | tenant | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| ai.status | query | authorized | read:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| ai.updateSettings | mutation | tenant | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | apiKey.create | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | apiKey.list | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | apiKey.revoke | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -389,11 +396,15 @@
 | period.unlockBooks | mutation | authorized | — (+ only the owner unlocks a period) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | period.unlockGstMonth | mutation | authorized | — (+ only the owner unlocks a period) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | plan.list | query | public | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| platform.aiCredits | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.aiPrices | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.aiUsage | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.billingSummary | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.closeGovUsageMonth | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.deletePayout | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.endTrial | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.extendTrial | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.grantAiCredits | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.grantTrial | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.me | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | platform.overview | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
@@ -409,6 +420,7 @@
 | platform.roadmapReorder | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.roadmapUpdate | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.sandboxQuota | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| platform.saveAiPrices | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.savePlan | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.saveTrialSettings | mutation | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | platform.securityEvents | query | protected | — (+ platform admins only) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |

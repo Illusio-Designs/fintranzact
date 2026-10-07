@@ -5,13 +5,16 @@ ungated-exempt = public/protected base AND allowlisted (auth, billing, platform 
 inline-guarded = public/protected base, but the router calls assertWritable itself (INLINE_WRITE_GUARDED);
 ungated = public/protected base with no check at all: must be empty of business-data writes.
 
-mutations: 330 (gated 266, exempt 9, ungated-exempt 52, inline-guarded 3, ungated 0)
+mutations: 335 (gated 269, exempt 9, ungated-exempt 54, inline-guarded 3, ungated 0)
 
 | procedure | base | status |
 |---|---|---|
 | account.create | authorized | gated |
 | account.delete | authorized | gated |
 | account.update | authorized | gated |
+| ai.begin | authorized | gated |
+| ai.deleteConversation | authorized | gated |
+| ai.updateSettings | tenant | gated |
 | apiKey.create | protected | inline-guarded |
 | apiKey.revoke | protected | ungated-exempt |
 | auth.completeProfile | protected | ungated-exempt |
@@ -231,6 +234,7 @@ mutations: 330 (gated 266, exempt 9, ungated-exempt 52, inline-guarded 3, ungate
 | platform.deletePayout | protected | ungated-exempt |
 | platform.endTrial | protected | ungated-exempt |
 | platform.extendTrial | protected | ungated-exempt |
+| platform.grantAiCredits | protected | ungated-exempt |
 | platform.grantTrial | protected | ungated-exempt |
 | platform.recordPayout | protected | ungated-exempt |
 | platform.resetPlan | protected | ungated-exempt |
@@ -239,6 +243,7 @@ mutations: 330 (gated 266, exempt 9, ungated-exempt 52, inline-guarded 3, ungate
 | platform.roadmapDelete | protected | ungated-exempt |
 | platform.roadmapReorder | protected | ungated-exempt |
 | platform.roadmapUpdate | protected | ungated-exempt |
+| platform.saveAiPrices | protected | ungated-exempt |
 | platform.savePlan | protected | ungated-exempt |
 | platform.saveTrialSettings | protected | ungated-exempt |
 | platform.setPlan | protected | ungated-exempt |

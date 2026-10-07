@@ -98,6 +98,8 @@ export const READ_ONLY_EXEMPT: ReadonlySet<string> = new Set([
   "platform.grantTrial",
   "platform.endTrial",
   "platform.saveTrialSettings",
+  "platform.saveAiPrices",
+  "platform.grantAiCredits",
   "platform.resetTwoFactor",
   "platform.savePlan",
   "platform.resetPlan",
