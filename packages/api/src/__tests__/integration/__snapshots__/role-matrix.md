@@ -8,12 +8,16 @@
 | account.delete | mutation | authorized | delete:Account | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | account.list | query | authorized | read:Account | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ |
 | account.update | mutation | authorized | update:Account | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| ai.action | query | authorized | read:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | ai.begin | mutation | authorized | create:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| ai.cancelAction | mutation | authorized | create:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| ai.confirmAction | mutation | authorized | create:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | ai.conversation | query | authorized | read:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | ai.conversations | query | authorized | read:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | ai.deleteConversation | mutation | authorized | create:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | ai.settings | query | tenant | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | ai.status | query | authorized | read:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| ai.updateAction | mutation | authorized | create:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | ai.updateSettings | mutation | tenant | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | apiKey.create | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | apiKey.list | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |

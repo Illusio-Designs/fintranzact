@@ -2718,6 +2718,37 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-11-ai-phase-2",
+    updates: [
+      {
+        // Built and tested (shared unit tests, API unit and integration tests against Postgres with a scripted
+        // fake provider, web component tests). The real Anthropic API was never called and no browser was run
+        // when this was written. Gated by the AI add-on (ADDON_FEATURES.ai_assistant and ai_plus `implemented`
+        // stay false). The model only proposes: six propose_* tools store a validated pending action
+        // (ai_pending_actions) and the person's Confirm (ai.confirmAction, not a tool) runs the real procedure
+        // as them, once, with every normal rule. "Send reminder from chat" does exactly what Send reminder on the
+        // invoice does: email and SMS are sent by the existing machinery when confirmed (only the WhatsApp path,
+        // which records the reminder and returns a wa.me link, and the card preview are covered end to end in
+        // tests; no real email or SMS was sent), no new channel. "Page context": invoice, quotation, party, item,
+        // report and a fixed list of pages, verified through the person's permissions; a report sends its id
+        // (a period only when it is in the URL, which the reports page does not do yet). No native mobile app,
+        // CLI or MCP surface (parity exceptions). Still to do for the item: a real-provider check of how
+        // well the model follows the action rules, and the owner's release decision.
+        title: "AI business assistant — Phase 2: actions with confirmation",
+        status: "in_progress",
+        done: [
+          "Confirmation card component (review, edit, confirm, cancel)",
+          "Create invoice / quotation from chat",
+          "Record payment from chat",
+          "Add party / item from chat",
+          "Send reminder from chat",
+          "Page context (current invoice, party, report)",
+          "Permission checks and audit log for actions",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

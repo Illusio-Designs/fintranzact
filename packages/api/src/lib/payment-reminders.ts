@@ -33,6 +33,7 @@ import {
   maskPhone,
   normalizeIndianMobile,
   planAutoReminder,
+  REMINDER_CHANNELS,
   renderReminderLine,
   renderReminderTemplate,
   resolveReminderSettings,
@@ -625,4 +626,56 @@ export async function sendReminderNow(
     url = buildWhatsAppLink(inv.partyPhone, buildMessage(business, inv, "whatsapp", now, link).body);
   }
   return { channel, status: channel === "whatsapp" ? "link_opened" : "sent", url };
+}
+
+export interface ReminderPreview {
+  invoiceNumber: string;
+  partyName: string;
+  /** Balance due, as a decimal string. */
+  balanceDue: string;
+  /** Why nothing can be sent for this invoice at all, or null. */
+  blockedReason: string | null;
+  /** Why this channel cannot be used right now (no address, sent in the last 24 hours...), or null. */
+  channelReason: string | null;
+  /** The channels that can be used now. */
+  availableChannels: ReminderChannel[];
+  /** Masked address the reminder would go to ("ra***@x.com", "******3210"). */
+  recipient: string | null;
+  subject: string;
+  body: string;
+}
+
+/**
+ * What "Send reminder now" would send, without sending, claiming or recording
+ * anything and without creating a payment link (a link is added when it is
+ * really sent). Used by the AI assistant's confirmation card so the person
+ * reviews the actual message.
+ */
+export async function previewInvoiceReminder(
+  db: TenantDatabase,
+  businessId: string,
+  invoiceId: string,
+  channel: ReminderChannel,
+  opts: { now?: Date; deps?: ReminderDeps } = {},
+): Promise<ReminderPreview> {
+  const now = opts.now ?? new Date();
+  const deps = opts.deps ?? {};
+  const info = await getInvoiceReminderInfo(db, businessId, invoiceId, { now, deps });
+  const { business } = await loadBusinessReminderSettings(db, businessId);
+  const inv = await loadInvoice(db, businessId, invoiceId);
+  const link = await resolvePaymentLink(db, deps, businessId, invoiceId, false);
+  const msg = buildMessage(business, inv, channel, now, link);
+  const recipient =
+    channel === "email" ? (inv.partyEmail ? maskEmail(inv.partyEmail) : null) : inv.partyPhone ? maskPhone(inv.partyPhone) : null;
+  return {
+    invoiceNumber: inv.invoiceNumber,
+    partyName: inv.partyName,
+    balanceDue: info.balanceDue,
+    blockedReason: info.blockedReason,
+    channelReason: info.channels[channel].reason,
+    availableChannels: REMINDER_CHANNELS.filter((c) => info.channels[c].available),
+    recipient,
+    subject: msg.subject,
+    body: msg.body,
+  };
 }

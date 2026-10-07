@@ -5,7 +5,7 @@
  * cards are validated again here before they are ever rendered.
  */
 
-import { parseAiCards, type AiCard } from "@fintranzact/shared";
+import { parseTrustedAiCards, type AiAnyCard, type AiPageContext } from "@fintranzact/shared";
 import { apiUrl } from "@/lib/api-url";
 import { getBusinessId } from "@/lib/trpc";
 import { isDesktop } from "@/lib/isDesktop";
@@ -15,7 +15,7 @@ export type AiStreamEvent =
   | { event: "meta"; data: { conversationId: string; model: string; tier: string } }
   | { event: "tool"; data: { name: string; status: string } }
   | { event: "text"; data: { delta: string } }
-  | { event: "done"; data: { conversationId: string; messageId: string; text: string; cards: AiCard[]; remaining: number | null } }
+  | { event: "done"; data: { conversationId: string; messageId: string; text: string; cards: AiAnyCard[]; remaining: number | null } }
   | { event: "error"; data: { code: string; message: string } };
 
 /** A refusal before the stream started (add-on, quota, switched off, not configured, rate limit, ...). */
@@ -64,7 +64,7 @@ export function toAiEvent(message: { event: string; data: string }): AiStreamEve
     case "error":
       return { event: message.event, data } as AiStreamEvent;
     case "done":
-      return { event: "done", data: { ...data, cards: parseAiCards(data.cards ?? []).cards } } as unknown as AiStreamEvent;
+      return { event: "done", data: { ...data, cards: parseTrustedAiCards(data.cards ?? []) } } as unknown as AiStreamEvent;
     default:
       return null;
   }
@@ -73,6 +73,8 @@ export function toAiEvent(message: { event: string; data: string }): AiStreamEve
 export interface StreamOptions {
   message: string;
   conversationId?: string;
+  /** The page the person is on (allowlisted shapes only; the server verifies it). */
+  context?: AiPageContext | null;
   signal?: AbortSignal;
   onEvent: (event: AiStreamEvent) => void;
   fetchImpl?: typeof fetch;
@@ -99,7 +101,7 @@ export async function streamAiAnswer(opts: StreamOptions): Promise<void> {
       method: "POST",
       headers,
       credentials: desktop ? "omit" : "include",
-      body: JSON.stringify({ message: opts.message, ...(opts.conversationId ? { conversationId: opts.conversationId } : {}) }),
+      body: JSON.stringify({ message: opts.message, ...(opts.conversationId ? { conversationId: opts.conversationId } : {}), ...(opts.context ? { context: opts.context } : {}) }),
       signal: opts.signal,
     });
   } catch (err) {

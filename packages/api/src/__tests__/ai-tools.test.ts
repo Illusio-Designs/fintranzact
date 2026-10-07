@@ -36,7 +36,7 @@ describe("the allowlist", () => {
     expect(AI_TOOL_NAMES).toEqual([
       "sales_summary", "profit_and_loss", "outstanding_balances", "overdue_invoices", "top_customers", "top_selling_items",
       "stock_levels", "low_stock_reorder", "batch_expiry", "gst_payable", "tax_summary", "cash_and_bank", "monthly_comparison",
-      "sales_trend", "expenses_by_category", "find_invoices", "get_invoice", "find_parties", "recent_transactions",
+      "sales_trend", "expenses_by_category", "find_invoices", "get_invoice", "find_parties", "find_items", "recent_transactions",
     ]);
     for (const d of aiToolDefs()) {
       expect(d.description.length).toBeGreaterThan(10);
@@ -48,7 +48,7 @@ describe("the allowlist", () => {
   });
 
   it("has no write, payroll or admin tool", () => {
-    for (const name of AI_TOOL_NAMES) expect(name).not.toMatch(/create|update|delete|send|record|payroll|employee|salary|admin|platform|export/i);
+    for (const name of AI_TOOL_NAMES) expect(name).not.toMatch(/create|update|delete|send|record|propose|confirm|payroll|employee|salary|admin|platform|export/i);
   });
 
   it("refuses names outside the allowlist without touching the caller", async () => {
@@ -245,6 +245,7 @@ describe("every tool runs against a plausible procedure answer", () => {
     "dashboard.expensesByCategory": [],
     "invoice.getById": null,
     "party.list": { total: 0, data: [] },
+    "item.list": { total: 0, data: [] },
     "reports.daybook": { entries: [], summary: { totalSalesInvoiced: "0", totalPaymentsReceived: "0", totalPaymentsMade: "0", totalExpenses: "0" } },
   };
   const inputs: Record<string, unknown> = { gst_payable: { year: 2026, month: 9 }, get_invoice: { id: "11111111-1111-4111-8111-111111111111" } };

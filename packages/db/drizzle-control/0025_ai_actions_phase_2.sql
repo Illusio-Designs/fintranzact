@@ -1,0 +1,2 @@
+ALTER TABLE "ai_settings" ADD COLUMN "actions_enabled" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+ALTER TABLE "ai_settings" ADD COLUMN "actions_disabled_roles" jsonb DEFAULT '[]'::jsonb NOT NULL;

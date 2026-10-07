@@ -8,7 +8,7 @@
  * fake client and a fake tool runner (no network, no database).
  */
 
-import type { AiTokenUsage } from "@fintranzact/shared";
+import type { AiConfirmationCard, AiTokenUsage } from "@fintranzact/shared";
 import { AiProviderError, type AiClient, type AiContentBlock, type AiMessage, type AiToolDef } from "./client.js";
 import type { AiToolOutcome, AiToolStatus } from "./tools.js";
 import { CardsStreamFilter } from "./cards-filter.js";
@@ -48,10 +48,12 @@ export interface AiLoopState {
   usage: Required<AiTokenUsage>;
   toolCalls: Array<{ name: string; status: AiToolStatus }>;
   rounds: number;
+  /** Confirmation cards the action tools produced (server-built from stored proposals, never from model text). */
+  actionCards: AiConfirmationCard[];
 }
 
 export function newAiLoopState(): AiLoopState {
-  return { visible: "", usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }, toolCalls: [], rounds: 0 };
+  return { visible: "", usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }, toolCalls: [], rounds: 0, actionCards: [] };
 }
 
 export interface AiLoopResult {
@@ -61,6 +63,8 @@ export interface AiLoopResult {
   cardsRaw: string | null;
   usage: Required<AiTokenUsage>;
   toolCalls: Array<{ name: string; status: AiToolStatus }>;
+  /** Confirmation cards proposed by action tools, in order. */
+  actionCards: AiConfirmationCard[];
   rounds: number;
   /** end_turn, or why the loop stopped early: max_rounds, token_budget, deadline, max_tokens. */
   stopReason: string;
@@ -142,6 +146,7 @@ export async function runAiLoop(input: AiLoopInput): Promise<AiLoopResult> {
       input.onToolStart?.(use.name);
       const outcome = await input.runTool(use.name, use.input);
       toolCalls.push({ name: use.name, status: outcome.status });
+      if (outcome.card) state.actionCards.push(outcome.card);
       input.onToolEnd?.(use.name, outcome.status);
       results.push({ type: "tool_result", tool_use_id: use.id, content: outcome.content, ...(outcome.status === "ok" ? {} : { is_error: true }) });
     }
@@ -151,5 +156,5 @@ export async function runAiLoop(input: AiLoopInput): Promise<AiLoopResult> {
 
   const { tail, cardsRaw } = filter.finish();
   emit(tail);
-  return { text: state.visible.trim(), cardsRaw, usage, toolCalls, rounds: state.rounds, stopReason };
+  return { text: state.visible.trim(), cardsRaw, usage, toolCalls, actionCards: state.actionCards, rounds: state.rounds, stopReason };
 }

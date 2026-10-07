@@ -1,6 +1,7 @@
 import { auditLog } from "@fintranzact/db";
 import { isCaRole } from "@fintranzact/shared";
 import type { TenantDatabase } from "../trpc.js";
+import { withAuditSource } from "./audit-source.js";
 
 /**
  * Put the actor's role into an entry's metadata when they act as a CA
@@ -31,13 +32,15 @@ export async function logAudit(
   }
 ) {
   try {
+    // Where the change came from (e.g. "via AI assistant" while a confirmed assistant action runs).
+    const metadata = withAuditSource(params.metadata);
     await db.insert(auditLog).values({
       businessId: params.businessId,
       userId: params.userId,
       action: params.action,
       entityType: params.entityType,
       entityId: params.entityId || null,
-      metadata: params.metadata || isCaRole(params.role) ? JSON.stringify(withActorRole(params.metadata, params.role)) : null,
+      metadata: metadata || isCaRole(params.role) ? JSON.stringify(withActorRole(metadata, params.role)) : null,
       ipAddress: params.ipAddress || null,
     });
   } catch (err) {

@@ -6,10 +6,14 @@ import { useAiAccess } from "@/components/ai/AiGate";
 
 /**
  * Team tab: the owner's switches for the AI assistant. One for the whole
- * organisation and one per role. The server enforces both (a switched-off role
- * is refused whatever the screen shows); the owner is never locked out, so the
- * assistant can always be switched back on.
+ * organisation and one per role, and the same two for ACTIONS (the assistant
+ * preparing invoices, payments, parties, items and reminders for a person to
+ * confirm). The server enforces all of them (a switched-off role is refused
+ * whatever the screen shows); the owner is never locked out of the assistant,
+ * so it can always be switched back on.
  */
+const sameSet = (a: string[], b: string[]) => a.slice().sort().join() === b.slice().sort().join();
+
 export function AiAssistantSettingsCard({ role }: { role: string | undefined }) {
   const utils = trpc.useUtils();
   const isOwner = role === "owner" || role === "superadmin";
@@ -17,11 +21,15 @@ export function AiAssistantSettingsCard({ role }: { role: string | undefined }) 
   const { data } = trpc.ai.settings.useQuery(undefined, { enabled: isOwner, retry: 0 });
   const [enabled, setEnabled] = useState(true);
   const [off, setOff] = useState<AiSwitchableRole[]>([]);
+  const [actionsEnabled, setActionsEnabled] = useState(true);
+  const [actionsOff, setActionsOff] = useState<AiSwitchableRole[]>([]);
 
   useEffect(() => {
     if (!data) return;
     setEnabled(data.enabled);
     setOff(data.disabledRoles);
+    setActionsEnabled(data.actionsEnabled ?? true);
+    setActionsOff(data.actionsDisabledRoles ?? []);
   }, [data]);
 
   const save = trpc.ai.updateSettings.useMutation({
@@ -34,8 +42,15 @@ export function AiAssistantSettingsCard({ role }: { role: string | undefined }) 
 
   if (!isOwner) return null;
 
-  const dirty = !!data && (enabled !== data.enabled || off.slice().sort().join() !== data.disabledRoles.slice().sort().join());
-  const toggleRole = (r: AiSwitchableRole) => setOff((cur) => (cur.includes(r) ? cur.filter((x) => x !== r) : [...cur, r]));
+  const dirty =
+    !!data &&
+    (enabled !== data.enabled ||
+      !sameSet(off, data.disabledRoles) ||
+      actionsEnabled !== (data.actionsEnabled ?? true) ||
+      !sameSet(actionsOff, data.actionsDisabledRoles ?? []));
+  const toggle = (set: typeof setOff) => (r: AiSwitchableRole) => set((cur) => (cur.includes(r) ? cur.filter((x) => x !== r) : [...cur, r]));
+  const toggleRole = toggle(setOff);
+  const toggleActionRole = toggle(setActionsOff);
 
   return (
     <div className="card mt-4 px-6 py-5" data-testid="ai-settings-card">
@@ -66,8 +81,37 @@ export function AiAssistantSettingsCard({ role }: { role: string | undefined }) 
         <p className="mt-2 text-xs text-text-tertiary">Owners always keep it. Accountant access roles (auditor, filing CA) do not have the assistant.</p>
       </fieldset>
 
+      <label className="mt-5 flex items-start gap-3 border-t border-border-light pt-4 text-sm">
+        <input type="checkbox" role="switch" checked={actionsEnabled} onChange={(e) => setActionsEnabled(e.target.checked)} className="mt-1" disabled={!enabled} />
+        <span>
+          <span className="font-medium text-text-primary">Allow the assistant to prepare actions</span>
+          <span className="block text-xs text-text-tertiary">
+            Invoices, quotations, payments, parties, items and reminders. Each one is shown on a card and nothing is saved until the person taps Confirm, using their own
+            permissions. Switching this off stops it for everyone, you included; the assistant still answers questions.
+          </span>
+        </span>
+      </label>
+
+      <fieldset className="mt-3" disabled={!enabled || !actionsEnabled}>
+        <legend className="text-xs font-medium text-text-secondary">Roles that can have actions prepared</legend>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          {(Object.keys(AI_ROLE_LABELS) as AiSwitchableRole[]).map((r) => (
+            <label key={r} className="flex items-center gap-2 text-sm text-text-primary">
+              <input type="checkbox" checked={!actionsOff.includes(r)} onChange={() => toggleActionRole(r)} aria-label={`${AI_ROLE_LABELS[r]}: actions`} />
+              {AI_ROLE_LABELS[r]}
+            </label>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-text-tertiary">A role also needs the permission for the action itself: a salesperson cannot have items added, for example.</p>
+      </fieldset>
+
       <div className="mt-4">
-        <button type="button" className="btn-primary" disabled={!dirty || save.isPending} onClick={() => save.mutate({ enabled, disabledRoles: off })}>
+        <button
+          type="button"
+          className="btn-primary"
+          disabled={!dirty || save.isPending}
+          onClick={() => save.mutate({ enabled, disabledRoles: off, actionsEnabled, actionsDisabledRoles: actionsOff })}
+        >
           {save.isPending ? "Saving…" : "Save"}
         </button>
       </div>
