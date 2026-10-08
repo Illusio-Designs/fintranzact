@@ -174,7 +174,7 @@ export async function grantAddon(
 export async function addMember(
   tenantId: string,
   userId: string,
-  role: "owner" | "admin" | "member" | "viewer" | "superadmin" | "seller_manager" | "seller" | "accountant" | "auditor" | "ca_filing" = "owner",
+  role: "owner" | "admin" | "member" | "viewer" | "superadmin" | "seller_manager" | "seller" | "accountant" | "auditor" | "ca_filing" | "hr" | "employee" = "owner",
 ): Promise<TestMember> {
   const db = getControlDb();
 

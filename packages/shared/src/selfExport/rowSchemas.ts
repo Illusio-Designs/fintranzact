@@ -1335,6 +1335,107 @@ export const payslipRowSchema = z.object({
   createdAt: isoDatetime,
 });
 
+// ── Payroll Phase 3 (docs/architecture/payroll-self-service.md) ──────────────
+// Exported: the attendance settings, work locations and their assignments, import history, the punches
+// (WITHOUT their coordinates: lat and lng are redacted to null) and the Form 16 releases.
+// Never exported: selfies (photos, deleted after the retention period), employee logins (they point at
+// user accounts of this organisation), device keys (secrets) and consent records' user ids are kept as
+// plain ids only.
+
+const numberNullable = z.number().nullable();
+
+export const attendanceSettingsRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  punchEnabled: z.boolean(),
+  geofencePolicy: z.string(),
+  accuracyThresholdM: z.number().int(),
+  selfieRequired: z.boolean(),
+  selfieRetentionDays: z.number().int(),
+  lateGraceMinutes: z.number().int(),
+  fullDayMinHours: z.string().nullable(),
+  halfDayMinHours: z.string().nullable(),
+  overtimeFromPunches: z.boolean(),
+  updatedAt: isoDatetime,
+});
+
+export const workLocationRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  name: z.string(),
+  lat: z.number(),
+  lng: z.number(),
+  radiusM: z.number().int(),
+  isActive: z.boolean(),
+  createdAt: isoDatetime,
+});
+
+export const employeeWorkLocationRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  employeeId: uuid,
+  locationId: uuid,
+});
+
+export const attendanceImportBatchRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  source: z.string(),
+  fileName: z.string().nullable(),
+  deviceKeyId: uuidNullable,
+  status: z.string(),
+  totals: z.record(z.string(), z.number()),
+  fromDate: dateStringNullable,
+  toDate: dateStringNullable,
+  createdByUserId: uuidNullable,
+  createdAt: isoDatetime,
+  undoneAt: isoDatetimeNullable,
+  undoneByUserId: uuidNullable,
+});
+
+export const employeePunchRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  employeeId: uuid,
+  kind: z.string(),
+  punchedAt: isoDatetime,
+  clientTime: isoDatetimeNullable,
+  workDate: dateString,
+  source: z.string(),
+  deviceId: z.string(),
+  lat: numberNullable,
+  lng: numberNullable,
+  accuracyM: numberNullable,
+  distanceM: z.number().int().nullable(),
+  locationId: uuidNullable,
+  geofenceResult: z.string(),
+  flags: z.array(z.string()),
+  reviewStatus: z.string().nullable(),
+  reviewedByUserId: uuidNullable,
+  reviewedAt: isoDatetimeNullable,
+  reviewNote: z.string().nullable(),
+  importBatchId: uuidNullable,
+  createdByUserId: uuidNullable,
+  createdAt: isoDatetime,
+});
+
+export const attendanceConsentRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  employeeId: uuid,
+  userId: uuid,
+  version: z.string(),
+  acceptedAt: isoDatetime,
+});
+
+export const form16ReleaseRowSchema = z.object({
+  id: uuid,
+  businessId: uuid,
+  financialYear: z.number().int(),
+  releasedByUserId: uuidNullable,
+  releasedAt: isoDatetime,
+});
+
 // ── Registry map ──────────────────────────────────────────────────────────────
 
 export const ROW_SCHEMAS: Record<string, z.ZodTypeAny> = {
@@ -1405,4 +1506,11 @@ export const ROW_SCHEMAS: Record<string, z.ZodTypeAny> = {
   payroll_statutory_payments: payrollStatutoryPaymentRowSchema,
   payroll_run_adjustments: payrollRunAdjustmentRowSchema,
   payslips: payslipRowSchema,
+  attendance_settings: attendanceSettingsRowSchema,
+  work_locations: workLocationRowSchema,
+  employee_work_locations: employeeWorkLocationRowSchema,
+  attendance_import_batches: attendanceImportBatchRowSchema,
+  employee_punches: employeePunchRowSchema,
+  attendance_consents: attendanceConsentRowSchema,
+  form16_releases: form16ReleaseRowSchema,
 };

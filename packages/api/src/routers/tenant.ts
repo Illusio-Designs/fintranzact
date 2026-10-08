@@ -11,7 +11,8 @@ import { invalidateTwoFactorGateMember, invalidateTwoFactorGateTenant } from "..
 import { getGateMembership, getTwoFactorRequirementForCaller } from "../lib/two-factor-gate.js";
 import { setSecurityPolicy, type PolicyDeps } from "../lib/two-factor-policy.js";
 import { recordSecurityEvent } from "../lib/security-events.js";
-import { planIdSchema, TWO_FACTOR_POLICIES, DEFAULT_TWO_FACTOR_GRACE_DAYS, ACCESS_EVENT_TYPES, caRoleDescription, memberRoleLabel, isCaRole } from "@fintranzact/shared";
+import { acceptEmployeeInvitation } from "../lib/payroll/employee-access.js";
+import { HR_ROLE_DESCRIPTION, EMPLOYEE_ROLE_DESCRIPTION, planIdSchema, TWO_FACTOR_POLICIES, DEFAULT_TWO_FACTOR_GRACE_DAYS, ACCESS_EVENT_TYPES, caRoleDescription, memberRoleLabel, isCaRole } from "@fintranzact/shared";
 import { emailService } from "../lib/email.js";
 import { getCatalogPlan } from "../lib/plan-catalog.js";
 import { newOrganisationPlanFields } from "../lib/signup-plan.js";
@@ -45,7 +46,8 @@ function emailIs(column: typeof users.email | typeof invitations.email, normaliz
 
 /** What an invitation shows the invitee: the role's label and, for an accountant role, what it can do. */
 function roleInfo(role: string) {
-  return { roleLabel: memberRoleLabel(role), accessDescription: caRoleDescription(role) };
+  const description = caRoleDescription(role) ?? (role === "hr" ? HR_ROLE_DESCRIPTION : role === "employee" ? EMPLOYEE_ROLE_DESCRIPTION : null);
+  return { roleLabel: memberRoleLabel(role), accessDescription: description };
 }
 
 /** Who/where for an access event raised by a signed-in request. */
@@ -438,6 +440,12 @@ export const tenantRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Invitation not found or expired" });
       }
 
+      if (invitation.role === "employee") {
+        await acceptEmployeeInvitation(invitation, ctx.user, { ip: ctx.ipAddress, userAgent: ctx.req.headers.get("user-agent") });
+        const tenantName = await autoSelectTenantInSession(ctx.req, invitation.tenantId);
+        return { tenantId: invitation.tenantId, tenantName };
+      }
+
       // Check if already a member
       const [existingMember] = await controlDb.select({ id: tenantMembers.id })
         .from(tenantMembers)
@@ -629,7 +637,7 @@ export const tenantRouter = router({
       // Trimmed and lowercased once, so every lookup and comparison below (and
       // the invitee's own list) sees the same address however it was typed.
       email: z.string().trim().toLowerCase().email(),
-      role: z.enum(["admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"]).default("seller"),
+      role: z.enum(["admin", "seller_manager", "seller", "accountant", "hr", "auditor", "ca_filing"]).default("seller"),
       // CA roles only (ignored otherwise): "This CA referred me to Fintranzact, credit them as my partner". Default off.
       creditPartner: z.boolean().optional(),
     }))
@@ -837,6 +845,13 @@ export const tenantRouter = router({
         });
       }
 
+      // An employee login (Payroll self-service) links the person to one employee record.
+      if (invitation.role === "employee") {
+        await acceptEmployeeInvitation(invitation, ctx.user, { ip: ctx.ipAddress, userAgent: ctx.req.headers.get("user-agent") });
+        const tenantName = await autoSelectTenantInSession(ctx.req, invitation.tenantId);
+        return { tenantId: invitation.tenantId, tenantName };
+      }
+
       // Check if already a member (e.g. double-click)
       const [existingMember] = await controlDb.select({ id: tenantMembers.id })
         .from(tenantMembers)
@@ -973,7 +988,7 @@ export const tenantRouter = router({
   updateMemberRole: tenantProcedure
     .input(z.object({
       userId: z.string().uuid(),
-      role: z.enum(["admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"]),
+      role: z.enum(["admin", "seller_manager", "seller", "accountant", "hr", "auditor", "ca_filing"]),
     }))
     .mutation(async ({ input, ctx }) => {
       const [callerMembership] = await controlDb.select({ role: tenantMembers.role })
@@ -999,6 +1014,10 @@ export const tenantRouter = router({
 
       if (targetMembership && ["owner", "superadmin"].includes(targetMembership.role)) {
         throw new TRPCError({ code: "FORBIDDEN", message: "Cannot change the role of a superadmin" });
+      }
+      // An employee login is tied to one employee record and managed from Payroll (remove the login there).
+      if (targetMembership?.role === "employee") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "An employee login cannot be given another role. Remove it in Payroll and invite the person again." });
       }
 
       // Accountant (CA) roles: owner/superadmin only, to or from one; capped per organisation.

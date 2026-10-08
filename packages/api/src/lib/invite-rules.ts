@@ -9,7 +9,7 @@
  *  - An existing member's role may be changed to or from a CA role by the
  *    owner / superadmin only.
  */
-import { MAX_CA_MEMBERS_PER_ORG, isCaRole } from "@fintranzact/shared";
+import { MAX_CA_MEMBERS_PER_ORG, isCaRole, isSeatlessRole } from "@fintranzact/shared";
 
 export const INVITER_ROLES: readonly string[] = ["owner", "superadmin", "admin"];
 export const CA_MANAGER_ROLES: readonly string[] = ["owner", "superadmin"];
@@ -22,9 +22,9 @@ export type RuleResult =
   | { ok: true }
   | { ok: false; code: "FORBIDDEN" | "CONFLICT"; message: string };
 
-/** Does a member / pending invite with this role count towards the plan's maxTeamMembers? CAs never do. */
+/** Does a member / pending invite with this role count towards the plan's maxTeamMembers? CAs and employee logins never do. */
 export function countsTowardTeamLimit(role: string): boolean {
-  return !isCaRole(role);
+  return !isSeatlessRole(role);
 }
 
 /** One canonical form for an invited e-mail address: trimmed and lowercased. */

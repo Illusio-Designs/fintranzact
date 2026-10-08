@@ -266,4 +266,80 @@ export const payrollTables: TableCoverage[] = [
          WHERE (p.snapshot->>'netPay')::numeric <> l.net_pay OR (p.snapshot->>'grossEarnings')::numeric <> l.gross_earnings OR (p.snapshot->>'totalDeductions')::numeric <> l.total_deductions`),
     ],
   },
+
+  // ── Phase 3: self-service, mobile punches, biometric import ─────────────────
+  {
+    table: "employee_logins",
+    rules: [
+      rule("employee_logins", "login-business-matches-employee", "error",
+        "An employee login belongs to the same business as the employee it is linked to.",
+        ["tenant.acceptInvitation (employee invitation)"],
+        `SELECT l.business_id, l.id::text, 'login ' || l.id || ' links an employee of another business'
+         FROM employee_logins l JOIN employees e ON e.id = l.employee_id WHERE e.business_id <> l.business_id`),
+    ],
+  },
+  {
+    table: "attendance_settings",
+    rules: [],
+    noExtraRequirements: "One row per business (unique index) holding the geofence policy, selfie and retention rules and the punch rollup rules; every column is NOT NULL with a default or a deliberate NULL (derived hours) and nothing reads across tables.",
+  },
+  {
+    table: "work_locations",
+    rules: [],
+    noExtraRequirements: "A name, coordinates and a radius per business; punches keep only the id of the nearest location as a plain value (no foreign key), so deleting a location never changes a stored punch.",
+  },
+  {
+    table: "employee_work_locations",
+    rules: [],
+    noExtraRequirements: "Links an employee to an allowed work location (unique per pair); both sides cascade on delete.",
+  },
+  {
+    table: "attendance_import_batches",
+    rules: [],
+    noExtraRequirements: "One row per file import or device push with its counts and date range; punches point at it with an FK that clears on delete, and an undone batch only has its status changed.",
+  },
+  {
+    table: "employee_punches",
+    rules: [
+      rule("employee_punches", "punch-values-valid", "error",
+        "A punch is an in or an out, from the mobile app, a biometric device or HR, with a known geofence result.",
+        ["payrollSelf.punch", "payrollImport.commit", "POST /api/attendance/push"],
+        `SELECT p.business_id, p.id::text, 'kind ' || p.kind || ', source ' || p.source || ', result ' || p.geofence_result
+         FROM employee_punches p
+         WHERE p.kind NOT IN ('in','out') OR p.source NOT IN ('mobile','biometric','manual')
+            OR p.geofence_result NOT IN ('inside','outside','no_location','low_accuracy','not_checked')`),
+      rule("employee_punches", "review-has-reviewer", "error",
+        "A punch that was approved or rejected records who decided and when; a pending or unflagged one records neither.",
+        ["payrollPunch.review"],
+        `SELECT p.business_id, p.id::text, 'review ' || COALESCE(p.review_status, 'none') || ' without a matching reviewer'
+         FROM employee_punches p
+         WHERE (p.review_status IN ('approved','rejected') AND (p.reviewed_by_user_id IS NULL OR p.reviewed_at IS NULL))
+            OR (COALESCE(p.review_status, 'pending') = 'pending' AND p.reviewed_at IS NOT NULL)`),
+      rule("employee_punches", "mobile-punch-has-server-and-client-time", "warning",
+        "A mobile punch records the phone's clock for reference next to the server's time.",
+        ["payrollSelf.punch"],
+        `SELECT p.business_id, p.id::text, 'mobile punch without a client time'
+         FROM employee_punches p WHERE p.source = 'mobile' AND p.client_time IS NULL`),
+    ],
+  },
+  {
+    table: "employee_punch_selfies",
+    rules: [],
+    noExtraRequirements: "The photo of one punch (primary key = the punch), deleted with it and by the retention purge; nothing else reads it, and it is never exported.",
+  },
+  {
+    table: "attendance_consents",
+    rules: [],
+    noExtraRequirements: "An employee's agreement to one version of the attendance-data wording (unique per employee and version); it is only ever added.",
+  },
+  {
+    table: "attendance_device_keys",
+    rules: [],
+    noExtraRequirements: "A per-business secret for biometric middleware, stored as a hash (unique); it is only ever created or revoked, and is never exported.",
+  },
+  {
+    table: "form16_releases",
+    rules: [],
+    noExtraRequirements: "One row per business and financial year (unique index) meaning HR released that year's Form 16 working copy to employees; the copy itself is computed from approved runs on demand.",
+  },
 ];

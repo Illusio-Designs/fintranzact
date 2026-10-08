@@ -42,7 +42,7 @@ import {
 } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure } from "../trpc.js";
 import { withAudit } from "../lib/audit.js";
-import { assertPayroll, badRequest, notFound } from "../lib/payroll/access.js";
+import { assertPayroll, assertPayrollPosting, badRequest, notFound } from "../lib/payroll/access.js";
 import { listDues, recordStatutoryPayment } from "../lib/payroll/dues.js";
 import {
   buildAttendanceRegisterFile,
@@ -270,7 +270,7 @@ export const payrollStatutoryRouter = router({
    */
   recordPayment: memberProcedure.input(statutoryPaymentSchema).mutation(
     withAudit(async ({ ctx, input }) => {
-      await assertPayroll(ctx, "update");
+      await assertPayrollPosting(ctx);
       return recordStatutoryPayment(ctx.db, {
         businessId: ctx.businessId,
         runId: input.runId,

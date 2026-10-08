@@ -142,6 +142,8 @@ function idKind(router: string, name: string): string | undefined {
   if (router === "payrollAttendance") return name.startsWith("holiday") ? "payrollHoliday" : undefined;
   if (router === "payrollLeave") return name.startsWith("type") ? "leaveType" : "leaveApplication";
   if (router === "payrollRun") return "payrollRun";
+  if (router === "payrollSelf") return "leaveApplication";
+  if (router === "payrollPunch") return name.startsWith("location") ? "workLocation" : "deviceKey";
   const byRouter: Record<string, string> = {
     account: "account", bankAccount: "bankAccount", batch: "batch", business: "business", expense: "expense",
     item: "item", journal: "journal", party: "party", payment: "payment", priceLevel: "priceLevel",
@@ -199,6 +201,7 @@ const FIELD_KIND: Record<string, string> = {
   componentId: "salaryComponent",
   runId: "payrollRun",
   adjustmentId: "payrollAdjustment",
+  punchId: "employeePunch",
 };
 
 /**
@@ -210,6 +213,8 @@ export function kindFor(proc: Pick<ProcInfo, "router" | "name">, key: string, pa
   // A bare id names the procedure's own record only at the top level; an
   // `id` inside a nested object (e.g. a shipping-method list) is not a record.
   if (key === "id" || key === "ids") return path.length === 0 || path[0] === key ? idKind(router, name) : undefined;
+  // Payroll Phase 3: an import batch (not an item batch).
+  if (router === "payrollImport" && key === "batchId") return "importBatch";
   if (key === "parentId") return router === "account" ? "account" : "stockGroup";
   if (key === "templateId") return router === "journal" ? "journalTemplate" : router === "payrollSalary" ? "salaryTemplate" : "bankTemplate";
   if (key === "orderId") return router === "store" ? "storeOrder" : "salesOrder";

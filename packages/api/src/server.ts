@@ -30,6 +30,7 @@ import { calcLineItem, calcInvoiceTotals, money, parseCopies, isIntraStateSupply
 import { verifyTurnstile } from "./lib/turnstile.js";
 import { startRecurringScheduler, stopRecurringScheduler } from "./lib/recurring-invoice-scheduler.js";
 import { startPaymentReminderScheduler, stopPaymentReminderScheduler } from "./lib/payment-reminders.js";
+import { startSelfiePurgeScheduler, stopSelfiePurgeScheduler } from "./lib/selfie-purge-scheduler.js";
 import { startTdsReminderScheduler, stopTdsReminderScheduler } from "./lib/tds-reminder-scheduler.js";
 import { startHsnRefreshScheduler, stopHsnRefreshScheduler } from "./lib/hsn-refresh.js";
 import { startTrialReminderScheduler, stopTrialReminderScheduler } from "./lib/trial-reminders.js";
@@ -52,6 +53,7 @@ import { registerBillingInvoiceRoute } from "./http/billingInvoice.js";
 import { registerBusinessRazorpayWebhook } from "./http/businessRazorpayWebhook.js";
 import { registerStorePaymentRoutes } from "./http/storePayments.js";
 import { registerAiStreamRoute } from "./http/aiStream.js";
+import { registerAttendancePushRoute } from "./http/attendancePush.js";
 import { createStoreOrderPaymentLink, loadStorePaymentOptions } from "./lib/store-payments/order-payment.js";
 import { sendStoreOrderEmail } from "./lib/store-payments/emails.js";
 import { createSharePaymentLink, shareOnlinePaymentAvailable } from "./lib/razorpay/share.js";
@@ -2441,6 +2443,9 @@ registerBusinessRazorpayWebhook(app, { clientIp: getClientIp, rateLimitDisabled 
 // ── AI assistant (streaming answers over server-sent events) ──
 registerAiStreamRoute(app);
 
+// ── Payroll: biometric device punches (per-business device key) ──
+registerAttendancePushRoute(app);
+
 // ── tRPC handler ───────────────────────────────────────────────
 app.use("/api/trpc/*", async (c) => {
   const response = await fetchRequestHandler({
@@ -2660,6 +2665,7 @@ const server = serve({ fetch: app.fetch, port }, (info) => {
   startHsnRefreshScheduler();
   startTrialReminderScheduler();
   startPaymentReminderScheduler();
+  startSelfiePurgeScheduler();
   // Create the platform admin from PLATFORM_ADMIN_EMAIL / _PASSWORD if set.
   seedPlatformAdmin().catch((err) => logger.error({ err }, "Could not create the platform admin account"));
 });
@@ -2672,6 +2678,7 @@ function shutdown(signal: string) {
   stopHsnRefreshScheduler();
   stopTrialReminderScheduler();
   stopPaymentReminderScheduler();
+  stopSelfiePurgeScheduler();
   server.close(() => {
     logger.info("HTTP server closed");
     process.exit(0);

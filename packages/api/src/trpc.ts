@@ -14,7 +14,8 @@ import { enforceFeatureGates } from "./lib/feature-gate.js";
 import { recordOrgOpened } from "./lib/access-events.js";
 import { requireTenantMembership } from "./lib/tenant-membership.js";
 import { FUNDING_CUSTOMER_MESSAGE, isFundingFailure } from "./lib/sandbox/funding.js";
-import { checkTwoFactorGate } from "./lib/two-factor-gate.js";
+import { checkTwoFactorGate, getGateMembership } from "./lib/two-factor-gate.js";
+import { employeeMayCall, EMPLOYEE_ROLE } from "@fintranzact/shared";
 import { twoFactorDataOf, twoFactorRequiredError } from "./lib/two-factor-error.js";
 
 // ── Middleware context shape interfaces ────────────────────────
@@ -157,7 +158,7 @@ const isAuthenticated = t.middleware(({ ctx, next }) => {
 });
 
 // Middleware: requires tenant + injects ctx.db
-const hasTenantAccess = t.middleware(async ({ ctx, next }) => {
+const hasTenantAccess = t.middleware(async ({ ctx, path, next }) => {
   if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
   if (!ctx.tenantId) throw new TRPCError({ code: "BAD_REQUEST", message: "No organization selected" });
 
@@ -167,6 +168,17 @@ const hasTenantAccess = t.middleware(async ({ ctx, next }) => {
   // process (lib/tenant-membership.ts). Platform admins do not use the tenant
   // bases, so they are not affected.
   await requireTenantMembership(ctx.tenantId, ctx.user.id);
+
+  // Payroll self-service logins (role "employee") may call only the small allowlist of
+  // self-service procedures, whatever any other procedure's own permission check says. This is
+  // the backstop behind the CASL rules: an employee session cannot reach a tenant or business
+  // procedure by accident or by a guessed id (docs/architecture/payroll-self-service.md). The
+  // role comes from the 30s-cached lookup that twoFactorGate uses (invalidated when a
+  // membership changes or is removed).
+  const { entry: membership } = await getGateMembership(ctx.tenantId, ctx.user.id);
+  if (membership?.role === EMPLOYEE_ROLE && !employeeMayCall(path)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Your login is for employee self-service only." });
+  }
 
   const db = await getTenantDb(ctx.tenantId);
 

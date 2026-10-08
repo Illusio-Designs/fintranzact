@@ -34,6 +34,16 @@ export function isCaRole(role: string | null | undefined): role is CaRole {
   return role === "auditor" || role === "ca_filing";
 }
 
+/**
+ * Roles that never use a plan team-member seat: the accountant (CA) roles, which have their own cap,
+ * and the Payroll self-service "employee" login, which is included in the Payroll add-on.
+ */
+export const SEATLESS_ROLES = ["auditor", "ca_filing", "employee"] as const;
+
+export function isSeatlessRole(role: string | null | undefined): boolean {
+  return (SEATLESS_ROLES as readonly string[]).includes(role ?? "");
+}
+
 /** Access text for a CA role, or null for any other role. */
 export function caRoleDescription(role: string | null | undefined): string | null {
   return isCaRole(role) ? CA_ROLE_DESCRIPTIONS[role] : null;
@@ -48,6 +58,8 @@ const MEMBER_ROLE_LABELS: Record<string, string> = {
   seller: "Seller",
   accountant: "Accountant (bookkeeping)",
   viewer: "Accountant (bookkeeping)",
+  hr: "HR / Payroll manager",
+  employee: "Employee (self-service)",
   ...CA_ROLE_LABELS,
 };
 

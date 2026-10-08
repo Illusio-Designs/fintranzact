@@ -17,7 +17,7 @@ const RESOURCES: Exclude<Resource, "all">[] = [
   "Store", "SalesTarget", "RecurringInvoice",
   "Account", "ITC", "Tds", "PeriodLock",
   "BankReconciliation", "EInvoice", "EWayBill",
-  "Payroll",
+  "Payroll", "PayrollPosting", "PayrollSelf",
   "Ai",
 ];
 
@@ -89,8 +89,14 @@ const EXPECTED: Record<string, Grants> = {
     RecurringInvoice: "r",
     // Payroll (add-on): prepares payroll, never approves it or sees unmasked identity numbers (manage).
     Payroll: "cru",
+    // Posting a run to the books and recording statutory payments: bookkeeping, so the accountant has it and HR does not.
+    PayrollPosting: "c",
     Ai: "cr",
   },
+  // HR / Payroll manager: everything the accountant prepares in Payroll, nothing in the books, no AI assistant.
+  hr: { Payroll: "cru", Business: "r" },
+  // Employee self-service: only the payrollSelf procedures.
+  employee: { PayrollSelf: "cru" },
   // Read-only accountant: reads, never writes.
   auditor: READ_ONLY_GRANTS(),
   // Filing accountant: the same reads, plus create:GstReport (gstReturns.*, gstr2b.*).
@@ -125,7 +131,7 @@ describe("permission matrix — every role × resource × action", () => {
 
 describe("matrix invariants", () => {
   it("no role other than superadmin/admin can manage Team or run Import", () => {
-    for (const role of ["seller_manager", "seller", "accountant", "auditor", "ca_filing", "viewer", "owner-typo"]) {
+    for (const role of ["seller_manager", "seller", "accountant", "hr", "employee", "auditor", "ca_filing", "viewer", "owner-typo"]) {
       const a = defineAbilityFor({ userId: "u", role });
       for (const act of ACTIONS) {
         expect(a.can(act, "Team")).toBe(false);
@@ -165,6 +171,18 @@ describe("matrix invariants", () => {
       expect(aud.can("create", r)).toBe(false);
       expect(ca.can("create", r)).toBe(r === "GstReport");
     }
+  });
+
+  it("the employee role can use nothing but self-service, and HR has no bookkeeping, posting, approval or AI", () => {
+    const emp = defineAbilityFor({ userId: "u", role: "employee" });
+    for (const r of RESOURCES) for (const act of ACTIONS) expect(emp.can(act, r), `employee ${act} ${r}`).toBe(r === "PayrollSelf" && act !== "delete" && act !== "manage");
+    const hr = defineAbilityFor({ userId: "u", role: "hr" });
+    for (const r of ["PayrollPosting", "PayrollSelf", "Ai", "Account", "Invoice", "BankAccount", "PeriodLock", "Team"] as const) {
+      for (const act of ACTIONS) expect(hr.can(act, r), `hr ${act} ${r}`).toBe(false);
+    }
+    // HR never "manages" Payroll: approval, delete and the unmasked identity numbers stay with owners and admins.
+    expect(hr.can("manage", "Payroll")).toBe(false);
+    expect(hr.can("delete", "Payroll")).toBe(false);
   });
 
   it("an unmapped DB role gets nothing", () => {

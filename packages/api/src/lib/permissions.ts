@@ -13,6 +13,10 @@ export type Resource =
   | "Account" | "ITC" | "Tds" | "PeriodLock"
   | "BankReconciliation" | "EInvoice" | "EWayBill"
   | "Payroll"
+  // Payroll Phase 3: posting a payroll run (and statutory payments) to the books, which HR does not do.
+  | "PayrollPosting"
+  // Payroll Phase 3: the employee self-service procedures (payrollSelf.*). Only the employee role holds it.
+  | "PayrollSelf"
   | "Ai"
   | "all";
 
@@ -205,9 +209,32 @@ export function defineAbilityFor(ctx: PermissionContext): AppAbility {
       can("create", "Payroll");
       can("read", "Payroll");
       can("update", "Payroll");
+      // Posting a run to the books and recording statutory payments is bookkeeping, which an accountant does.
+      can("create", "PayrollPosting");
       // AI assistant (add-on): see the seller_manager note.
       can("create", "Ai");
       can("read", "Ai");
+      break;
+
+    case "hr":
+      // HR / Payroll manager (docs/architecture/payroll-self-service.md): everything in Payroll
+      // that an accountant prepares (employees, attendance, leave, runs, payslips, statutory
+      // views and files), but nothing in the books: no posting, no approval or delete (those need
+      // "manage", which only owners and admins hold), no unmasked identity numbers, no
+      // business settings, billing or team. No AI assistant (it is the books' assistant).
+      can("create", "Payroll");
+      can("read", "Payroll");
+      can("update", "Payroll");
+      can("read", "Business");
+      break;
+
+    case "employee":
+      // Employee self-service: only the payrollSelf procedures, which resolve the employee from
+      // the signed-in membership. Nothing else, not even Business. The API also refuses every
+      // procedure outside the allowlist for this role (trpc.ts).
+      can("create", "PayrollSelf");
+      can("read", "PayrollSelf");
+      can("update", "PayrollSelf");
       break;
 
     case "auditor":
@@ -243,6 +270,8 @@ export function mapDbRole(dbRole: string): string {
     "accountant": "accountant",
     "auditor": "auditor",
     "ca_filing": "ca_filing",
+    "hr": "hr",
+    "employee": "employee",
   };
   // Unknown roles map to an empty string — defineAbilityFor hits the default case (no permissions)
   return mapping[dbRole] ?? "";

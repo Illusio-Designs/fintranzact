@@ -9,6 +9,7 @@
 
 import { z } from "zod";
 import { isIsoDate, isPayrollMonth, type AttendanceStatus } from "./payroll-calendar.js";
+import { isoDateSchema } from "./payroll.js";
 
 // ── Roles ────────────────────────────────────────────────────────────────────
 
@@ -652,6 +653,18 @@ export const punchInputSchema = z.object({
 export type PunchInput = z.infer<typeof punchInputSchema>;
 
 export const monthInputSchema = z.object({ month: z.string().refine(isPayrollMonth, "Enter a month like 2026-10.") });
+
+/** An employee's own leave application: the employee is the signed-in person, never an input. */
+export const selfLeaveApplySchema = z
+  .object({
+    leaveTypeId: uuid,
+    fromDate: isoDateSchema,
+    toDate: isoDateSchema,
+    halfDayStart: z.boolean().default(false),
+    halfDayEnd: z.boolean().default(false),
+    reason: z.string().trim().max(300).optional(),
+  })
+  .refine((v) => v.toDate >= v.fromDate, { path: ["toDate"], message: "The end date cannot be before the start date." });
 
 export const workLocationSchema = z.object({
   name: z.string().trim().min(1, "Enter a name.").max(80),

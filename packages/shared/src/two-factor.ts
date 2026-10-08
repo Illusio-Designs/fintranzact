@@ -174,6 +174,9 @@ export function twoFactorRequiredForMember(input: TwoFactorRequirementInput): Tw
   const none: TwoFactorRequirement = { required: false, blocked: false, graceEndsAt: null };
 
   if (policy === "off") return none;
+  // Payroll self-service logins (docs/architecture/payroll-self-service.md): not covered in Phase 3,
+  // whatever the policy. They see only their own records; the business can still ask an employee to set 2FA on their own account.
+  if (role === "employee") return none;
   if (policy === "admins" && !(TWO_FACTOR_ADMIN_ROLES as readonly string[]).includes(role)) return none;
   if (policy !== "admins" && policy !== "all") return none; // unknown value: fail open, not locked out
   if (hasTwoFactor) return none;
