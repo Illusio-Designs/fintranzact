@@ -263,11 +263,17 @@ describe("device push endpoint", () => {
     const body = { punches: [{ employeeCode: "E001", timestamp: "2026-11-04 09:00:00" }] };
     // 60 requests a minute per key: fill the window directly (sending them one by one could outlast the minute on a slow machine).
     const [{ id }] = await ownerC.payrollPunch.deviceKeyList();
-    for (let i = 0; i < 60; i++) expect(attendancePushKeyLimiter.hit(id!)).toBe(true);
-    expect((await push(key, body)).status).toBe(429);
-    // A fresh window lets it through again.
-    resetAttendancePushLimits();
-    expect((await push(key, body)).status).toBe(200);
+    const saved = process.env.DISABLE_RATE_LIMIT; // other suites may switch limiting off; this test is about the limiter
+    delete process.env.DISABLE_RATE_LIMIT;
+    try {
+      for (let i = 0; i < 60; i++) expect(attendancePushKeyLimiter.hit(id!)).toBe(true);
+      expect((await push(key, body)).status).toBe(429);
+      // A fresh window lets it through again.
+      resetAttendancePushLimits();
+      expect((await push(key, body)).status).toBe(200);
+    } finally {
+      if (saved !== undefined) process.env.DISABLE_RATE_LIMIT = saved;
+    }
   });
 
   it("stops working when the key is revoked", async () => {
