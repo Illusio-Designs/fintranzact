@@ -53,6 +53,22 @@
           "contactsPermission": "Fintranzact needs access to your contacts to help you create invoices faster."
         }
       ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Fintranzact uses the camera to take one selfie when you check in or out of work. It is not used at any other time.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Fintranzact reads your location once when you check in or out of work, to confirm you are at your work location. It never tracks you in the background.",
+          "isAndroidBackgroundLocationEnabled": false,
+          "isIosBackgroundLocationEnabled": false
+        }
+      ],
       "@react-native-community/datetimepicker"
     ]
   }

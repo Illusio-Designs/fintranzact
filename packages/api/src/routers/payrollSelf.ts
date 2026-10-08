@@ -226,6 +226,8 @@ export const payrollSelfRouter = router({
       if (input.kind === "out" && !open) throw badRequest("You are not checked in. Check in first.");
       const workDate = input.kind === "in" ? istDateOf(now.getTime()) : open!.workDate;
       const flag = FLAG_FOR_RESULT[decision.result];
+      // A phone that volunteers "my location is mocked" (a hint, not proof) always goes to review.
+      const flags = [...(decision.needsReview && flag ? [flag] : []), ...(input.mockLocation && point ? ["mock_location"] : [])];
       const [punch] = await tx
         .insert(employeePunches)
         .values({
@@ -243,8 +245,8 @@ export const payrollSelfRouter = router({
           distanceM: decision.distanceM,
           locationId: decision.nearestLocationId,
           geofenceResult: decision.result,
-          flags: decision.needsReview && flag ? [flag] : [],
-          reviewStatus: decision.needsReview ? "pending" : null,
+          flags,
+          reviewStatus: decision.needsReview || flags.length > 0 ? "pending" : null,
           createdByUserId: ctx.user.id,
         })
         .returning();

@@ -677,6 +677,11 @@ export const punchInputSchema = z.object({
   lat: latitude.optional(),
   lng: longitude.optional(),
   accuracyM: z.number().min(0).max(100_000).optional(),
+  /**
+   * The phone said its location is mocked (Android reports this). Only a hint the app volunteers, easily
+   * left out by a modified app: the punch is then flagged for review. The server cannot detect a fake location itself.
+   */
+  mockLocation: z.boolean().optional(),
   /** A resized JPEG or PNG as a data URL. Required when the business asks for selfies. */
   selfie: z.string().max(450_000).optional(),
   consentVersion: z.string().max(40),
@@ -767,5 +772,6 @@ export const SELF_ATTENDANCE_FLAG_LABELS: Record<string, string> = {
   open: "Not checked out yet",
   orphan_out: "Check-out without check-in",
   clock_skew: "Phone clock was off",
+  mock_location: "Phone reported a mock location",
   duplicate: "Duplicate",
 };

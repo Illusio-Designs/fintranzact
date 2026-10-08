@@ -560,6 +560,15 @@ describe("work locations and the geofence policy", () => {
     await hrC.payrollPunch.updateSettings(settingsInput());
   });
 
+  it("a phone that reports a mock location is flagged for review (a hint, never a block)", async () => {
+    const r = await punch(ashaC, "in", "2026-12-15T09:00:00+05:30", { ...HERE, mockLocation: true });
+    expect(r.geofenceResult).toBe("inside");
+    const flagged = (await hrC.payrollPunch.punches({ review: "pending" })).find((p) => p.id === r.id)!;
+    expect(flagged).toMatchObject({ flags: ["mock_location"], reviewStatus: "pending", geofenceResult: "inside" });
+    await punch(ashaC, "out", "2026-12-15T18:00:00+05:30", HERE);
+    await hrC.payrollPunch.review({ punchId: r.id, decision: "approve" });
+  });
+
   it("an employee with no assignment may punch at any active location; an inactive one is ignored", async () => {
     await hrC.payrollPunch.locationAssign({ employeeId: ids.asha!, locationIds: [] });
     await hrC.payrollPunch.locationUpdate({ id: office, isActive: false });
