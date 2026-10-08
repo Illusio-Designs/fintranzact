@@ -185,7 +185,7 @@ export async function setBonusExclusion(db: TenantDatabase, input: { businessId:
     if (!isBonusRunEditable(run.status as BonusRunStatus)) throw badRequest("An approved bonus run cannot be changed.");
     const [emp] = await tx.select({ id: employees.id }).from(employees).where(and(eq(employees.id, input.employeeId), eq(employees.businessId, input.businessId))).limit(1);
     if (!emp) throw notFound("Employee");
-    const exclusions = { ...(run.exclusions ?? {}) };
+    const exclusions = { ...run.exclusions };
     if (input.reason.trim()) exclusions[input.employeeId] = input.reason.trim();
     else delete exclusions[input.employeeId];
     const set: Partial<typeof bonusRuns.$inferInsert> = { exclusions, updatedAt: new Date() };
