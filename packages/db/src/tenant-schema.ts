@@ -2540,6 +2540,8 @@ export const payrollSettings = pgTable("payroll_settings", {
   lwfState: text("lwf_state"),
   // Deduct income tax (TDS) on salary under s.192; needs the TAN on the business.
   tdsEnabled: boolean("tds_enabled").default(false).notNull(),
+  // Phase 4: the most of an employee's net pay (before loan recovery) a run recovers for loan and advance instalments, %.
+  loanMaxDeductionPercent: numeric("loan_max_deduction_percent", { precision: 5, scale: 2 }).default("50").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   uniqueIndex("payroll_settings_business_idx").on(t.businessId),
@@ -2983,6 +2985,9 @@ export const payrollRunLines = pgTable("payroll_run_lines", {
     source: string;
     full: string;
     amount: string;
+    // Phase 4: a loan instalment recovered in the run (source "loan").
+    loanId?: string;
+    loanPart?: string;
   }>>().notNull(),
   grossEarnings: numeric("gross_earnings", { precision: 15, scale: 2 }).notNull(),
   totalDeductions: numeric("total_deductions", { precision: 15, scale: 2 }).notNull(),
@@ -3288,6 +3293,270 @@ export const aiPendingActions = pgTable("ai_pending_actions", {
 }, (t) => [
   index("ai_pending_actions_user_idx").on(t.businessId, t.userId, t.createdAt),
   index("ai_pending_actions_expiry_idx").on(t.status, t.expiresAt),
+]);
+
+// ── Payroll Phase 4: bonus, gratuity, full and final, loans, letters ──
+// docs/architecture/payroll-phase-4.md. Money is numeric(15,2) rupees.
+
+// A bonus run for one financial year (one per business and year).
+//   status - draft | calculated | pending_approval | approved | posted | paid
+// `rules` freezes the bonus settings the run was calculated with. `exclusions` maps an
+// employee id to the reason the employee was marked not eligible by hand.
+export const bonusRuns = pgTable("bonus_runs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  financialYear: integer("financial_year").notNull(),
+  number: text("number").notNull(),
+  status: text("status").default("draft").notNull(),
+  percent: numeric("percent", { precision: 5, scale: 2 }).notNull(),
+  note: text("note"),
+  employeeCount: integer("employee_count").default(0).notNull(),
+  eligibleCount: integer("eligible_count").default(0).notNull(),
+  totalBonus: numeric("total_bonus", { precision: 15, scale: 2 }).default("0").notNull(),
+  rules: jsonb("rules").$type<Record<string, unknown>>(),
+  exclusions: jsonb("exclusions").$type<Record<string, string>>().default({}).notNull(),
+  warnings: jsonb("warnings").$type<Array<{ code: string; message: string; employeeId?: string }>>().default([]).notNull(),
+  calculatedAt: timestamp("calculated_at", { withTimezone: true }),
+  calculatedByUserId: uuid("calculated_by_user_id"),
+  calculatedByName: text("calculated_by_name"),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  submittedByUserId: uuid("submitted_by_user_id"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  approvedByUserId: uuid("approved_by_user_id"),
+  approvedByName: text("approved_by_name"),
+  postedAt: timestamp("posted_at", { withTimezone: true }),
+  postedByUserId: uuid("posted_by_user_id"),
+  accrualJournalEntryId: uuid("accrual_journal_entry_id").references(() => journalEntries.id),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  paidOn: date("paid_on"),
+  paidByUserId: uuid("paid_by_user_id"),
+  paidFromBankAccountId: uuid("paid_from_bank_account_id").references(() => bankAccounts.id),
+  paidReference: text("paid_reference"),
+  paymentJournalEntryId: uuid("payment_journal_entry_id").references(() => journalEntries.id),
+  createdByUserId: uuid("created_by_user_id"),
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("bonus_runs_year_idx").on(t.businessId, t.financialYear),
+  uniqueIndex("bonus_runs_number_idx").on(t.businessId, t.number),
+]);
+
+export const bonusRunLines = pgTable("bonus_run_lines", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  runId: uuid("run_id").notNull().references(() => bonusRuns.id, { onDelete: "cascade" }),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id),
+  employeeCode: text("employee_code").notNull(),
+  employeeName: text("employee_name").notNull(),
+  eligible: boolean("eligible").notNull(),
+  reason: text("reason").notNull(),
+  reasonText: text("reason_text").notNull(),
+  monthsPaid: integer("months_paid").notNull(),
+  daysPaid: numeric("days_paid", { precision: 7, scale: 1 }).notNull(),
+  eligibilityWage: numeric("eligibility_wage", { precision: 15, scale: 2 }).notNull(),
+  wages: numeric("wages", { precision: 15, scale: 2 }).notNull(),
+  calculationWages: numeric("calculation_wages", { precision: 15, scale: 2 }).notNull(),
+  percent: numeric("percent", { precision: 5, scale: 2 }).notNull(),
+  bonus: numeric("bonus", { precision: 15, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("bonus_run_lines_employee_idx").on(t.runId, t.employeeId),
+  index("bonus_run_lines_business_idx").on(t.businessId),
+]);
+
+// A record that a gratuity provision was posted to the books (Dr gratuity expense / Cr gratuity provision).
+// `amount` is the difference between the liability on `as_of` and the provision balance in the books at the time.
+export const gratuityProvisions = pgTable("gratuity_provisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  asOf: date("as_of").notNull(),
+  liability: numeric("liability", { precision: 15, scale: 2 }).notNull(),
+  previousBalance: numeric("previous_balance", { precision: 15, scale: 2 }).notNull(),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+  employeeCount: integer("employee_count").default(0).notNull(),
+  note: text("note"),
+  journalEntryId: uuid("journal_entry_id").references(() => journalEntries.id),
+  createdByUserId: uuid("created_by_user_id"),
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("gratuity_provisions_business_idx").on(t.businessId, t.asOf),
+]);
+
+// A full and final settlement (one per employee).
+//   status - draft | pending_approval | approved | posted | paid
+// The final month's SALARY is not in here: it is paid by the payroll run of the exit month (docs/architecture/payroll-phase-4.md).
+// `inputs` holds what the preparer chose (leave days, notice shortfall, manual TDS and lines); the lines table holds the result.
+export const fnfSettlements = pgTable("fnf_settlements", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id),
+  number: text("number").notNull(),
+  status: text("status").default("draft").notNull(),
+  lastWorkingDay: date("last_working_day").notNull(),
+  exitReason: text("exit_reason"),
+  encashmentBasis: text("encashment_basis").default("basic_da_26").notNull(),
+  inputs: jsonb("inputs").$type<Record<string, unknown>>().default({}).notNull(),
+  note: text("note"),
+  grossTotal: numeric("gross_total", { precision: 15, scale: 2 }).default("0").notNull(),
+  deductionsTotal: numeric("deductions_total", { precision: 15, scale: 2 }).default("0").notNull(),
+  loanRecovered: numeric("loan_recovered", { precision: 15, scale: 2 }).default("0").notNull(),
+  netPayable: numeric("net_payable", { precision: 15, scale: 2 }).default("0").notNull(),
+  // The exit month's payroll run (the salary of the last month is paid there).
+  salaryMonth: text("salary_month"),
+  salaryRunId: uuid("salary_run_id").references(() => payrollRuns.id, { onDelete: "set null" }),
+  // How the gratuity was worked out (years, rule, cap), frozen at calculation.
+  gratuity: jsonb("gratuity").$type<Record<string, unknown>>(),
+  warnings: jsonb("warnings").$type<Array<{ code: string; message: string }>>().default([]).notNull(),
+  calculatedAt: timestamp("calculated_at", { withTimezone: true }),
+  calculatedByUserId: uuid("calculated_by_user_id"),
+  calculatedByName: text("calculated_by_name"),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }),
+  submittedByUserId: uuid("submitted_by_user_id"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  approvedByUserId: uuid("approved_by_user_id"),
+  approvedByName: text("approved_by_name"),
+  postedAt: timestamp("posted_at", { withTimezone: true }),
+  postedByUserId: uuid("posted_by_user_id"),
+  accrualJournalEntryId: uuid("accrual_journal_entry_id").references(() => journalEntries.id),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  paidOn: date("paid_on"),
+  paidByUserId: uuid("paid_by_user_id"),
+  paidFromBankAccountId: uuid("paid_from_bank_account_id").references(() => bankAccounts.id),
+  paidReference: text("paid_reference"),
+  paymentJournalEntryId: uuid("payment_journal_entry_id").references(() => journalEntries.id),
+  createdByUserId: uuid("created_by_user_id"),
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("fnf_settlements_employee_idx").on(t.businessId, t.employeeId),
+  uniqueIndex("fnf_settlements_number_idx").on(t.businessId, t.number),
+]);
+
+//   kind - leave_encashment | gratuity | bonus | arrears | other_earning | notice_recovery | tds | other_deduction | loan_recovery
+//   side - earning | deduction
+export const fnfSettlementLines = pgTable("fnf_settlement_lines", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  settlementId: uuid("settlement_id").notNull().references(() => fnfSettlements.id, { onDelete: "cascade" }),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  side: text("side").notNull(),
+  label: text("label").notNull(),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+  // A loan id (loan recovery) or a leave type id (leave encashment).
+  ref: text("ref"),
+  detail: text("detail"),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("fnf_settlement_lines_settlement_idx").on(t.settlementId, t.sortOrder),
+  index("fnf_settlement_lines_business_idx").on(t.businessId),
+]);
+
+// A loan or an advance to an employee.
+//   kind   - loan | advance
+//   status - pending_approval | approved | active | closed | rejected | cancelled
+// The balance is the principal less the principal recovered, summed from employee_loan_events.
+export const employeeLoans = pgTable("employee_loans", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id),
+  number: text("number").notNull(),
+  kind: text("kind").default("loan").notNull(),
+  status: text("status").default("pending_approval").notNull(),
+  principal: numeric("principal", { precision: 15, scale: 2 }).notNull(),
+  // Annual interest on the reducing balance, %.
+  interestRate: numeric("interest_rate", { precision: 5, scale: 2 }).default("0").notNull(),
+  installmentCount: integer("installment_count").notNull(),
+  emi: numeric("emi", { precision: 15, scale: 2 }).notNull(),
+  startMonth: text("start_month").notNull(),
+  issueDate: date("issue_date").notNull(),
+  purpose: text("purpose"),
+  requestedByUserId: uuid("requested_by_user_id"),
+  requestedByName: text("requested_by_name"),
+  approvedAt: timestamp("approved_at", { withTimezone: true }),
+  approvedByUserId: uuid("approved_by_user_id"),
+  approvedByName: text("approved_by_name"),
+  decisionNote: text("decision_note"),
+  disbursedAt: timestamp("disbursed_at", { withTimezone: true }),
+  disbursedOn: date("disbursed_on"),
+  disbursedByUserId: uuid("disbursed_by_user_id"),
+  disbursedFromBankAccountId: uuid("disbursed_from_bank_account_id").references(() => bankAccounts.id),
+  disbursementReference: text("disbursement_reference"),
+  disbursementJournalEntryId: uuid("disbursement_journal_entry_id").references(() => journalEntries.id),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("employee_loans_number_idx").on(t.businessId, t.number),
+  index("employee_loans_employee_idx").on(t.employeeId, t.status),
+]);
+
+//   status - open | paid | skipped | superseded
+// `seq` keeps counting across a reschedule: a replaced open instalment is marked superseded and new ones get higher numbers.
+export const employeeLoanInstallments = pgTable("employee_loan_installments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  loanId: uuid("loan_id").notNull().references(() => employeeLoans.id, { onDelete: "cascade" }),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  seq: integer("seq").notNull(),
+  dueMonth: text("due_month").notNull(),
+  principal: numeric("principal", { precision: 15, scale: 2 }).notNull(),
+  interest: numeric("interest", { precision: 15, scale: 2 }).notNull(),
+  paidPrincipal: numeric("paid_principal", { precision: 15, scale: 2 }).default("0").notNull(),
+  paidInterest: numeric("paid_interest", { precision: 15, scale: 2 }).default("0").notNull(),
+  status: text("status").default("open").notNull(),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("employee_loan_installments_seq_idx").on(t.loanId, t.seq),
+  index("employee_loan_installments_due_idx").on(t.businessId, t.dueMonth, t.status),
+]);
+
+//   kind - issued | approved | disbursed | emi_recovered | prepaid | foreclosed | fnf_recovered | skipped | rescheduled | closed | rejected | cancelled
+// `principal` and `interest` are the amounts of the event (recovered or received); `balance_after` the outstanding principal after it.
+export const employeeLoanEvents = pgTable("employee_loan_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  loanId: uuid("loan_id").notNull().references(() => employeeLoans.id, { onDelete: "cascade" }),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id),
+  kind: text("kind").notNull(),
+  eventDate: date("event_date").notNull(),
+  principal: numeric("principal", { precision: 15, scale: 2 }).default("0").notNull(),
+  interest: numeric("interest", { precision: 15, scale: 2 }).default("0").notNull(),
+  balanceAfter: numeric("balance_after", { precision: 15, scale: 2 }).notNull(),
+  runId: uuid("run_id").references(() => payrollRuns.id, { onDelete: "set null" }),
+  settlementId: uuid("settlement_id").references(() => fnfSettlements.id, { onDelete: "set null" }),
+  journalEntryId: uuid("journal_entry_id").references(() => journalEntries.id),
+  bankAccountId: uuid("bank_account_id").references(() => bankAccounts.id),
+  note: text("note"),
+  createdByUserId: uuid("created_by_user_id"),
+  createdByName: text("created_by_name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("employee_loan_events_loan_idx").on(t.loanId, t.createdAt),
+  index("employee_loan_events_business_idx").on(t.businessId, t.eventDate),
+  // A payroll run recovers a loan at most once (approval is therefore idempotent).
+  uniqueIndex("employee_loan_events_run_idx").on(t.loanId, t.runId).where(sql`${t.kind} = 'emi_recovered'`),
+  uniqueIndex("employee_loan_events_fnf_idx").on(t.loanId, t.settlementId).where(sql`${t.kind} = 'fnf_recovered'`),
+]);
+
+// The business's relieving letter wording (placeholders like {{employee_name}}); one per kind.
+export const payrollLetterTemplates = pgTable("payroll_letter_templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  kind: text("kind").default("relieving").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  signatoryName: text("signatory_name"),
+  signatoryTitle: text("signatory_title"),
+  place: text("place"),
+  updatedByUserId: uuid("updated_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("payroll_letter_templates_kind_idx").on(t.businessId, t.kind),
 ]);
 
 // ── Business-date column registry ─────────────────────────────────

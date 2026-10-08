@@ -36,6 +36,7 @@ import {
   type TenantDatabase,
 } from "@fintranzact/db";
 import {
+  applyLoanRecoveryToLine,
   approverAllowed,
   buildPostingTotals,
   canTransitionRun,
@@ -50,6 +51,7 @@ import {
   monthStart,
   paiseToRupees,
   payslipNumber,
+  planLoanRecovery,
   rupeesToPaise,
   STATUTORY_PAYABLE_GROUPS,
   STATUTORY_PAYABLE_LABELS,
@@ -69,6 +71,7 @@ import { assertPeriodOpen } from "../period-lock.js";
 import { STATUTORY_PAYABLE_KEYS, bookDate, cashOrBankAccountId, ensurePayrollAccounts, writeJournalEntry, type PayrollAccountKey } from "./books.js";
 import { holidayDatesFor, loadHolidays, loadMonthAttendance, loadPayrollSettings, type PayrollSettingsValues } from "./data.js";
 import { badRequest, isUniqueViolation, notFound } from "./access.js";
+import { applyRunLoanRecoveries, loadLoanDues } from "./loans.js";
 import { applyStatutoryForEmployee, dedupeConfigWarnings, lineStatutoryJson, loadStatutoryRunContext, runSnapshot } from "./statutory.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -289,6 +292,7 @@ function componentsToJson(result: PayrollLineResult): ComponentJson {
     source: c.source,
     full: paiseToRupees(c.fullPaise),
     amount: paiseToRupees(c.amountPaise),
+    ...(c.loanId ? { loanId: c.loanId, loanPart: c.loanPart } : {}),
   }));
 }
 
@@ -335,6 +339,8 @@ export async function calculateRun(
 
     const warnings: Array<PayrollWarning & { employeeId?: string }> = [];
     const lines: Array<typeof payrollRunLines.$inferInsert & { _result: PayrollLineResult }> = [];
+    // Loan and advance instalments due this month (Phase 4); an employee in full and final settlement is recovered there instead.
+    const loanInfo = await loadLoanDues(tx, input.businessId, month, empIds);
 
     for (const emp of ctx.employees) {
       const assignment = latest.get(emp.id);
@@ -385,6 +391,27 @@ export async function calculateRun(
         result = { ...st.line, warnings: [...st.line.warnings, ...st.warnings] };
         statutoryJson = lineStatutoryJson(st.details);
         configWarnings.push(...st.configWarnings);
+      }
+      const empDues = loanInfo.dues.get(emp.id);
+      if (empDues?.length) {
+        const plan = planLoanRecovery({ netPaise: result.netPaise, maxSharePercent: ctx.settings.loanMaxDeductionPercent, loans: empDues });
+        result = applyLoanRecoveryToLine(result, plan);
+        if (plan.shortfallPaise > 0) {
+          result = {
+            ...result,
+            warnings: [
+              ...result.warnings,
+              {
+                code: "loan_arrears",
+                message: `Loan instalments of ₹${paiseToRupees(plan.shortfallPaise)} could not be recovered (at most ${ctx.settings.loanMaxDeductionPercent}% of net pay is recovered) and are carried forward as arrears.`,
+              },
+            ],
+          };
+        }
+      }
+      const blocked = loanInfo.blockedByFnf.get(emp.id);
+      if (blocked?.length) {
+        result = { ...result, warnings: [...result.warnings, { code: "loan_in_fnf", message: `Loan instalments (${blocked.join(", ")}) were not recovered: the balance is recovered in the full and final settlement.` }] };
       }
       for (const w of result.warnings) warnings.push({ ...w, message: `${emp.name}: ${w.message}`, employeeId: emp.id });
       const finalSettlement = !!emp.lastWorkingDay && emp.lastWorkingDay >= monthStart(month) && emp.lastWorkingDay <= monthEnd(month);
@@ -643,6 +670,10 @@ export async function approveRun(db: TenantDatabase, input: { businessId: string
       throw badRequest("The run's totals no longer match its lines. Calculate it again before approving.");
     }
 
+    // Loan and advance instalments in the lines are recorded now; refused when a balance moved since the run was calculated.
+    const settings = await loadPayrollSettings(tx, input.businessId);
+    await applyRunLoanRecoveries(tx, { businessId: input.businessId, runId: run.id, month: run.month, lines, maxSharePercent: settings.loanMaxDeductionPercent, actor: input.actor });
+
     const [biz] = await tx.select().from(businesses).where(eq(businesses.id, input.businessId)).limit(1);
     const emps: EmployeeRow[] = await tx.select().from(employees).where(and(eq(employees.businessId, input.businessId), inArray(employees.id, lines.map((l) => l.employeeId))));
     const empById = new Map(emps.map((e) => [e.id, e]));
@@ -751,6 +782,8 @@ export async function postRun(db: TenantDatabase, input: { businessId: string; r
           category: c.category as ComponentCategory,
           amountPaise: rupeesToPaise(c.amount),
           statutoryKind: c.statutoryKind,
+          source: c.source,
+          loanPart: c.loanPart ?? null,
         })),
       })),
     );
@@ -759,6 +792,8 @@ export async function postRun(db: TenantDatabase, input: { businessId: string; r
     if (totals.netPayablePaise > 0) keys.add("salaries_payable");
     if (totals.deductionsPayablePaise > 0) keys.add("deductions_payable");
     if (totals.employerPayablePaise > 0) keys.add("employer_payable");
+    if (totals.loanPrincipalPaise > 0) keys.add("loans_receivable");
+    if (totals.loanInterestPaise > 0) keys.add("loan_interest_income");
     for (const g of STATUTORY_PAYABLE_GROUPS) if (totals.statutoryPayable[g] > 0) keys.add(STATUTORY_PAYABLE_KEYS[g]);
     if (keys.size === 0) throw badRequest("There is nothing to post: every employee's pay is zero.");
     const acc = await ensurePayrollAccounts(tx, input.businessId, [...keys]);
@@ -771,6 +806,8 @@ export async function postRun(db: TenantDatabase, input: { businessId: string; r
     if (totals.netPayablePaise > 0) jl.push({ accountId: acc.salaries_payable!, debitPaise: 0, creditPaise: totals.netPayablePaise, narration: `Net salaries payable ${label}` });
     if (totals.deductionsPayablePaise > 0) jl.push({ accountId: acc.deductions_payable!, debitPaise: 0, creditPaise: totals.deductionsPayablePaise, narration: `Deductions held ${label}` });
     if (totals.employerPayablePaise > 0) jl.push({ accountId: acc.employer_payable!, debitPaise: 0, creditPaise: totals.employerPayablePaise, narration: `Employer contributions ${label}` });
+    if (totals.loanPrincipalPaise > 0) jl.push({ accountId: acc.loans_receivable!, debitPaise: 0, creditPaise: totals.loanPrincipalPaise, narration: `Loan and advance recovery ${label}` });
+    if (totals.loanInterestPaise > 0) jl.push({ accountId: acc.loan_interest_income!, debitPaise: 0, creditPaise: totals.loanInterestPaise, narration: `Interest recovered on staff loans ${label}` });
     for (const g of STATUTORY_PAYABLE_GROUPS) {
       if (totals.statutoryPayable[g] > 0) {
         jl.push({ accountId: acc[STATUTORY_PAYABLE_KEYS[g]]!, debitPaise: 0, creditPaise: totals.statutoryPayable[g], narration: `${STATUTORY_PAYABLE_LABELS[g]} ${label}` });

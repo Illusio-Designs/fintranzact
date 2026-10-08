@@ -656,6 +656,9 @@ const fnfManualLine = z.object({
   /** Rupees. */
   amount: z.number().positive("Enter an amount above zero.").max(1_000_000_000),
 });
+const fnfManualEarning = fnfManualLine.extend({ kind: z.enum(["arrears", "other_earning"]).default("other_earning") });
+export type FnfManualEarning = z.infer<typeof fnfManualEarning>;
+export type FnfManualDeduction = z.infer<typeof fnfManualLine>;
 export const fnfCreateSchema = z.object({
   employeeId: uuid,
   encashmentBasis: z.enum(LEAVE_ENCASHMENT_BASES).default("basic_da_26"),
@@ -672,7 +675,7 @@ export const fnfUpdateSchema = z.object({
   includeBonus: z.boolean().optional(),
   /** Days of each leave type to encash, keyed by leave type id; blank = the maximum. */
   encashDays: z.record(z.string().uuid(), z.number().min(0).max(366)).optional(),
-  earnings: z.array(fnfManualLine).max(20).optional(),
+  earnings: z.array(fnfManualEarning).max(20).optional(),
   deductions: z.array(fnfManualLine).max(20).optional(),
   note: maybe(text(500)),
 });

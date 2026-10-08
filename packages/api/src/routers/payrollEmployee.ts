@@ -11,7 +11,7 @@
 import { and, asc, count, eq, ilike, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { employees, payrollDepartments, payrollDesignations, payrollShifts } from "@fintranzact/db";
+import { employees, fnfSettlements, payrollDepartments, payrollDesignations, payrollShifts } from "@fintranzact/db";
 import {
   departmentInputSchema,
   designationInputSchema,
@@ -180,12 +180,17 @@ export const payrollEmployeeRouter = router({
       const [existing] = await ctx.db.select().from(employees).where(and(eq(employees.id, input.id), eq(employees.businessId, ctx.businessId))).limit(1);
       if (!existing) throw notFound("Employee");
       if (existing.status === "active") return employeeDetail(existing, { full: canSeeSensitive(ctx.ability) });
+      // A full and final settlement that is more than a draft is final: bringing the employee back would pay them twice.
+      const [fnf] = await ctx.db.select({ id: fnfSettlements.id, status: fnfSettlements.status }).from(fnfSettlements).where(and(eq(fnfSettlements.employeeId, existing.id), eq(fnfSettlements.businessId, ctx.businessId))).limit(1);
+      if (fnf && fnf.status !== "draft") throw badRequest("This employee's full and final settlement is already in progress or settled, so the employee cannot be brought back.");
       await enforceEmployeeCap(ctx.tenantId, ctx.db, 1);
       const [row] = await ctx.db
         .update(employees)
         .set({ status: "active", lastWorkingDay: null, exitReason: null, exitNote: null, fnfNote: null, fnfPayrollRunId: null, updatedAt: new Date() })
         .where(eq(employees.id, existing.id))
         .returning();
+      // A draft settlement belongs to the exit that was just undone.
+      if (fnf) await ctx.db.delete(fnfSettlements).where(eq(fnfSettlements.id, fnf.id));
       return employeeDetail(row!, { full: canSeeSensitive(ctx.ability) });
     }, (r) => ({ action: "payroll.employee.reactivate", entityType: "employee", entityId: r.id, metadata: { employeeCode: r.employeeCode } })),
   ),

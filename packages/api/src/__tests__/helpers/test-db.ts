@@ -204,6 +204,15 @@ export async function truncateAllTables(): Promise<void> {
     TRUNCATE TABLE
       -- Tenant schema (leaf tables first)
       ai_pending_actions,
+      employee_loan_events,
+      employee_loan_installments,
+      employee_loans,
+      fnf_settlement_lines,
+      fnf_settlements,
+      gratuity_provisions,
+      bonus_run_lines,
+      bonus_runs,
+      payroll_letter_templates,
       ai_messages,
       ai_conversations,
       employee_punch_selfies,

@@ -232,7 +232,9 @@ export interface PayrollWarning {
     // Statutory (Phase 2)
     | "pt_slabs_missing" | "pt_state_missing" | "pt_gender_missing" | "lwf_not_configured" | "tax_slabs_missing" | "tds_pan_missing"
     | "tds_history_gap" | "tds_capped" | "tds_surcharge" | "tds_senior_citizen" | "pf_uan_missing" | "esi_number_missing"
-    | "double_deduction" | "pf_excluded_review" | "statutory_rates_default";
+    | "double_deduction" | "pf_excluded_review" | "statutory_rates_default"
+    // Loans (Phase 4)
+    | "loan_arrears" | "loan_in_fnf";
   message: string;
 }
 
