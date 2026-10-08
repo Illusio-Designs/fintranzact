@@ -149,6 +149,60 @@ exceptions:
       - payrollPunch.selfie
       - payrollPunch.settings
       - payrollPunch.updateSettings
+      # --- Payroll (add-on, Phase 4: bonus, gratuity, full and final, loans, letters) ---
+      # Year-end and exit processing is HR and finance desk work on the web: bonus runs (with the Bonus settings the CA verifies),
+      # the gratuity estimate and provision, full and final settlements (with their approval and posting), loans and advances
+      # (issue, approval, disbursement, prepayment, skip), the relieving letter template and its PDF. Mobile has no Payroll area for
+      # HR (see Phase 1); the employee app deliberately gets no loan or settlement view (payrollSelf is unchanged in Phase 4).
+      - payrollBonus.approve
+      - payrollBonus.bankFile
+      - payrollBonus.calculate
+      - payrollBonus.create
+      - payrollBonus.delete
+      - payrollBonus.get
+      - payrollBonus.list
+      - payrollBonus.markPaid
+      - payrollBonus.post
+      - payrollBonus.reopen
+      - payrollBonus.rules
+      - payrollBonus.setExclusion
+      - payrollBonus.statementCsv
+      - payrollBonus.statementPdf
+      - payrollBonus.submit
+      - payrollBonus.update
+      - payrollFnf.approve
+      - payrollFnf.calculate
+      - payrollFnf.create
+      - payrollFnf.delete
+      - payrollFnf.get
+      - payrollFnf.list
+      - payrollFnf.markPaid
+      - payrollFnf.post
+      - payrollFnf.reopen
+      - payrollFnf.statementPdf
+      - payrollFnf.submit
+      - payrollFnf.update
+      - payrollGratuity.estimate
+      - payrollGratuity.postProvision
+      - payrollGratuity.provisionHistory
+      - payrollLetter.relievingPdf
+      - payrollLetter.saveTemplate
+      - payrollLetter.template
+      - payrollLoan.approve
+      - payrollLoan.cancel
+      - payrollLoan.create
+      - payrollLoan.disburse
+      - payrollLoan.foreclose
+      - payrollLoan.get
+      - payrollLoan.list
+      - payrollLoan.prepay
+      - payrollLoan.reject
+      - payrollLoan.reschedule
+      - payrollLoan.schedulePreview
+      - payrollLoan.settings
+      - payrollLoan.skip
+      - payrollLoan.statementCsv
+      - payrollLoan.updateSettings
       # --- Inventory (warehouses & stock) ---
       # Warehouse setup, transfers, adjustments and physical stock are web-only screens for now.
       - stock.adjust
@@ -758,6 +812,59 @@ exceptions:
       - payrollPunch.selfie
       - payrollPunch.settings
       - payrollPunch.updateSettings
+      # --- Payroll (add-on, Phase 4: bonus, gratuity, full and final, loans, letters) ---
+      # These approve and post money (bonus, settlements, loan disbursement, gratuity provision) and carry salary and exit data
+      # for named people, so they stay in the web UI with the maker-checker prompts and the verify-with-your-CA reminders; they are not
+      # scripted from a command line or an API key.
+      - payrollBonus.approve
+      - payrollBonus.bankFile
+      - payrollBonus.calculate
+      - payrollBonus.create
+      - payrollBonus.delete
+      - payrollBonus.get
+      - payrollBonus.list
+      - payrollBonus.markPaid
+      - payrollBonus.post
+      - payrollBonus.reopen
+      - payrollBonus.rules
+      - payrollBonus.setExclusion
+      - payrollBonus.statementCsv
+      - payrollBonus.statementPdf
+      - payrollBonus.submit
+      - payrollBonus.update
+      - payrollFnf.approve
+      - payrollFnf.calculate
+      - payrollFnf.create
+      - payrollFnf.delete
+      - payrollFnf.get
+      - payrollFnf.list
+      - payrollFnf.markPaid
+      - payrollFnf.post
+      - payrollFnf.reopen
+      - payrollFnf.statementPdf
+      - payrollFnf.submit
+      - payrollFnf.update
+      - payrollGratuity.estimate
+      - payrollGratuity.postProvision
+      - payrollGratuity.provisionHistory
+      - payrollLetter.relievingPdf
+      - payrollLetter.saveTemplate
+      - payrollLetter.template
+      - payrollLoan.approve
+      - payrollLoan.cancel
+      - payrollLoan.create
+      - payrollLoan.disburse
+      - payrollLoan.foreclose
+      - payrollLoan.get
+      - payrollLoan.list
+      - payrollLoan.prepay
+      - payrollLoan.reject
+      - payrollLoan.reschedule
+      - payrollLoan.schedulePreview
+      - payrollLoan.settings
+      - payrollLoan.skip
+      - payrollLoan.statementCsv
+      - payrollLoan.updateSettings
       - payrollSelf.acceptConsent
       - payrollSelf.attendance
       - payrollSelf.form16Years
@@ -1247,6 +1354,58 @@ exceptions:
       - payrollPunch.selfie
       - payrollPunch.settings
       - payrollPunch.updateSettings
+      # --- Payroll (add-on, Phase 4: bonus, gratuity, full and final, loans, letters) ---
+      # Salary, bonus, gratuity, loan and exit data of named employees is not offered to AI clients over MCP (the in-app assistant
+      # also has no payroll tool), and approving or posting these is human work in the web UI.
+      - payrollBonus.approve
+      - payrollBonus.bankFile
+      - payrollBonus.calculate
+      - payrollBonus.create
+      - payrollBonus.delete
+      - payrollBonus.get
+      - payrollBonus.list
+      - payrollBonus.markPaid
+      - payrollBonus.post
+      - payrollBonus.reopen
+      - payrollBonus.rules
+      - payrollBonus.setExclusion
+      - payrollBonus.statementCsv
+      - payrollBonus.statementPdf
+      - payrollBonus.submit
+      - payrollBonus.update
+      - payrollFnf.approve
+      - payrollFnf.calculate
+      - payrollFnf.create
+      - payrollFnf.delete
+      - payrollFnf.get
+      - payrollFnf.list
+      - payrollFnf.markPaid
+      - payrollFnf.post
+      - payrollFnf.reopen
+      - payrollFnf.statementPdf
+      - payrollFnf.submit
+      - payrollFnf.update
+      - payrollGratuity.estimate
+      - payrollGratuity.postProvision
+      - payrollGratuity.provisionHistory
+      - payrollLetter.relievingPdf
+      - payrollLetter.saveTemplate
+      - payrollLetter.template
+      - payrollLoan.approve
+      - payrollLoan.cancel
+      - payrollLoan.create
+      - payrollLoan.disburse
+      - payrollLoan.foreclose
+      - payrollLoan.get
+      - payrollLoan.list
+      - payrollLoan.prepay
+      - payrollLoan.reject
+      - payrollLoan.reschedule
+      - payrollLoan.schedulePreview
+      - payrollLoan.settings
+      - payrollLoan.skip
+      - payrollLoan.statementCsv
+      - payrollLoan.updateSettings
       - payrollSelf.acceptConsent
       - payrollSelf.attendance
       - payrollSelf.form16Years

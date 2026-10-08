@@ -123,6 +123,8 @@ async function addEvent(
     note: e.note ?? null,
     createdByUserId: e.actor?.id ?? null,
     createdByName: e.actor?.name ?? null,
+    // The statement is ordered by this: clock_timestamp() moves on inside a transaction, now() does not.
+    createdAt: sql`clock_timestamp()`,
   });
 }
 

@@ -257,6 +257,15 @@ export const INPUT_OVERRIDES: Record<string, (ids: Record<string, string>) => un
   "payrollImport.preview": () => ({ rows: [["E-NONE", "2026-10-05 09:00:00"]], mapping: { employeeCode: 0, timestamp: 1, hasHeader: false, dateOrder: "dmy" } }),
   "payrollImport.commit": () => ({ rows: [["E-NONE", "2026-10-05 09:00:00"]], mapping: { employeeCode: 0, timestamp: 1, hasHeader: false, dateOrder: "dmy" } }),
   "payrollEmployee.exit": () => ({ lastWorkingDay: new Date().toISOString().slice(0, 10) }),
+  // Payroll Phase 4: a loan needs the number of instalments or the EMI (a refinement the generator cannot see).
+  "payrollLoan.create": () => ({ installments: 3, startMonth: new Date().toISOString().slice(0, 7), issueDate: new Date().toISOString().slice(0, 10) }),
+  "payrollLoan.schedulePreview": () => ({ installments: 3, startMonth: new Date().toISOString().slice(0, 7) }),
+  "payrollLoan.reschedule": () => ({ installments: 3, firstMonth: new Date().toISOString().slice(0, 7) }),
+  "payrollLoan.disburse": () => ({ paidOn: new Date().toISOString().slice(0, 10) }),
+  "payrollLoan.prepay": () => ({ receivedOn: new Date().toISOString().slice(0, 10) }),
+  "payrollLoan.foreclose": () => ({ receivedOn: new Date().toISOString().slice(0, 10) }),
+  "payrollBonus.markPaid": () => ({ paidOn: new Date().toISOString().slice(0, 10) }),
+  "payrollFnf.markPaid": () => ({ paidOn: new Date().toISOString().slice(0, 10) }),
   "auth.register": () => ({
     username: "sweeper",
     email: `sweep.${randomUUID().slice(0, 8)}@example.in`,
@@ -294,6 +303,8 @@ let leaveSeq = 0;
 let holidaySeq = 0;
 let runSeq = 0;
 let punchSeq = 0;
+let bonusSeq = 0;
+let loanSeq = 0;
 const accountCode = (prefix: "8" | "9") => `${prefix}${String(++accountSeq).padStart(6, "0")}`;
 
 type Seeder = (b: SweepBusiness, c: Caller) => Promise<string | undefined>;
@@ -531,6 +542,28 @@ export const SEEDERS: Array<[string, Seeder]> = [
     return firstId(await c.payrollRun.create({ month } as never));
   }],
   ["payrollAdjustment", async (b, c) => firstId(await c.payrollRun.addAdjustment({ runId: b.ids.payrollRun!, employeeId: b.ids.employee!, name: `Advance ${b.tag}`, type: "deduction", amount: 10 } as never))],
+  // Payroll Phase 4. A bonus run and a loan are inserted directly: a bonus run is one per financial year (a different old year each
+  // time) and a loan made through the API would be "requested" by the sweep's owner, who then could not approve it (maker-checker),
+  // which the role matrix would misread as a refusal.
+  ["bonusRun", async (b) => {
+    const sql = getTestClient();
+    const fy = 1900 + ++bonusSeq;
+    return sqlId(sql`INSERT INTO bonus_runs (business_id, financial_year, number, percent) VALUES (${b.id}, ${fy}, ${`BN-S${fy}`}, '10.00') RETURNING id`);
+  }],
+  ["employeeLoan", async (b) => {
+    const sql = getTestClient();
+    const n = ++loanSeq;
+    const id = await sqlId(sql`INSERT INTO employee_loans (business_id, employee_id, number, status, principal, interest_rate, installment_count, emi, start_month, issue_date)
+      VALUES (${b.id}, ${b.ids.employee!}, ${`LN-S${n}X`}, 'pending_approval', '1000.00', '0', 2, '500.00', '2030-01', '2030-01-01') RETURNING id`);
+    await sql`INSERT INTO employee_loan_installments (loan_id, business_id, seq, due_month, principal, interest)
+      VALUES (${id}, ${b.id}, 1, '2030-01', '500.00', '0'), (${id}, ${b.id}, 2, '2030-02', '500.00', '0')`;
+    return id;
+  }],
+  ["fnfSettlement", async (b, c) => {
+    const eid = firstId(await c.payrollEmployee.create({ employeeCode: `X${uniq().toUpperCase()}`, name: `Leaver ${b.tag} ${uniq()}`, dateOfJoining: "2026-01-01" } as never))!;
+    await c.payrollEmployee.exit({ id: eid, lastWorkingDay: new Date(Date.now() - 86_400_000).toISOString().slice(0, 10), reason: "resignation" } as never);
+    return firstId(await c.payrollFnf.create({ employeeId: eid, encashmentBasis: "basic_da_26" } as never));
+  }],
   ["workLocation", async (b, c) => firstId(await c.payrollPunch.locationCreate({ name: `Site ${b.tag} ${uniq()}`, lat: 19.076, lng: 72.8777, radiusM: 150 } as never))],
   ["deviceKey", async (b, c) => firstId(await c.payrollPunch.deviceKeyCreate({ name: `Device ${b.tag} ${uniq()}` } as never))],
   ["employeePunch", async (b) => {
