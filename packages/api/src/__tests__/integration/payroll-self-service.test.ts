@@ -561,11 +561,11 @@ describe("work locations and the geofence policy", () => {
   });
 
   it("a phone that reports a mock location is flagged for review (a hint, never a block)", async () => {
-    const r = await punch(ashaC, "in", "2026-12-15T09:00:00+05:30", { ...HERE, mockLocation: true });
+    const r = await punch(ashaC, "in", "2026-12-21T09:00:00+05:30", { ...HERE, mockLocation: true });
     expect(r.geofenceResult).toBe("inside");
     const flagged = (await hrC.payrollPunch.punches({ review: "pending" })).find((p) => p.id === r.id)!;
     expect(flagged).toMatchObject({ flags: ["mock_location"], reviewStatus: "pending", geofenceResult: "inside" });
-    await punch(ashaC, "out", "2026-12-15T18:00:00+05:30", HERE);
+    await punch(ashaC, "out", "2026-12-21T18:00:00+05:30", HERE);
     await hrC.payrollPunch.review({ punchId: r.id, decision: "approve" });
   });
 
@@ -573,11 +573,11 @@ describe("work locations and the geofence policy", () => {
     await hrC.payrollPunch.locationAssign({ employeeId: ids.asha!, locationIds: [] });
     await hrC.payrollPunch.locationUpdate({ id: office, isActive: false });
     // No active location at all: nothing to compare with, so nothing is checked.
-    expect((await punch(ashaC, "in", "2026-12-11T09:00:00+05:30", FAR)).geofenceResult).toBe("not_checked");
-    await punch(ashaC, "out", "2026-12-11T18:00:00+05:30", FAR);
+    expect((await punch(ashaC, "in", "2026-12-22T09:00:00+05:30", FAR)).geofenceResult).toBe("not_checked");
+    await punch(ashaC, "out", "2026-12-22T18:00:00+05:30", FAR);
     await hrC.payrollPunch.locationUpdate({ id: office, isActive: true });
-    expect((await punch(ashaC, "in", "2026-12-14T09:00:00+05:30", HERE)).geofenceResult).toBe("inside");
-    await punch(ashaC, "out", "2026-12-14T18:00:00+05:30", HERE);
+    expect((await punch(ashaC, "in", "2026-12-23T09:00:00+05:30", HERE)).geofenceResult).toBe("inside");
+    await punch(ashaC, "out", "2026-12-23T18:00:00+05:30", HERE);
   });
 });
 
