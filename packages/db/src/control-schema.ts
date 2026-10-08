@@ -17,6 +17,9 @@ export const memberRoleEnum = pgEnum("member_role", [
   "superadmin", "seller_manager", "seller", "accountant",
   // Accountant access (read-only / filing-only); see docs/ACCOUNTANT-ACCESS.md
   "auditor", "ca_filing",
+  // Payroll Phase 3: HR / Payroll manager, and the self-service employee login
+  // (docs/architecture/payroll-self-service.md)
+  "hr", "employee",
 ]);
 
 // ── Tenants ────────────────────────────────────────────────────
@@ -203,6 +206,9 @@ export const invitations = pgTable("invitations", {
   acceptedAt: timestamp("accepted_at", { withTimezone: true }),
   /** CA invites only: the owner asked to credit the CA, a partner, as the organisation's referrer on accept (opt-in, default none). */
   creditPartner: boolean("credit_partner"),
+  /** Employee invitations only: the employee record (in the tenant database, so no foreign key) the login will be linked to, and its business. */
+  employeeId: uuid("employee_id"),
+  businessId: uuid("business_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
   uniqueIndex("invitations_token_idx").on(t.token),

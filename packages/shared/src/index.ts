@@ -39,5 +39,6 @@ export * from "./payroll-calc.js";
 export * from "./payroll.js";
 export * from "./payroll-statutory.js";
 export * from "./payroll-filings.js";
+export * from "./payroll-self.js";
 export * from "./ai.js";
 export * from "./ai-actions.js";
