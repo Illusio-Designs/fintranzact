@@ -451,20 +451,9 @@ export async function approveFnf(db: TenantDatabase, input: { businessId: string
     const key = (kind: string, ref: string | null, label: string, amount: string) => `${kind}|${ref ?? ""}|${label}|${rupeesToPaise(amount)}`;
     const savedKeys = saved.map((l) => key(l.kind, l.ref, l.label, l.amount)).sort().join("\n");
     const freshKeys = plan.lines.map((l) => key(l.kind, l.ref ?? null, l.label, paiseToRupees(l.amountPaise))).sort().join("\n");
-    if (savedKeys !== freshKeys) throw badRequest("Balances (leave, loans or bonus) changed after the settlement was calculated. Calculate it again before approving.");
+    if (savedKeys !== freshKeys) throw badRequest("Balances (leave, loans or bonus) changed after the settlement was calculated (for example a bonus run now pays the bonus). Calculate it again before approving.");
     if (plan.result.netPayablePaise < 0) throw badRequest("The recoveries are more than the amounts due.");
     if (plan.salary.state === "no_run" || plan.salary.state === "run_pending") throw badRequest(plan.salary.message);
-    // A bonus run that already pays this employee for the year blocks a second payment of the same bonus.
-    if (plan.bonusFy != null) {
-      const [dup] = await tx
-        .select({ number: bonusRuns.number })
-        .from(bonusRuns)
-        .innerJoin(bonusRunLines, and(eq(bonusRunLines.runId, bonusRuns.id), eq(bonusRunLines.employeeId, emp.id), eq(bonusRunLines.eligible, true)))
-        .where(and(eq(bonusRuns.businessId, input.businessId), eq(bonusRuns.financialYear, plan.bonusFy), inArray(bonusRuns.status, FINAL)))
-        .limit(1);
-      if (dup) throw badRequest(`Bonus for ${fyLabel(plan.bonusFy)} is already paid through bonus run ${dup.number}. Calculate the settlement again.`);
-    }
-
     // Leave encashed leaves the balance (idempotent by period key).
     const settings = await loadPayrollSettings(tx, input.businessId);
     const leaveYear = leaveYearOf(s.lastWorkingDay, settings.leaveYearStartMonth);

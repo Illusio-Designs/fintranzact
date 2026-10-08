@@ -144,3 +144,7 @@ Mobile, CLI and MCP (parity exceptions); loans and recurring deductions as recor
 ## Phase 3
 
 Mobile attendance with a selfie and location, employee logins and self-service, HR and employee roles, and biometric import are described in [`payroll-self-service.md`](payroll-self-service.md).
+
+## Phase 4
+
+Bonus, gratuity, full and final settlement, loans and advances, relieving letters and the extra registers are described in [`payroll-phase-4.md`](payroll-phase-4.md).

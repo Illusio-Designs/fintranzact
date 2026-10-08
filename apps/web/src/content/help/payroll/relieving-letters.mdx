@@ -1,0 +1,32 @@
+---
+title: Relieving letters
+description: "Make a relieving letter PDF for an employee who has left, from wording you control. The letter is not digitally signed."
+sidebar:
+  order: 17
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+
+<ForDesktop>
+
+Open **Payroll → Full and final** and scroll to **Relieving letters**. A letter is available once an employee's exit is recorded.
+
+## The wording
+
+The letter text is yours. Fintranzact starts with standard wording; edit it and press **Save wording**. These placeholders are filled in for each employee:
+
+`{{employee_name}}`, `{{employee_code}}`, `{{designation}}`, `{{department}}`, `{{date_of_joining}}`, `{{last_working_day}}`, `{{company_name}}` and `{{letter_date}}`.
+
+A placeholder that is not on this list is refused when you save, and a value that is missing for an employee prints as a dash. You can also set the letter title, the place and the signatory's name and title.
+
+## The letter
+
+Press **Relieving letter** next to a name to download the PDF. It uses your business name, address and logo from your business settings, the employee's details, and your wording.
+
+- The signature line is **blank**, for a person to sign. If you uploaded a signature image to your business, it is printed above the line.
+- The letter is **not digitally signed**, and Fintranzact does not claim it is.
+- Each letter you make is recorded in the audit log with who made it.
+
+Have your lawyer or CA check the wording you use.
+
+</ForDesktop>

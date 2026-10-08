@@ -680,6 +680,87 @@ describe("isolation and the data audit", () => {
   });
 });
 
+describe("more rules: fixed-term and death gratuity, the carry-forward cap, a negative settlement, a bonus paid twice, a single-user business", () => {
+  it("a Contract employee is fixed-term: one completed year is enough", async () => {
+    const e = await ownerC.payrollEmployee.create({ employeeCode: "E201", name: "Fatima Khan", dateOfJoining: "2025-04-01", employmentType: "contract" });
+    ids.E201 = e.id;
+    const comps = await ownerC.payrollSalary.componentList();
+    const t = (await ownerC.payrollSalary.templateList())[0]!;
+    void comps;
+    await ownerC.payrollSalary.assign({ employeeId: e.id, templateId: t.id, annualCtc: 240000, effectiveFrom: "2025-04-01" });
+    const est = await hrC.payrollGratuity.estimate({ asOf: "2026-03-31" });
+    expect(est.rows.find((r) => r.employeeCode === "E201")).toMatchObject({ completedYears: 1, rule: "fixed_term", minYearsRequired: 1, eligible: true, amount: "5769.23" }); // 10,000 x 15 / 26
+    const early = await hrC.payrollGratuity.estimate({ asOf: "2026-03-30" });
+    expect(early.rows.find((r) => r.employeeCode === "E201")).toMatchObject({ eligible: false, amount: "0.00" });
+  });
+
+  it("a leave type with a carry-forward maximum limits what a settlement encashes", async () => {
+    await ownerC.payrollLeave.typeCreate({ code: "XL", name: "Extra leave", isPaid: true, accrualType: "monthly", accrualDays: 3, carryForward: true, carryForwardMax: 2, encashable: true });
+    const e = await ownerC.payrollEmployee.create({ employeeCode: "E202", name: "Gopal Iyer", dateOfJoining: "2026-01-01" });
+    ids.E202 = e.id;
+    const t = (await ownerC.payrollSalary.templateList())[0]!;
+    await ownerC.payrollSalary.assign({ employeeId: e.id, templateId: t.id, annualCtc: 240000, effectiveFrom: "2026-01-01" });
+    await ownerC.payrollLeave.accrue({ month: "2026-08" });
+    await ownerC.payrollLeave.accrue({ month: "2026-09" });
+    await hrC.payrollEmployee.exit({ id: e.id, lastWorkingDay: "2026-09-30", reason: "death" });
+    const s = await hrC.payrollFnf.create({ employeeId: e.id, encashmentBasis: "basic_da_30" });
+    ids.fnf2 = s.id;
+    const d = await hrC.payrollFnf.get({ id: s.id });
+    expect(d.encashable.find((x) => x.code === "XL")).toMatchObject({ balance: 6, maxDays: 2 });
+    const leave = d.lines.filter((l) => l.kind === "leave_encashment").find((l) => l.label.includes("XL"))!;
+    expect(leave.amount).toBe("666.67"); // 2 days x 10,000 / 30
+    // Death: no minimum service. 8 months of service counts as one year: 10,000 x 15 / 26.
+    expect(d.lines.find((l) => l.kind === "gratuity")).toMatchObject({ amount: "5769.23" });
+  });
+
+  it("a settlement whose recoveries are more than what is due cannot be submitted", async () => {
+    await hrC.payrollFnf.update({ id: ids.fnf2!, deductions: [{ name: "Advance not recorded", amount: 1000000 }] });
+    const d = await hrC.payrollFnf.get({ id: ids.fnf2! });
+    expect(Number(d.settlement.netPayable)).toBeLessThan(0);
+    expect(d.settlement.warnings.map((w) => w.code)).toContain("negative_net");
+    await expect(hrC.payrollFnf.submit({ id: ids.fnf2! })).rejects.toThrow(/more than the amounts due/);
+    await hrC.payrollFnf.delete({ id: ids.fnf2! });
+    // A deleted draft frees the employee for a new one; reactivating undoes the exit.
+    await hrC.payrollEmployee.reactivate({ id: ids.E202! });
+  });
+
+  it("a bonus already paid through an approved bonus run cannot be paid again in a settlement", async () => {
+    // E101 leaves after the May payroll. The settlement adds the bonus due while no bonus run exists yet.
+    await hrC.payrollEmployee.exit({ id: ids.E101!, lastWorkingDay: "2026-05-31", reason: "resignation" });
+    const s = await hrC.payrollFnf.create({ employeeId: ids.E101!, encashmentBasis: "basic_da_26" });
+    await hrC.payrollFnf.update({ id: s.id, includeBonus: true });
+    const before = await hrC.payrollFnf.get({ id: s.id });
+    expect(before.lines.find((l) => l.kind === "bonus")).toBeTruthy();
+    await hrC.payrollFnf.submit({ id: s.id });
+    // A bonus run for the same year is calculated and approved: it includes E101 (the settlement is not approved yet).
+    const bonus = await hrC.payrollBonus.create({ financialYear: 2026, percent: 8.33 });
+    await hrC.payrollBonus.calculate({ id: bonus.id });
+    expect((await hrC.payrollBonus.get({ id: bonus.id })).lines.find((l) => l.employeeCode === "E101")).toMatchObject({ eligible: true });
+    await hrC.payrollBonus.submit({ id: bonus.id });
+    await ownerC.payrollBonus.approve({ id: bonus.id });
+    await expect(ownerC.payrollFnf.approve({ id: s.id })).rejects.toThrow(/bonus run now pays the bonus/);
+    // Calculated again, the settlement leaves the bonus out and says why.
+    await hrC.payrollFnf.calculate({ id: s.id });
+    const after = await hrC.payrollFnf.get({ id: s.id });
+    expect(after.lines.some((l) => l.kind === "bonus")).toBe(false);
+    expect(after.settlement.warnings.map((w) => w.code)).toContain("bonus_in_run");
+    await hrC.payrollFnf.submit({ id: s.id });
+    expect((await ownerC.payrollFnf.approve({ id: s.id })).status).toBe("approved");
+  });
+
+  it("a business with a single user can approve its own loan", async () => {
+    const e = await ownerBC.payrollEmployee.create({ employeeCode: "S1", name: "Solo Employee", dateOfJoining: "2026-01-01" });
+    const loan = await ownerBC.payrollLoan.create({ employeeId: e.id, kind: "advance", amount: 5000, interestRate: 0, installments: 2, startMonth: "2026-11", issueDate: "2026-10-01" });
+    expect((await ownerBC.payrollLoan.approve({ id: loan.id })).status).toBe("approved");
+  });
+
+  it("finds nothing wrong after all of it", async () => {
+    const tables = new Set(["bonus_runs", "bonus_run_lines", "gratuity_provisions", "fnf_settlements", "fnf_settlement_lines", "employee_loans", "employee_loan_installments", "employee_loan_events", "payroll_letter_templates"]);
+    const report = await runAudit(getTestClient(), { businessIds: [biz.id, bizB.id] });
+    expect(report.results.filter((r) => tables.has(r.rule.table)).map((r) => `${r.rule.id}: ${r.samples.map((x) => x.detail).join("; ")}`)).toEqual([]);
+  });
+});
+
 function loanFor(employeeId: string) {
   return { employeeId, kind: "loan" as const, amount: 1000, interestRate: 0, installments: 2, startMonth: "2026-06", issueDate: "2026-05-01" };
 }

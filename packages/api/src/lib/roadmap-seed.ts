@@ -2785,6 +2785,47 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-13-payroll-phase-4",
+    updates: [
+      {
+        // Built and tested (shared unit tests with boundary values, API integration tests against Postgres,
+        // web component tests); not run in a browser. NOT ticked: "CA verification of bonus and gratuity
+        // rules" (nobody has confirmed them: docs/PAYROLL-CA-VERIFICATION.md, Phase 4, lists every
+        // assumption and docs/PENDING-OWNER-TASKS.md has the owner item). Notes on specific lines: the bonus
+        // percentage range (8.33 to 20) and 30 days are seeded but the eligibility ceiling, calculation
+        // ceiling and minimum wage ship EMPTY and a bonus run refuses to calculate until they are set;
+        // set-on / set-off is not built. "Full & final: pending salary" is built as a link: the last month's
+        // salary is paid by the exit month's payroll run (with PF, ESI, TDS and the payslip), the
+        // settlement shows it and cannot be submitted until that run is approved, so it is neither missed
+        // nor paid twice. TDS on a settlement is NOT calculated (a manual amount line and a warning). Tax on
+        // gratuity is not calculated. The relieving letter is not digitally signed. "Labour-law registers":
+        // the Phase 2 registers plus employees, deductions and advances, overtime and settlements, as working
+        // copies for CA or legal review (formats differ by state); no claim of statutory compliance. The
+        // employee-side loan view was not built. No mobile, CLI or MCP surfaces (parity exceptions).
+        title: "Payroll — Phase 4: bonus, gratuity, full & final, loans and registers",
+        status: "in_progress",
+        done: [
+          "Bonus eligibility and calculation (8.33%–20%)",
+          "Gratuity calculation (15 days per year; 1 year fixed-term / 5 years others)",
+          "Full & final: pending salary",
+          "Full & final: leave encashment",
+          "Full & final: gratuity and recoveries",
+          "Relieving letter",
+          "Loans/advances: issue, EMI recovery, balance",
+          "Labour-law registers",
+        ],
+      },
+      {
+        // The Phase 2 line about advances and loan EMIs: loans and advances are now records with an EMI
+        // schedule, recovered by the payroll run as a payslip line (Phase 4). Penalties and fines remain one-off
+        // adjustments (Phase 1) and are listed in the deductions register.
+        title: "Payroll — Phase 2: PF, ESI, PT, TDS and statutory filings",
+        status: "in_progress",
+        done: ["Other deductions: advances, loan EMIs, penalties"],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

@@ -1,0 +1,54 @@
+---
+title: Full and final settlement
+description: "Settle an employee who has left: leave encashment, gratuity, bonus due, recoveries and loan balances, with approval by a second person, posting to your books and a settlement statement."
+sidebar:
+  order: 15
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+
+<ForDesktop>
+
+When an employee leaves, record the exit on the **Employees** tab (last working day and reason), then settle in **Payroll → Full and final**.
+
+## The last month's salary is not in the settlement
+
+The salary for the month of the last working day is paid by the **normal payroll run of that month**. That run already pays for the days worked and takes PF, ESI, professional tax and TDS, and the payslip and statutory files stay complete. The settlement links to that run, shows what it pays, and **cannot be submitted until that run is approved**. This is how the last month is never paid twice and never missed. If there is no run for the month yet, create and approve it first.
+
+## What the settlement contains
+
+**Amounts due**
+
+- **Leave encashment**: for each leave type that is encashable, the balance in the leave year of the last working day (limited by the type's carry-forward maximum), times a daily rate. You choose the rate: Basic + DA / 26 (the default), Basic + DA / 30, or gross / 30. You can lower the days. Check the basis with your CA.
+- **Gratuity**: as in [Gratuity](/help/payroll/gratuity), using the last working day and the exit reason.
+- **Bonus due** (optional): a suggestion at the lowest percentage, from the approved payroll of the financial year so far. It is left out if a bonus run already pays it.
+- **Arrears and other amounts**: lines you add.
+
+**Recoveries**
+
+- **Notice-period shortfall**: you enter the days short; the recovery is the gross monthly salary / 30 for each day.
+- **TDS on the settlement**: **not calculated**. Enter the amount yourself after checking with your CA.
+- **Other recoveries**: lines you add.
+- **Loans and advances**: the outstanding **principal** of every active loan is recovered **last**, from what is left, and never takes the net payable below zero. Any part that cannot be recovered stays outstanding on the loan, with a warning. While a settlement exists for an employee, payroll runs do not deduct their loan instalments.
+
+**Net payable** = amounts due - recoveries - loans.
+
+## Steps
+
+1. **+ New settlement** and choose the employee. It is calculated at once.
+2. Change the inputs and press **Save and recalculate** (draft only). **Recalculate** also refreshes leave and loan balances.
+3. **Submit for approval**. An **owner or admin**, who is not the person who last calculated it (unless your business has one user), approves. Approving records the leave encashed and the loans recovered, and freezes the figures.
+4. **Post to books** and **Mark as paid** (owner, admin or accountant).
+5. **Statement (PDF)** gives the employee a settlement statement at any time after the first calculation.
+
+An employee with a settlement that is more than a draft cannot be brought back with Reactivate. **There is no way to reverse a posted settlement**; correct it with a journal entry, as with payroll runs.
+
+## Books
+
+Dr leave encashment and other dues (Salary - Allowances), arrears (Salary & Wages), bonus (Salary - Bonus & Incentives), gratuity (the Gratuity Provision, then Salary - Gratuity) / Cr Full and Final Settlements Payable (the net), Loans and Advances to Employees, Payroll Deductions Payable and TDS on Salary Payable. Paying clears Full and Final Settlements Payable against the bank.
+
+## Relieving letters
+
+The same tab has the **Relieving letters** panel; see [Relieving letters](/help/payroll/relieving-letters).
+
+</ForDesktop>

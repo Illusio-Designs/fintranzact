@@ -102,3 +102,78 @@ How to read the confidence column: **stated** = the figure is in the roadmap tex
 
 - [ ] The statutory settings for the current financial year have been entered and the **last verified** note filled in on the Statutory settings screen.
 - [ ] A sample payroll month was recomputed independently by the CA and matched, line by line.
+
+## 7. Phase 4: bonus, gratuity, full and final, loans and registers
+
+The code is in `packages/shared/src/payroll-phase4.ts`; the design is in [`architecture/payroll-phase-4.md`](architecture/payroll-phase-4.md). **The roadmap line "CA verification of bonus and gratuity rules" is not ticked: nobody has confirmed any of this.** Same confidence column as above.
+
+### Figures shipped as defaults and figures shipped EMPTY
+
+| Item | Default | Basis | Confirm |
+|---|---|---|---|
+| Lowest and highest bonus percentage | 8.33% and 20% | stated (roadmap) | [ ] |
+| Days worked in the year to be eligible for bonus | 30 | long-standing | [ ] |
+| Gratuity minimum years, ordinary staff | 5 completed years | stated | [ ] |
+| Gratuity minimum years, fixed-term | 1 completed year | stated (the roadmap says "under the new Labour Codes") | [ ] |
+| Gratuity days per year / divisor / limit | 15 / 26 / ₹20,00,000 | stated / long-standing (from Phase 2) | [ ] |
+| Loan recovery cap | 50% of net pay (a setting per business) | assumption | [ ] |
+
+Shipped **EMPTY on purpose** (a bonus run refuses to calculate until they are set; confirm the right figures for each year and enter them with a "last verified" note):
+
+- [ ] **Bonus eligibility wage ceiling** (a monthly figure).
+- [ ] **Bonus calculation ceiling** (a monthly figure).
+- [ ] **Minimum wage for bonus** (a monthly figure; optional when the calculation ceiling is set).
+
+### Bonus rules and assumptions
+
+- [ ] **One bonus run per financial year (April to March)**, from the Basic + DA of the **approved payroll runs** of that year. Months without an approved run are not counted (a warning names them).
+- [ ] **Wage definition** = Basic + DA only (categories basic and DA of the salary structure), **as earned** after loss of pay. Retaining allowance and other wage components are not included, unlike the PF wage. Confirm.
+- [ ] **Eligibility** is tested on the **full-month Basic + DA of the last month the employee was paid in the year** (not on every month, not on the highest month): eligible when it is **up to** the ceiling (equal is eligible). The Act speaks of salary or wage "per mensem"; this is our reading. Confirm.
+- [ ] **Days worked** is measured by **paid days** (including weekly offs, holidays and paid leave) summed over the year; fewer than the minimum (30) makes the employee not eligible. Confirm paid days are an acceptable proxy for "days worked".
+- [ ] **Calculation wage** each month = the **lower** of the Basic + DA earned and the **cap**, where the cap is the **higher of the calculation ceiling and the minimum wage**, reduced for a part month (cap x paid days / days in month, rounded half up). The brief for this feature described it as "the higher of the ceiling-limited wage and the minimum wage"; we implemented the Act's reading (the cap is the higher of the two) so that a wage below the minimum wage is **not** raised to it. Confirm which is right.
+- [ ] **Bonus** = the total of the monthly calculation wages x the chosen percentage, rounded half up **once per employee** to the paisa.
+- [ ] **Percentage** chosen per run between the lowest and highest. No allocable-surplus test.
+- [ ] **Not built, on purpose:** set-on and set-off of allocable surplus (sections 15 and 16), the minimum-bonus-versus-surplus logic, and bonus-related PF. Confirm none is needed for your clients.
+- [ ] **Manual "not eligible" flag** with a reason (for example dismissal for misconduct); nothing decides misconduct automatically.
+- [ ] An employee whose bonus for the year is paid in an **approved full and final settlement** is left out of that year's bonus run, and the settlement refuses a bonus a run already pays.
+- [ ] **Books:** Dr 5202 Salary - Bonus & Incentives / Cr 2440 Bonus Payable on the **last day of the financial year** (today if it has not ended); payment is Dr 2440 / Cr bank or cash.
+
+### Gratuity
+
+- [ ] **Formula:** last drawn **Basic + DA** (the monthly figures of the salary structure in force on the date, not an average) x 15 / 26 x years; rounded half up to the paisa once.
+- [ ] **Years:** completed years (service measured from the joining date to the end date, **counting the end date**), plus one when the part year is **more than six months** (exactly six months does not round up). The **minimum is tested on completed years**, not on the rounded-up figure.
+- [ ] **Fixed-term:** the employment type **Contract** is treated as fixed-term (1 year). The app has no separate fixed-term flag. Confirm, and confirm the 1-year rule under the Labour Codes for your contracts.
+- [ ] **Death and disablement:** the exit reasons "Death" and "Disablement" remove the minimum service entirely. The amount is still the formula (a person with less than six months of service therefore gets nothing). Confirm.
+- [ ] **Limit** from Statutory settings (₹20,00,000 shipped); 0 means no limit.
+- [ ] **Tax on gratuity is not calculated**, in the estimate or in a settlement.
+- [ ] **Provision (optional):** the liability is the sum of what is **payable today** to employees who have met the minimum service. The provision posts only when someone presses the button, books the difference from the balance of 2441 Gratuity Provision (Dr 5205 Salary - Gratuity / Cr 2441), and a settlement draws gratuity from the provision first. This is a simple "payable if everyone eligible left today" policy, **not an actuarial valuation**. Confirm the accounting policy.
+
+### Full and final settlement
+
+- [ ] **Order:** amounts due (leave encashment, gratuity, bonus due, arrears and other earnings) less notice-period recovery, a manual TDS amount and other recoveries, then **loan principal last**, from what is left, never below zero (the rest stays outstanding on the loan).
+- [ ] **The last month's salary is paid by the exit month's payroll run, not in the settlement**, so PF, ESI, professional tax, TDS, the payslip and the statutory files stay complete. The settlement cannot be submitted until that run is approved. Confirm this is acceptable (the alternative, computing it inside the settlement, would have left those filings short).
+- [ ] **Leave encashment:** every **encashable** leave type; days = the balance in the leave year of the last working day, **limited by the type's carry-forward maximum** when it carries forward with a limit; rate = **Basic + DA / 26** (default), Basic + DA / 30 or gross / 30 (a choice per settlement); amount = days x rate, rounded half up once. Confirm the divisor and the cap.
+- [ ] **Notice-period recovery:** shortfall days x **gross monthly salary / 30** (half days allowed), rounded half up. Confirm.
+- [ ] **Bonus due** is only a suggestion at the **lowest** percentage on the wages of the financial year of the exit (to the exit month).
+- [ ] **TDS on the settlement is NOT computed** beyond a manual amount line and a warning. Leave encashment and gratuity have their own exemption rules and the settlement is not part of the Phase 2 TDS projection.
+- [ ] **No reversal** of an approved settlement (none exists for payroll runs either): correct with a journal entry.
+- [ ] **Books:** Dr Salary - Allowances (leave encashment and other dues), Salary & Wages (arrears), Salary - Bonus & Incentives, Gratuity Provision / Salary - Gratuity; Cr 2442 Full and Final Settlements Payable (net), 1260 Loans and Advances (loan recovered), 2410 Payroll Deductions Payable (notice and other recoveries) and 2434 TDS on Salary Payable (the manual amount). Dated the last working day.
+
+### Loans and advances
+
+- [ ] **Interest** is simple reducing-balance, monthly: balance x yearly rate / 12, rounded half up to the paisa; **no day count**. Interest income is credited to 4110 as it is recovered. Confirm the tax treatment of interest on loans to employees, and any perquisite (interest-free or concessional loan) implications. **None is computed.**
+- [ ] **EMI** = the standard formula rounded half up to the paisa (double-precision arithmetic); with 0 percent, the amount divided by the instalments, rounded half up. The **last instalment** clears the exact balance (a few paise different). Given an EMI instead of a count, instalments continue until the balance is cleared (refused above 600 months or if the EMI does not cover the interest).
+- [ ] **Recovery in payroll:** at most the configured share of net pay **before loan recovery** (50% default); interest is taken before principal, oldest instalment first; the rest is carried forward as arrears. Confirm the legal limit on deductions from wages that applies to you.
+- [ ] **Part-payment** reschedules the balance at the same EMI (shorter loan); a **skipped** month charges no interest; unpaid interest on a replaced instalment is not carried.
+- [ ] **Full and final** recovers the **principal outstanding only** (no accrued interest).
+- [ ] **Books:** Dr 1260 Loans and Advances to Employees / Cr bank or cash at disbursement; instalments in payroll credit 1260 (principal) and 4110 (interest) instead of 2410.
+
+### Relieving letters and registers
+
+- [ ] The letter wording is the business's own text with placeholders; the shipped default is a plain certificate. **Not digitally signed.** Have a lawyer check the wording.
+- [ ] The employment, deductions and advances, overtime and settlement registers are **working copies**. State and Act formats differ; none is claimed to be a statutory form.
+
+### Sign-off for Phase 4
+
+- [ ] The bonus ceilings and the percentage for the current financial year have been entered with a "last verified" note.
+- [ ] A sample bonus run, gratuity amount, loan schedule and settlement were recomputed independently by the CA and matched.
