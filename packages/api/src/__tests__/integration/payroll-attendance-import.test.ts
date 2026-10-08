@@ -11,7 +11,7 @@ import { attendanceRecords, attendanceDeviceKeys, auditLog, businessMembers, emp
 import { createTenant, createUser, addMember, createBusiness, grantAddon, type TestUser, type TestTenant, type TestBusiness } from "../helpers/fixtures.js";
 import { createTestCaller } from "../helpers/create-test-caller.js";
 import { getTenantTestDb, truncateAllTables, closeTestDb } from "../helpers/test-db.js";
-import { registerAttendancePushRoute, resetAttendancePushLimits } from "../../http/attendancePush.js";
+import { attendancePushKeyLimiter, registerAttendancePushRoute, resetAttendancePushLimits } from "../../http/attendancePush.js";
 import { importLimiter } from "../../routers/payrollImport.js";
 import { invalidateEntitlements } from "../../lib/entitlements.js";
 import { punchClock } from "../../lib/payroll/punches.js";
@@ -261,9 +261,13 @@ describe("device push endpoint", () => {
 
   it("is rate limited per key", async () => {
     const body = { punches: [{ employeeCode: "E001", timestamp: "2026-11-04 09:00:00" }] };
-    let last = 200;
-    for (let i = 0; i < 61; i++) last = (await push(key, body)).status;
-    expect(last).toBe(429);
+    // 60 requests a minute per key: fill the window directly (sending them one by one could outlast the minute on a slow machine).
+    const [{ id }] = await ownerC.payrollPunch.deviceKeyList();
+    for (let i = 0; i < 60; i++) expect(attendancePushKeyLimiter.hit(id!)).toBe(true);
+    expect((await push(key, body)).status).toBe(429);
+    // A fresh window lets it through again.
+    resetAttendancePushLimits();
+    expect((await push(key, body)).status).toBe(200);
   });
 
   it("stops working when the key is revoked", async () => {

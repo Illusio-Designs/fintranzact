@@ -69,6 +69,10 @@ export const ROLE_ABILITIES: Record<string, Set<string>> = {
     "Ai:read",
     "Ai:create",
   ]),
+  // HR / Payroll manager: payroll day to day, nothing in the books (no posting, approving or deleting).
+  hr: new Set(["Payroll:read", "Payroll:create", "Payroll:update", "Business:read"]),
+  // Employee self-service: only the employee app (the app shows a separate shell for this role).
+  employee: new Set(["PayrollSelf:read", "PayrollSelf:create", "PayrollSelf:update"]),
   // Accountant access roles (docs/ACCOUNTANT-ACCESS.md): read everything, change nothing.
   auditor: new Set(ACCOUNTANT_READ),
   // Filing accountant: the same reads, plus preparing and filing GST returns.

@@ -9,12 +9,18 @@ import { RunsTab } from "./RunsTab";
 import { StatutoryTab } from "./StatutoryTab";
 import { DuesTab } from "./DuesTab";
 import { FilingsTab } from "./FilingsTab";
+import { AccessTab } from "./AccessTab";
+import { PunchesTab } from "./PunchesTab";
+import { ImportTab } from "./ImportTab";
 
 export const PAYROLL_TABS = [
   { value: "employees", label: "Employees" },
   { value: "salary", label: "Salary structures" },
   { value: "attendance", label: "Attendance" },
   { value: "leave", label: "Leave" },
+  { value: "punches", label: "Check-ins" },
+  { value: "import", label: "Device import" },
+  { value: "access", label: "Employee app" },
   { value: "runs", label: "Payroll runs" },
   { value: "statutory", label: "Statutory settings" },
   { value: "dues", label: "Statutory dues" },
@@ -25,7 +31,7 @@ export type PayrollTab = (typeof PAYROLL_TABS)[number]["value"];
 
 /**
  * The Payroll page: the add-on notice when the organisation does not have the
- * add-on, otherwise its eight sections. (The route file only wires the ?tab=
+ * add-on, otherwise its eleven sections. (The route file only wires the ?tab=
  * search parameter to this component.)
  */
 export function PayrollPage({ tab, onTabChange }: { tab: PayrollTab; onTabChange: (tab: PayrollTab) => void }) {
@@ -35,7 +41,7 @@ export function PayrollPage({ tab, onTabChange }: { tab: PayrollTab; onTabChange
 
   return (
     <div>
-      <PageHeader title="Payroll" description="Employees, attendance and leave, salary structures, monthly payroll runs and payslips, and statutory deductions, dues and filings." />
+      <PageHeader title="Payroll" description="Employees, attendance and leave, check-ins and device import, the employee app, salary structures, monthly payroll runs and payslips, and statutory deductions, dues and filings." />
       {access.loading ? (
         <p className="text-sm text-text-tertiary">Loading...</p>
       ) : !usable ? (
@@ -53,6 +59,9 @@ export function PayrollPage({ tab, onTabChange }: { tab: PayrollTab; onTabChange
           {tab === "salary" && <SalaryTab />}
           {tab === "attendance" && <AttendanceTab />}
           {tab === "leave" && <LeaveTab />}
+          {tab === "punches" && <PunchesTab />}
+          {tab === "import" && <ImportTab />}
+          {tab === "access" && <AccessTab />}
           {tab === "runs" && <RunsTab />}
           {tab === "statutory" && <StatutoryTab />}
           {tab === "dues" && <DuesTab />}

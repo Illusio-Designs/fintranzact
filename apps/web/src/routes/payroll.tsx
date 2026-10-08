@@ -3,7 +3,7 @@ import { z } from "zod";
 import { PayrollPage, type PayrollTab } from "@/components/payroll/PayrollPage";
 
 export const Route = createFileRoute("/payroll")({
-  validateSearch: z.object({ tab: z.enum(["employees", "salary", "attendance", "leave", "runs", "statutory", "dues", "filings"]).optional().catch(undefined) }),
+  validateSearch: z.object({ tab: z.enum(["employees", "salary", "attendance", "leave", "punches", "import", "access", "runs", "statutory", "dues", "filings"]).optional().catch(undefined) }),
   component: PayrollRoute,
 });
 

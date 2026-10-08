@@ -28,6 +28,15 @@ export const CA_ACCESS_CHOICES: ReadonlyArray<{ role: CaRole; title: string; des
   { role: "ca_filing", title: "View and file returns", description: CA_ROLE_DESCRIPTIONS.ca_filing },
 ];
 
+/** What each staff role can do, shown beside the role picker when inviting a team member. */
+export const STAFF_ROLE_DESCRIPTIONS: Record<string, string> = {
+  admin: "Full access to everything, including billing, the team and settings.",
+  seller_manager: "Creates and edits sales documents, parties and items, manages sales targets and the online store.",
+  seller: "Creates sales documents and records payments. Sees only what selling needs.",
+  accountant: "Keeps the books: payments, expenses, bank, accounts and tax. Can prepare Payroll, but not approve a run.",
+  hr: "HR / Payroll manager: employees, attendance, leave, payroll runs (prepare and review), payslips and statutory files. Cannot approve a run, post to the books, or change business settings, billing or the team.",
+};
+
 export const CA_ACCESS_NOTE = "You can remove their access at any time. Their activity is logged.";
 
 export function isCaRole(role: string | null | undefined): role is CaRole {

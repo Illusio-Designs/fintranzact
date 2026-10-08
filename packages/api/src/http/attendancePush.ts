@@ -34,6 +34,9 @@ import { DEVICE_KEY_PREFIX, hashDeviceKey } from "../routers/payrollPunch.js";
 const perKey = createFixedWindowLimiter({ limit: 60, windowMs: 60_000 });
 const perIp = createFixedWindowLimiter({ limit: 120, windowMs: 60_000 });
 
+/** The per-key limiter, exported so a test can fill it without sending a minute's worth of requests. */
+export const attendancePushKeyLimiter = perKey;
+
 /** Tests clear the limiters. */
 export function resetAttendancePushLimits(): void {
   perKey.clear();

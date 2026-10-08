@@ -83,6 +83,7 @@ import { MaintenanceBanner } from "@/components/MaintenanceBanner";
 import { BillingBanner } from "@/components/BillingBanner";
 import { AskAiButton } from "@/components/ai/AskAiButton";
 import { AiAssistantPanel } from "@/components/ai/AiAssistantPanel";
+import { EmployeeApp } from "@/components/employee/EmployeeApp";
 import { TwoFactorBanner } from "@/components/TwoFactorBanner";
 import { useTwoFactorRequirement } from "@/hooks/useTwoFactorRequirement";
 import { useEntitlements } from "@/hooks/useEntitlements";
@@ -556,7 +557,30 @@ function NoOrgScreen() {
 
 // ── RootLayout ─────────────────────────────────────────────────
 
+/**
+ * How the session check retries: a failed check (network blip, cold start, 429/5xx) is not the same as
+ * being signed out, so retry a few times before giving up. Shared by both layouts below so they read one query.
+ */
+const SESSION_QUERY_OPTIONS = {
+  retry: (failureCount: number, error: unknown) => {
+    const code = (error as { data?: { code?: string } })?.data?.code;
+    return code !== "UNAUTHORIZED" && failureCount < 3;
+  },
+  retryDelay: (attempt: number) => Math.min(1000 * 2 ** attempt, 8000),
+};
+
+/**
+ * An employee login (Payroll self-service) gets its own small app and none of the accounting shell; every
+ * other member gets the full layout. The server refuses an employee every other call anyway
+ * (docs/architecture/payroll-self-service.md); this keeps the screens they cannot use out of sight.
+ */
 function RootLayout() {
+  const { data: me } = trpc.auth.me.useQuery(undefined, SESSION_QUERY_OPTIONS);
+  if (me?.user && me.tenantId && me.role === "employee") return <EmployeeApp tenantName={me.tenantName} />;
+  return <AppLayout />;
+}
+
+function AppLayout() {
   const utils = trpc.useUtils();
   const {
     data: session,
@@ -564,15 +588,7 @@ function RootLayout() {
     isFetching: sessionFetching,
     isError: sessionCheckFailed,
     refetch: refetchSession,
-  } = trpc.auth.me.useQuery(undefined, {
-    // A failed check (network blip, cold start, 429/5xx) is not the same as
-    // being signed out, so retry a few times before giving up.
-    retry: (failureCount, error) => {
-      const code = (error as { data?: { code?: string } })?.data?.code;
-      return code !== "UNAUTHORIZED" && failureCount < 3;
-    },
-    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
-  });
+  } = trpc.auth.me.useQuery(undefined, SESSION_QUERY_OPTIONS);
   // We could not find out whether the visitor is signed in. Never treat that
   // as "signed out" (that is what used to bounce people to /login at random).
   const sessionUnknown = !session && sessionCheckFailed;

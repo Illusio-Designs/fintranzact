@@ -27,6 +27,9 @@ vi.mock("../RunsTab", () => ({ RunsTab: () => <div data-testid="tab-runs" /> }))
 vi.mock("../StatutoryTab", () => ({ StatutoryTab: () => <div data-testid="tab-statutory" /> }));
 vi.mock("../DuesTab", () => ({ DuesTab: () => <div data-testid="tab-dues" /> }));
 vi.mock("../FilingsTab", () => ({ FilingsTab: () => <div data-testid="tab-filings" /> }));
+vi.mock("../AccessTab", () => ({ AccessTab: () => <div data-testid="tab-access" /> }));
+vi.mock("../PunchesTab", () => ({ PunchesTab: () => <div data-testid="tab-punches" /> }));
+vi.mock("../ImportTab", () => ({ ImportTab: () => <div data-testid="tab-import" /> }));
 
 import { PayrollPage } from "../PayrollPage";
 
@@ -69,12 +72,12 @@ describe("PayrollPage", () => {
     expect(screen.getByTestId("payroll-addon-notice")).toHaveTextContent("Ask an owner");
   });
 
-  it("with the add-on shows the eight sections and the chosen tab", () => {
+  it("with the add-on shows the eleven sections and the chosen tab", () => {
     statusData.current = status({ addons: { ai_assistant: false, ai_plus: false, payroll: true, store_pro: false } });
     const onTabChange = vi.fn();
     render(<PayrollPage tab="salary" onTabChange={onTabChange} />);
     const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
-    expect(tabs).toEqual(["Employees", "Salary structures", "Attendance", "Leave", "Payroll runs", "Statutory settings", "Statutory dues", "Filings and registers"]);
+    expect(tabs).toEqual(["Employees", "Salary structures", "Attendance", "Leave", "Check-ins", "Device import", "Employee app", "Payroll runs", "Statutory settings", "Statutory dues", "Filings and registers"]);
     expect(screen.getByTestId("tab-salary")).toBeInTheDocument();
     expect(screen.queryByTestId("payroll-addon-notice")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Payroll runs" }));
@@ -89,6 +92,16 @@ describe("PayrollPage", () => {
     expect(screen.getByTestId("tab-dues")).toBeInTheDocument();
     rerender(<PayrollPage tab="filings" onTabChange={() => {}} />);
     expect(screen.getByTestId("tab-filings")).toBeInTheDocument();
+  });
+
+  it("the Phase 3 sections open from their tabs", () => {
+    statusData.current = status({ addons: { ai_assistant: false, ai_plus: false, payroll: true, store_pro: false } });
+    const { rerender } = render(<PayrollPage tab="punches" onTabChange={() => {}} />);
+    expect(screen.getByTestId("tab-punches")).toBeInTheDocument();
+    rerender(<PayrollPage tab="import" onTabChange={() => {}} />);
+    expect(screen.getByTestId("tab-import")).toBeInTheDocument();
+    rerender(<PayrollPage tab="access" onTabChange={() => {}} />);
+    expect(screen.getByTestId("tab-access")).toBeInTheDocument();
   });
 
   it("a trial organisation (add-on on) can use it", () => {
