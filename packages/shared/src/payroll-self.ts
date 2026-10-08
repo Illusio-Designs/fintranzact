@@ -52,8 +52,39 @@ export const EMPLOYEE_ALLOWED_PROCEDURES: readonly string[] = [
   "tenant.current",
 ];
 
+/**
+ * Account-level procedures (about the signed-in PERSON, not an organisation's books) that an employee
+ * session may also call: signing in and out, their sessions and two-factor, switching or leaving
+ * organisations and answering invitations, the public plan and maintenance lookups. Anything else that
+ * is not in the self-service list above is refused for the employee role.
+ */
+export const EMPLOYEE_ACCOUNT_PROCEDURES: readonly string[] = [
+  "tenant.list",
+  "tenant.select",
+  "tenant.leave",
+  "tenant.create",
+  "tenant.canCreateOrg",
+  "tenant.myInvitations",
+  "tenant.acceptById",
+  "tenant.acceptInvitation",
+  "tenant.peekInvitation",
+  "tenant.setPinned",
+  "tenant.listClients",
+  "billing.config",
+  "plan.list",
+  "system.maintenanceStatus",
+  "partner.directory",
+  "partner.me",
+  "platform.me",
+];
+const EMPLOYEE_ACCOUNT_PREFIXES: readonly string[] = ["auth."];
+
 export function employeeMayCall(path: string): boolean {
-  return EMPLOYEE_ALLOWED_PROCEDURES.includes(path);
+  return (
+    EMPLOYEE_ALLOWED_PROCEDURES.includes(path) ||
+    EMPLOYEE_ACCOUNT_PROCEDURES.includes(path) ||
+    EMPLOYEE_ACCOUNT_PREFIXES.some((p) => path.startsWith(p))
+  );
 }
 
 /** The employee logins HR can invite; they never count towards the plan's team-member limit. */
