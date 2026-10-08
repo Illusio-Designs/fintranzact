@@ -59,8 +59,8 @@ describe("starting roadmap", () => {
     expect(new Set(list.data.map((i) => i.title))).toEqual(new Set(ROADMAP_SEED.map((s) => s.title)));
     // Items built since the roadmap was written arrive already moved.
     expect(list.counts.done).toBe(3); // + old docs domains redirect (2026-10-03-old-docs-redirect)
-    expect(list.counts.in_progress).toBe(23); // + AI assistant Phase 2 (2026-10-11-ai-phase-2), AI assistant Phase 1 (2026-10-09-ai-phase-1), Payroll Phase 2 (2026-10-08-payroll-phase-2), Payroll Phase 1 (2026-10-07-payroll-phase-1), delivery charges (2026-10-06-store-delivery), online payments at store checkout (2026-10-06-store-payments), mobile batch fields (2026-10-05-mobile-batch), plans P1 and pricing P5 (2026-10-03-plans-p1-p5), two-factor authentication (2026-10-02-2fa), CA access (2026-10-02-ca-access), HSN / SAC through Sandbox (2026-10-03-hsn-sandbox), Full Access Trial (2026-10-03-p2-trial)
-    expect(list.counts.planned).toBe(ROADMAP_SEED.length - 26);
+    expect(list.counts.in_progress).toBe(24); // + Payroll Phase 3 (2026-10-12-payroll-phase-3), AI assistant Phase 2 (2026-10-11-ai-phase-2), AI assistant Phase 1 (2026-10-09-ai-phase-1), Payroll Phase 2 (2026-10-08-payroll-phase-2), Payroll Phase 1 (2026-10-07-payroll-phase-1), delivery charges (2026-10-06-store-delivery), online payments at store checkout (2026-10-06-store-payments), mobile batch fields (2026-10-05-mobile-batch), plans P1 and pricing P5 (2026-10-03-plans-p1-p5), two-factor authentication (2026-10-02-2fa), CA access (2026-10-02-ca-access), HSN / SAC through Sandbox (2026-10-03-hsn-sandbox), Full Access Trial (2026-10-03-p2-trial)
+    expect(list.counts.planned).toBe(ROADMAP_SEED.length - 27);
     expect(list.stageCounts).toEqual({ before_launch: 18, after_launch: 52 });
     expect(list.categories).toEqual(expect.arrayContaining(["Payroll", "Inventory", "GST", "Mobile", "Platform", "Accounting", "Banking"]));
     for (const item of list.data) {

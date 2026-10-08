@@ -15,7 +15,10 @@
  *  - Inputs are validated (zod) and bounded; results are projections: only the
  *    fields the answer needs, long strings truncated, rows capped, and no
  *    secret fields (no PAN, Aadhaar, bank account numbers, credentials).
- *    Payroll is not exposed in Phase 1.
+ *    Payroll is not exposed in Phase 1. Payroll Phase 3 data (attendance selfies,
+ *    check-in locations, punches, device keys, employee logins) is never exposed
+ *    to any tool or prompt either (docs/architecture/payroll-self-service.md), and an
+ *    employee login cannot reach the assistant at all.
  *  - Everything a tool returns is DATA from the books. Names, notes and
  *    descriptions are user-typed and untrusted; the system prompt says so and
  *    the tool results are only ever passed back as tool_result content.
