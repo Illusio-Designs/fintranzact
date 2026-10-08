@@ -12,6 +12,10 @@ import { FilingsTab } from "./FilingsTab";
 import { AccessTab } from "./AccessTab";
 import { PunchesTab } from "./PunchesTab";
 import { ImportTab } from "./ImportTab";
+import { BonusTab } from "./BonusTab";
+import { GratuityTab } from "./GratuityTab";
+import { LoansTab } from "./LoansTab";
+import { FnfTab } from "./FnfTab";
 
 export const PAYROLL_TABS = [
   { value: "employees", label: "Employees" },
@@ -22,6 +26,10 @@ export const PAYROLL_TABS = [
   { value: "import", label: "Device import" },
   { value: "access", label: "Employee app" },
   { value: "runs", label: "Payroll runs" },
+  { value: "bonus", label: "Bonus" },
+  { value: "gratuity", label: "Gratuity" },
+  { value: "loans", label: "Loans and advances" },
+  { value: "fnf", label: "Full and final" },
   { value: "statutory", label: "Statutory settings" },
   { value: "dues", label: "Statutory dues" },
   { value: "filings", label: "Filings and registers" },
@@ -31,7 +39,7 @@ export type PayrollTab = (typeof PAYROLL_TABS)[number]["value"];
 
 /**
  * The Payroll page: the add-on notice when the organisation does not have the
- * add-on, otherwise its eleven sections. (The route file only wires the ?tab=
+ * add-on, otherwise its fifteen sections. (The route file only wires the ?tab=
  * search parameter to this component.)
  */
 export function PayrollPage({ tab, onTabChange }: { tab: PayrollTab; onTabChange: (tab: PayrollTab) => void }) {
@@ -41,7 +49,7 @@ export function PayrollPage({ tab, onTabChange }: { tab: PayrollTab; onTabChange
 
   return (
     <div>
-      <PageHeader title="Payroll" description="Employees, attendance and leave, check-ins and device import, the employee app, salary structures, monthly payroll runs and payslips, and statutory deductions, dues and filings." />
+      <PageHeader title="Payroll" description="Employees, attendance and leave, check-ins and device import, the employee app, salary structures, monthly payroll runs and payslips, bonus, gratuity, loans and advances, full and final settlement, and statutory deductions, dues and filings." />
       {access.loading ? (
         <p className="text-sm text-text-tertiary">Loading...</p>
       ) : !usable ? (
@@ -63,6 +71,10 @@ export function PayrollPage({ tab, onTabChange }: { tab: PayrollTab; onTabChange
           {tab === "import" && <ImportTab />}
           {tab === "access" && <AccessTab />}
           {tab === "runs" && <RunsTab />}
+          {tab === "bonus" && <BonusTab />}
+          {tab === "gratuity" && <GratuityTab />}
+          {tab === "loans" && <LoansTab />}
+          {tab === "fnf" && <FnfTab />}
           {tab === "statutory" && <StatutoryTab />}
           {tab === "dues" && <DuesTab />}
           {tab === "filings" && <FilingsTab />}

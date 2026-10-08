@@ -169,7 +169,7 @@ describe("EmployeesTab", () => {
     render(<EmployeesTab />);
     fireEvent.click(screen.getAllByRole("button", { name: "Exit" })[0]!);
     const dialog = screen.getByRole("dialog");
-    expect(dialog.textContent).toContain("full and final settlement");
+    expect(dialog.textContent).toContain("Full and final tab");
     fireEvent.click(within(dialog).getByRole("button", { name: "Mark as left" }));
     expect(h.exit).toHaveBeenCalledTimes(1);
     expect(h.exit.mock.calls[0]![0]).toMatchObject({ id: "e1", reason: "resignation" });

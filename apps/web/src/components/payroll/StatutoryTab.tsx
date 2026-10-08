@@ -392,16 +392,23 @@ function RegistersSection({ rates, patch, disabled }: SectionProps) {
   const g = rates.gratuity;
   const b = rates.bonus;
   return (
-    <Section title="Bonus and gratuity registers">
-      <p className="text-xs text-text-tertiary">These only feed the computed registers on the Filings tab. Nothing is paid from them.</p>
+    <Section title="Bonus and gratuity">
+      <p className="text-xs text-text-tertiary">These feed the bonus and gratuity registers, the Bonus runs, the Gratuity estimate and the full and final settlement.</p>
       <div className="grid gap-3 sm:grid-cols-4">
         <NumField label="Gratuity days per year" value={g.daysPerYear} disabled={disabled} onChange={(n) => patch((r) => void (r.gratuity.daysPerYear = n ?? 0))} />
         <NumField label="Gratuity working-days divisor" value={g.workingDaysDivisor} disabled={disabled} onChange={(n) => patch((r) => void (r.gratuity.workingDaysDivisor = Math.max(1, n ?? 26)))} />
         <NumField label="Gratuity minimum years" value={g.minYears} disabled={disabled} onChange={(n) => patch((r) => void (r.gratuity.minYears = n ?? 0))} />
         <NumField label="Gratuity limit" suffix="₹ (0 = none)" value={g.capRupees} disabled={disabled} onChange={(n) => patch((r) => void (r.gratuity.capRupees = n ?? 0))} />
-        <NumField label="Bonus wage ceiling" suffix="₹ a month (0 = not set)" value={b.wageCeilingRupees} disabled={disabled} onChange={(n) => patch((r) => void (r.bonus.wageCeilingRupees = n ?? 0))} />
-        <NumField label="Bonus percentage" suffix="% (0 = not set)" value={b.percent} disabled={disabled} onChange={(n) => patch((r) => void (r.bonus.percent = n ?? 0))} />
+        <NumField label="Gratuity minimum years, fixed-term" value={g.fixedTermMinYears} disabled={disabled} onChange={(n) => patch((r) => void (r.gratuity.fixedTermMinYears = n ?? 0))} />
+        <NumField label="Bonus calculation ceiling" suffix="₹ a month (0 = not set)" value={b.wageCeilingRupees} disabled={disabled} onChange={(n) => patch((r) => void (r.bonus.wageCeilingRupees = n ?? 0))} />
+        <NumField label="Bonus eligibility ceiling" suffix="₹ a month (0 = not set)" value={b.eligibilityCeilingRupees} disabled={disabled} onChange={(n) => patch((r) => void (r.bonus.eligibilityCeilingRupees = n ?? 0))} />
+        <NumField label="Minimum wage for bonus" suffix="₹ a month (0 = not set)" value={b.minimumWageRupees} disabled={disabled} onChange={(n) => patch((r) => void (r.bonus.minimumWageRupees = n ?? 0))} />
+        <NumField label="Bonus percentage (register)" suffix="% (0 = not set)" value={b.percent} disabled={disabled} onChange={(n) => patch((r) => void (r.bonus.percent = n ?? 0))} />
+        <NumField label="Lowest bonus percentage" suffix="%" value={b.minPercent} disabled={disabled} onChange={(n) => patch((r) => void (r.bonus.minPercent = n ?? 0))} />
+        <NumField label="Highest bonus percentage" suffix="%" value={b.maxPercent} disabled={disabled} onChange={(n) => patch((r) => void (r.bonus.maxPercent = n ?? 0))} />
+        <NumField label="Days worked to be eligible for bonus" value={b.minWorkingDays} disabled={disabled} onChange={(n) => patch((r) => void (r.bonus.minWorkingDays = Math.round(n ?? 0)))} />
       </div>
+      <p className="text-xs text-text-tertiary">The bonus ceilings ship empty: a bonus run cannot be calculated until the eligibility ceiling and the calculation ceiling (or the minimum wage) are set. The bonus is calculated on the higher of the calculation ceiling and the minimum wage. Verify every figure with your CA.</p>
     </Section>
   );
 }
