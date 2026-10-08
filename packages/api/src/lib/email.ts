@@ -378,6 +378,21 @@ export function buildInvitationEmail(p: InvitationEmailParams): BuiltEmail {
     };
   }
   const who = p.inviterName ?? "Someone";
+  if (p.role === "employee") {
+    return {
+      subject: `${p.businessName} has invited you to the employee app on Fintranzact`,
+      text: [
+        `${who} invited you to the employee app of ${p.businessName} on Fintranzact.`,
+        "",
+        "You will be able to check in and out, see your attendance, apply for leave and download your payslips and Form 16. You will see only your own records.",
+        "",
+        `Accept the invitation: ${p.inviteUrl}`,
+        "",
+        "Sign in or create an account with this email address. This invitation expires in 7 days. If you weren't expecting it, you can safely ignore this email.",
+      ].join("\n"),
+      html: normalInvitationHtml(p.inviteUrl, p.businessName, p.inviterName),
+    };
+  }
   return {
     subject: `You've been invited to join ${p.businessName} on Fintranzact`,
     text: [

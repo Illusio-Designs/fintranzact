@@ -7,6 +7,8 @@ export const roleLabels: Record<string, string> = {
   member: "Member",
   seller: "Seller",
   accountant: "Accountant (bookkeeping)",
+  hr: "HR / Payroll manager",
+  employee: "Employee (self-service)",
   auditor: "Accountant (read-only)",
   ca_filing: "Accountant (filing)",
 };

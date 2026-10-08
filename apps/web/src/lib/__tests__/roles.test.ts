@@ -20,7 +20,7 @@ describe("formatRole", () => {
   });
 
   it("roleLabels covers every role used in the CASL permissions system", () => {
-    const expectedRoles = ["owner", "superadmin", "admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing", "member"];
+    const expectedRoles = ["owner", "superadmin", "admin", "seller_manager", "seller", "accountant", "hr", "employee", "auditor", "ca_filing", "member"];
     for (const role of expectedRoles) {
       expect(roleLabels[role]).toBeDefined();
     }

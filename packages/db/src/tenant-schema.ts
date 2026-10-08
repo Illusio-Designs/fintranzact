@@ -12,6 +12,7 @@ import {
   jsonb,
   customType,
   date,
+  doublePrecision,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
@@ -3040,6 +3041,181 @@ export const payslips = pgTable("payslips", {
 }, (t) => [
   uniqueIndex("payslips_run_employee_idx").on(t.runId, t.employeeId),
   index("payslips_business_idx").on(t.businessId),
+]);
+
+// ── Payroll Phase 3: self-service, mobile punches, biometric import ─
+// docs/architecture/payroll-self-service.md.
+//
+// employee_logins   links ONE employee to ONE login user (control DB user id, a plain
+//                   uuid) in a business. Created when an invitation is accepted and
+//                   deleted when HR removes the link or the employee leaves. The role
+//                   "employee" on the organisation membership plus this row is what lets
+//                   a person use payrollSelf; the employee is always resolved from here,
+//                   never from client input.
+// attendance_settings  one row per business: geofence policy, selfie rules, rollup rules.
+// work_locations / employee_work_locations  allowed places and who may punch where
+//                   (an employee with no assignment may punch at any active location).
+// employee_punches  every check-in/out. punched_at is the authoritative instant (the
+//                   server's clock for the mobile app, the device's recorded time for an
+//                   import); client_time is the phone's clock, for reference only.
+//                   work_date is the IST day the punch belongs to. Location and selfie are
+//                   sensitive: never logged, never sent to the AI assistant.
+//   source          - mobile | biometric | manual
+//   geofence_result - inside | outside | no_location | low_accuracy | not_checked
+//   review_status   - null (nothing to review) | pending | approved | rejected
+// employee_punch_selfies  the photo (bytea, private, deleted after the retention period).
+// attendance_consents  an employee's agreement to the attendance-data wording, by version.
+// attendance_device_keys  per-business secrets for biometric middleware pushing punches.
+// attendance_import_batches  one row per file import or device push (history, undo).
+// form16_releases   HR releases a financial year's Form 16 working copy to employees.
+
+export const employeeLogins = pgTable("employee_logins", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull(),
+  createdByUserId: uuid("created_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("employee_logins_employee_idx").on(t.employeeId),
+  uniqueIndex("employee_logins_user_idx").on(t.businessId, t.userId),
+]);
+
+export const attendanceSettings = pgTable("attendance_settings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  punchEnabled: boolean("punch_enabled").default(true).notNull(),
+  geofencePolicy: text("geofence_policy").default("record").notNull(),
+  accuracyThresholdM: integer("accuracy_threshold_m").default(100).notNull(),
+  selfieRequired: boolean("selfie_required").default(true).notNull(),
+  selfieRetentionDays: integer("selfie_retention_days").default(90).notNull(),
+  lateGraceMinutes: integer("late_grace_minutes").default(15).notNull(),
+  fullDayMinHours: numeric("full_day_min_hours", { precision: 4, scale: 2 }),
+  halfDayMinHours: numeric("half_day_min_hours", { precision: 4, scale: 2 }),
+  overtimeFromPunches: boolean("overtime_from_punches").default(false).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("attendance_settings_business_idx").on(t.businessId),
+]);
+
+export const workLocations = pgTable("work_locations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  lat: doublePrecision("lat").notNull(),
+  lng: doublePrecision("lng").notNull(),
+  radiusM: integer("radius_m").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("work_locations_business_idx").on(t.businessId),
+]);
+
+export const employeeWorkLocations = pgTable("employee_work_locations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  locationId: uuid("location_id").notNull().references(() => workLocations.id, { onDelete: "cascade" }),
+}, (t) => [
+  uniqueIndex("employee_work_locations_idx").on(t.employeeId, t.locationId),
+  index("employee_work_locations_business_idx").on(t.businessId),
+]);
+
+export const attendanceImportBatches = pgTable("attendance_import_batches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  source: text("source").notNull(),
+  fileName: text("file_name"),
+  deviceKeyId: uuid("device_key_id"),
+  status: text("status").default("applied").notNull(),
+  totals: jsonb("totals").$type<Record<string, number>>().notNull(),
+  fromDate: date("from_date"),
+  toDate: date("to_date"),
+  createdByUserId: uuid("created_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  undoneAt: timestamp("undone_at", { withTimezone: true }),
+  undoneByUserId: uuid("undone_by_user_id"),
+}, (t) => [
+  index("attendance_import_batches_business_idx").on(t.businessId, t.createdAt),
+]);
+
+export const employeePunches = pgTable("employee_punches", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  punchedAt: timestamp("punched_at", { withTimezone: true }).notNull(),
+  clientTime: timestamp("client_time", { withTimezone: true }),
+  workDate: date("work_date").notNull(),
+  source: text("source").notNull(),
+  deviceId: text("device_id").default("").notNull(),
+  lat: doublePrecision("lat"),
+  lng: doublePrecision("lng"),
+  accuracyM: doublePrecision("accuracy_m"),
+  distanceM: integer("distance_m"),
+  locationId: uuid("location_id"),
+  geofenceResult: text("geofence_result").default("not_checked").notNull(),
+  flags: jsonb("flags").$type<string[]>().default([]).notNull(),
+  reviewStatus: text("review_status"),
+  reviewedByUserId: uuid("reviewed_by_user_id"),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  reviewNote: text("review_note"),
+  importBatchId: uuid("import_batch_id").references(() => attendanceImportBatches.id, { onDelete: "set null" }),
+  createdByUserId: uuid("created_by_user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("employee_punches_dedupe_idx").on(t.employeeId, t.punchedAt, t.source, t.deviceId),
+  index("employee_punches_employee_time_idx").on(t.employeeId, t.punchedAt),
+  index("employee_punches_business_date_idx").on(t.businessId, t.workDate),
+  index("employee_punches_review_idx").on(t.businessId, t.reviewStatus),
+]);
+
+export const employeePunchSelfies = pgTable("employee_punch_selfies", {
+  punchId: uuid("punch_id").primaryKey().references(() => employeePunches.id, { onDelete: "cascade" }),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  mimeType: text("mime_type").notNull(),
+  bytes: integer("bytes").notNull(),
+  data: bytea("data").notNull(),
+  capturedAt: timestamp("captured_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  index("employee_punch_selfies_captured_idx").on(t.businessId, t.capturedAt),
+]);
+
+export const attendanceConsents = pgTable("attendance_consents", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  employeeId: uuid("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull(),
+  version: text("version").notNull(),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("attendance_consents_idx").on(t.employeeId, t.version),
+]);
+
+export const attendanceDeviceKeys = pgTable("attendance_device_keys", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  // SHA-256 of the key; the key itself is shown once, when it is made.
+  keyHash: text("key_hash").notNull(),
+  keyPrefix: text("key_prefix").notNull(),
+  createdByUserId: uuid("created_by_user_id"),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("attendance_device_keys_hash_idx").on(t.keyHash),
+  index("attendance_device_keys_business_idx").on(t.businessId),
+]);
+
+export const form16Releases = pgTable("form16_releases", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  financialYear: integer("financial_year").notNull(),
+  releasedByUserId: uuid("released_by_user_id"),
+  releasedAt: timestamp("released_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("form16_releases_idx").on(t.businessId, t.financialYear),
 ]);
 
 // ── AI business assistant: conversation history ────────────────────

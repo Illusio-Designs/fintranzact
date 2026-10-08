@@ -52,6 +52,8 @@ const ROLE_LABELS: Record<string, string> = {
   seller_manager: "Sales Manager",
   seller: "Seller",
   accountant: "Accountant (bookkeeping)",
+  hr: "HR / Payroll manager",
+  employee: "Employee",
   auditor: "Accountant (read-only)",
   ca_filing: "Accountant (filing)",
   member: "Member",

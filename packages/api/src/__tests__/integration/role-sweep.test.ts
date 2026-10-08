@@ -140,6 +140,17 @@ const NON_CASL_GATES: Record<string, { allow: Column[]; why: string }> = {
   // create:PeriodLock OR create:GstReport (canMarkGstFiled), so the filing accountant may mark a return filed.
   "period.lockGstMonth": { allow: ["owner", "admin", "accountant", "ca_filing"], why: "PeriodLock or GstReport create" },
 };
+// Payroll Phase 3: employee self-service. None of the sweep roles is an employee login, and owners and admins are
+// refused too (the employee is resolved from the signed-in employee login, which they do not have). The employee
+// and HR roles are swept in integration/payroll-self-service.test.ts. `workplaces` is a tenant-level lookup of the
+// caller's own employee links, empty for everyone else.
+for (const p of listProcedures()) {
+  if (p.router === "payrollSelf" && p.name !== "workplaces") NON_CASL_GATES[p.path] = { allow: [], why: "employee logins only (resolved from the membership)" };
+}
+// Attendance punches carry location and selfies: HR, owners and admins only (not the bookkeeping accountant).
+for (const name of ["punches", "review", "selfie"]) {
+  NON_CASL_GATES[`payrollPunch.${name}`] = { allow: ADMINS, why: "HR, owner and admin only (location and selfies)" };
+}
 // Platform console: only platform admins (env-configured), never org roles.
 for (const p of listProcedures()) {
   if (p.router === "platform" && p.name !== "me") NON_CASL_GATES[p.path] = { allow: [], why: "platform admins only" };

@@ -431,3 +431,44 @@ Then update the roadmap card for the AI item in the admin console.
 
 To pull it back, set them to `false` again: new purchases stop, organisations that
 already have the add-on keep it, and renewals, webhooks and cancellation keep working.
+
+## 17. Payroll Phase 3: employee check-in, camera and location (before you release Payroll)
+
+Payroll Phase 3 is built and gated; `ADDON_FEATURES.payroll.implemented` is still
+false, so none of it is on sale. Design: `docs/architecture/payroll-self-service.md`.
+What needs a person, not code:
+
+1. **Mobile build and device test.** The employee screens need a new mobile build
+   (new native modules: `expo-camera`, `expo-location`, `expo-image-manipulator`).
+   Test on a real Android phone and a real iPhone: invite an employee, accept the
+   link, accept the consent, check in with a selfie inside and outside a work
+   location (try the Record, Warn and Block rules), deny the camera and location and
+   see the messages, check out, open a payslip and a released Form 16, apply for and
+   cancel leave. No camera, GPS or biometric hardware was available when this was
+   built, so none of this has been run on a device.
+2. **Store review for camera and location.** Apple and Google ask why the app uses
+   the camera and location. The wording is in `apps/mobile/app.json` (plugins
+   `expo-camera` and `expo-location`): camera for the attendance selfie, location
+   once at check-in, **foreground only, never in the background**. Fill in the
+   privacy "nutrition label" (Apple) and the Data safety form (Google): photos and
+   precise location, collected for attendance, linked to the user, not used for
+   tracking or advertising. Read the wording and change it if it is not how you
+   describe the app.
+3. **Privacy policy wording.** The help page "Attendance photos and location:
+   privacy" states what is collected, who sees it, 90-day selfie retention by
+   default and that nothing goes to the AI assistant. The privacy policy page
+   (`apps/web/src/routes/privacy.tsx`) has **not** been changed. Have the policy
+   reviewed and add a sentence such as: "If your employer uses FinTranzact
+   attendance, we process the selfie, one location reading and the time of each
+   check-in on your employer's behalf, show them only to your employer's
+   authorised staff, and delete selfies after the retention period your employer
+   sets." This needs your confirmation before it is published.
+4. **CA or legal review of attendance-photo consent.** The consent text
+   (`ATTENDANCE_CONSENT_VERSION` in `packages/shared/src/payroll-self.ts`) is a
+   plain-language notice, not legal advice. Have a CA or lawyer check it against
+   employment and data-protection requirements for photographing and locating
+   employees. If the wording changes, change the version so everyone is asked again.
+5. **Biometric devices.** Only file import and the push endpoint are built. Try one
+   real device export (and, if the vendor supports it, a push to
+   `POST /api/attendance/push` with a device key) and tell us if the column layout
+   is not recognised.

@@ -28,6 +28,7 @@ import { escapeLike } from "../lib/escape-like.js";
 import { getEntitlements } from "../lib/entitlements.js";
 import { assertPayroll, badRequest, canSeeSensitive, countOrganisationActiveEmployees, enforceEmployeeCap, isUniqueViolation, notFound } from "../lib/payroll/access.js";
 import { blankToNull, changedFieldNames, employeeDetail, employeeListItem } from "../lib/payroll/data.js";
+import { revokeEmployeeAccess } from "../lib/payroll/employee-access.js";
 
 const idInput = z.object({ id: z.string().uuid() });
 
@@ -157,6 +158,17 @@ export const payrollEmployeeRouter = router({
         })
         .where(eq(employees.id, existing.id))
         .returning();
+      // A person who has left no longer signs in to the employee app (payslips and Form 16 reach them from HR).
+      await revokeEmployeeAccess({
+        tenantId: ctx.tenantId,
+        db: ctx.db,
+        businessId: ctx.businessId,
+        employeeId: existing.id,
+        actor: { id: ctx.user.id },
+        reason: "exited",
+        ip: ctx.ipAddress,
+        userAgent: ctx.req.headers.get("user-agent"),
+      });
       return employeeDetail(row!, { full: canSeeSensitive(ctx.ability) });
     }, (r) => ({ action: "payroll.employee.exit", entityType: "employee", entityId: r.id, metadata: { employeeCode: r.employeeCode, reason: r.exitReason, lastWorkingDay: r.lastWorkingDay } })),
   ),

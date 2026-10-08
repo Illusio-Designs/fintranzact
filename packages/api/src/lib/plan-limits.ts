@@ -11,7 +11,7 @@ import { eq, and, gt, gte, isNull, count, sql, inArray, notInArray } from "drizz
 import { controlDb, tenantMembers, invitations } from "@fintranzact/db";
 import type { TenantDatabase } from "../trpc.js";
 import { businesses, recurringInvoiceRuns } from "@fintranzact/db";
-import { CA_ROLES, type PlanLimits } from "@fintranzact/shared";
+import { CA_ROLES, SEATLESS_ROLES, type PlanLimits } from "@fintranzact/shared";
 import { getPlanLimits } from "./plan-catalog.js";
 import { getEntitlements, assertWritable } from "./entitlements.js";
 import { limitError } from "./entitlement-error.js";
@@ -157,11 +157,11 @@ export async function enforceTeamMemberLimit(tenantId: string): Promise<void> {
 
   const [[members], [pending]] = await Promise.all([
     controlDb.select({ count: count() }).from(tenantMembers)
-      .where(and(eq(tenantMembers.tenantId, tenantId), notInArray(tenantMembers.role, [...CA_ROLES]))),
+      .where(and(eq(tenantMembers.tenantId, tenantId), notInArray(tenantMembers.role, [...SEATLESS_ROLES]))),
     controlDb.select({ count: count() }).from(invitations)
       .where(and(
         eq(invitations.tenantId, tenantId),
-        notInArray(invitations.role, [...CA_ROLES]),
+        notInArray(invitations.role, [...SEATLESS_ROLES]),
         gt(invitations.expiresAt, new Date()),
         isNull(invitations.acceptedAt),
       )),

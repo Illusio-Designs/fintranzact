@@ -22,7 +22,7 @@
 
 import { randomUUID } from "node:crypto";
 import { and, eq, ne } from "drizzle-orm";
-import { businessMembers } from "@fintranzact/db";
+import { attendanceImportBatches, businessMembers, employeePunchSelfies, employeePunches } from "@fintranzact/db";
 import { defaultStatutoryRates } from "@fintranzact/shared";
 import { createUser, createTenant, addMember, createSession, grantAddon, type TestUser, type TestTenant } from "./fixtures.js";
 import { createTestCaller } from "./create-test-caller.js";
@@ -241,6 +241,21 @@ export const INPUT_OVERRIDES: Record<string, (ids: Record<string, string>) => un
   "payrollStatutory.saveRates": () => ({ financialYear: 2026, rates: defaultStatutoryRates() }),
   "payrollStatutory.recordPayment": () => ({ kind: "pf", paidOn: new Date().toISOString().slice(0, 10), amount: 1 }),
   "payrollStatutory.register": () => ({ register: "wages", month: new Date().toISOString().slice(0, 7) }),
+  // Payroll Phase 3. Refined strings, enums with ranges and the nested import mapping are beyond the generator.
+  "payrollSelf.punch": () => ({ kind: "in", clientTime: Date.now(), deviceId: "sweep-device", consentVersion: "sweep" }),
+  "payrollSelf.attendance": () => ({ month: new Date().toISOString().slice(0, 7) }),
+  "payrollSelf.leaveApply": (ids) => ({ leaveTypeId: ids.leaveType, fromDate: "2030-06-03", toDate: "2030-06-03" }),
+  "payrollSelf.form16Pdf": () => ({ financialYear: 2026 }),
+  "payrollAccess.invite": () => ({ email: `employee.${randomUUID().slice(0, 8)}@sweep.in` }),
+  "payrollAccess.form16Release": () => ({ financialYear: 2026 }),
+  "payrollAccess.form16Unrelease": () => ({ financialYear: 2026 }),
+  "payrollPunch.updateSettings": () => ({ punchEnabled: true, geofencePolicy: "record", accuracyThresholdM: 100, selfieRequired: true, selfieRetentionDays: 90, lateGraceMinutes: 15, fullDayMinHours: null, halfDayMinHours: null, overtimeFromPunches: false }),
+  "payrollPunch.locationCreate": () => ({ name: `Site ${randomUUID().slice(0, 6)}`, lat: 19.076, lng: 72.8777, radiusM: 150 }),
+  "payrollPunch.locationUpdate": () => ({ radiusM: 200 }),
+  "payrollPunch.locationAssign": (ids) => ({ locationIds: [ids.workLocation] }),
+  "payrollPunch.review": () => ({ decision: "approve" }),
+  "payrollImport.preview": () => ({ rows: [["E-NONE", "2026-10-05 09:00:00"]], mapping: { employeeCode: 0, timestamp: 1, hasHeader: false, dateOrder: "dmy" } }),
+  "payrollImport.commit": () => ({ rows: [["E-NONE", "2026-10-05 09:00:00"]], mapping: { employeeCode: 0, timestamp: 1, hasHeader: false, dateOrder: "dmy" } }),
   "payrollEmployee.exit": () => ({ lastWorkingDay: new Date().toISOString().slice(0, 10) }),
   "auth.register": () => ({
     username: "sweeper",
@@ -278,6 +293,7 @@ let accountSeq = 0;
 let leaveSeq = 0;
 let holidaySeq = 0;
 let runSeq = 0;
+let punchSeq = 0;
 const accountCode = (prefix: "8" | "9") => `${prefix}${String(++accountSeq).padStart(6, "0")}`;
 
 type Seeder = (b: SweepBusiness, c: Caller) => Promise<string | undefined>;
@@ -515,6 +531,23 @@ export const SEEDERS: Array<[string, Seeder]> = [
     return firstId(await c.payrollRun.create({ month } as never));
   }],
   ["payrollAdjustment", async (b, c) => firstId(await c.payrollRun.addAdjustment({ runId: b.ids.payrollRun!, employeeId: b.ids.employee!, name: `Advance ${b.tag}`, type: "deduction", amount: 10 } as never))],
+  ["workLocation", async (b, c) => firstId(await c.payrollPunch.locationCreate({ name: `Site ${b.tag} ${uniq()}`, lat: 19.076, lng: 72.8777, radiusM: 150 } as never))],
+  ["deviceKey", async (b, c) => firstId(await c.payrollPunch.deviceKeyCreate({ name: `Device ${b.tag} ${uniq()}` } as never))],
+  ["employeePunch", async (b) => {
+    // A flagged mobile punch with a selfie, inserted directly (the app's own path needs consent, a clock and a photo).
+    const db = getTenantTestDb();
+    const at = new Date(Date.now() - 3_600_000 - ++punchSeq * 61_000);
+    const [row] = await db.insert(employeePunches).values({
+      businessId: b.id, employeeId: b.ids.employee!, kind: "in", punchedAt: at, workDate: at.toISOString().slice(0, 10), source: "mobile",
+      deviceId: `dev-${uniq()}`, geofenceResult: "outside", flags: ["outside_geofence"], reviewStatus: "pending",
+    }).returning({ id: employeePunches.id });
+    await db.insert(employeePunchSelfies).values({ punchId: row!.id, businessId: b.id, mimeType: "image/png", bytes: 3, data: Buffer.from([1, 2, 3]) });
+    return row!.id;
+  }],
+  ["importBatch", async (b) => {
+    const [row] = await getTenantTestDb().insert(attendanceImportBatches).values({ businessId: b.id, source: "file", totals: { rows: 0 } }).returning({ id: attendanceImportBatches.id });
+    return row!.id;
+  }],
   ["premise2", gen("warehouse.premiseCreate", (b) => ({ name: `Site ${b.tag} ${uniq()}`, code: `P${uniq()}` }))],
 ];
 

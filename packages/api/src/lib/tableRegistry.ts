@@ -64,6 +64,13 @@ import {
   payrollRunLines,
   payrollRunAdjustments,
   payslips,
+  attendanceSettings,
+  workLocations,
+  employeeWorkLocations,
+  attendanceImportBatches,
+  employeePunches,
+  attendanceConsents,
+  form16Releases,
   payrollStatutorySettings,
   employeeTaxDeclarations,
   payrollStatutoryPayments,
@@ -708,4 +715,13 @@ export const TABLE_REGISTRY: TableRegistryEntry[] = [
   { tableName: "payroll_statutory_payments", drizzleTable: payrollStatutoryPayments, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
   { tableName: "payroll_run_adjustments", drizzleTable: payrollRunAdjustments, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
   { tableName: "payslips", drizzleTable: payslips, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  // 55+. Payroll Phase 3 (docs/architecture/payroll-self-service.md). Punch coordinates are redacted (an
+  // employee's whereabouts are not exported). Selfies, employee logins and device keys are NOT exported.
+  { tableName: "attendance_settings", drizzleTable: attendanceSettings, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "work_locations", drizzleTable: workLocations, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "employee_work_locations", drizzleTable: employeeWorkLocations, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "attendance_import_batches", drizzleTable: attendanceImportBatches, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "employee_punches", drizzleTable: employeePunches, redactedFields: ["lat", "lng"], importable: true, selfFkFields: [], chunkSize: 5000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "attendance_consents", drizzleTable: attendanceConsents, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "form16_releases", drizzleTable: form16Releases, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
 ];

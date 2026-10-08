@@ -120,6 +120,35 @@ exceptions:
       - payrollStatutory.saveRates
       - payrollStatutory.settings
       - payrollStatutory.updateBusinessSettings
+      # --- Payroll (add-on, Phase 3: HR side) ---
+      # Inviting employees, releasing Form 16, work locations and the check-in policy, reviewing flagged punches (with their
+      # selfies and locations), device keys and the biometric file import are HR desk work in the Payroll page on the web.
+      # The mobile app gets the EMPLOYEE side (payrollSelf: check in with a selfie and location, attendance, payslips, Form 16,
+      # leave), which is why the payrollSelf procedures are not listed here.
+      - payrollAccess.form16List
+      - payrollAccess.form16Release
+      - payrollAccess.form16Unrelease
+      - payrollAccess.invite
+      - payrollAccess.loginList
+      - payrollAccess.revokeLogin
+      - payrollImport.commit
+      - payrollImport.history
+      - payrollImport.preview
+      - payrollImport.undo
+      - payrollPunch.deviceKeyCreate
+      - payrollPunch.deviceKeyList
+      - payrollPunch.deviceKeyRevoke
+      - payrollPunch.employeeLocations
+      - payrollPunch.locationAssign
+      - payrollPunch.locationCreate
+      - payrollPunch.locationDelete
+      - payrollPunch.locationList
+      - payrollPunch.locationUpdate
+      - payrollPunch.punches
+      - payrollPunch.review
+      - payrollPunch.selfie
+      - payrollPunch.settings
+      - payrollPunch.updateSettings
       # --- Inventory (warehouses & stock) ---
       # Warehouse setup, transfers, adjustments and physical stock are web-only screens for now.
       - stock.adjust
@@ -699,6 +728,46 @@ exceptions:
       - payrollStatutory.saveRates
       - payrollStatutory.settings
       - payrollStatutory.updateBusinessSettings
+      # --- Payroll (add-on, Phase 3: self-service, check-ins and device import) ---
+      # The employee side (payrollSelf) is for a signed-in employee on the web or phone: it needs a camera, a location reading and
+      # the employee login itself, which an API key cannot be (employee logins are refused every other procedure and cannot
+      # make a useful key). The HR side (invitations, work locations, the check-in policy, flagged-punch review with selfies and
+      # locations, device keys and the biometric file import) is desk work on the web; selfies and locations are personal data
+      # that are deliberately not put on a command line. Devices push punches over REST (POST /api/attendance/push) instead.
+      - payrollAccess.form16List
+      - payrollAccess.form16Release
+      - payrollAccess.form16Unrelease
+      - payrollAccess.invite
+      - payrollAccess.loginList
+      - payrollAccess.revokeLogin
+      - payrollImport.commit
+      - payrollImport.history
+      - payrollImport.preview
+      - payrollImport.undo
+      - payrollPunch.deviceKeyCreate
+      - payrollPunch.deviceKeyList
+      - payrollPunch.deviceKeyRevoke
+      - payrollPunch.employeeLocations
+      - payrollPunch.locationAssign
+      - payrollPunch.locationCreate
+      - payrollPunch.locationDelete
+      - payrollPunch.locationList
+      - payrollPunch.locationUpdate
+      - payrollPunch.punches
+      - payrollPunch.review
+      - payrollPunch.selfie
+      - payrollPunch.settings
+      - payrollPunch.updateSettings
+      - payrollSelf.acceptConsent
+      - payrollSelf.attendance
+      - payrollSelf.form16Years
+      - payrollSelf.leaveApply
+      - payrollSelf.leaveCancel
+      - payrollSelf.leaveOverview
+      - payrollSelf.me
+      - payrollSelf.payslips
+      - payrollSelf.punch
+      - payrollSelf.workplaces
       # --- Store policy pages ---
       # Long-text editor with preview, set up once per store in Settings → Online Store.
       - store.getPolicies
@@ -1150,6 +1219,44 @@ exceptions:
       - payrollStatutory.saveRates
       - payrollStatutory.settings
       - payrollStatutory.updateBusinessSettings
+      # --- Payroll (add-on, Phase 3: self-service, check-ins and device import) ---
+      # Not exposed to AI tools or MCP clients: the employee side is the employee's own app (camera, location, personal
+      # records), and the HR side carries attendance photos, locations, device secrets and invitations. Selfies and locations are
+      # never given to an AI assistant (docs/architecture/payroll-self-service.md).
+      - payrollAccess.form16List
+      - payrollAccess.form16Release
+      - payrollAccess.form16Unrelease
+      - payrollAccess.invite
+      - payrollAccess.loginList
+      - payrollAccess.revokeLogin
+      - payrollImport.commit
+      - payrollImport.history
+      - payrollImport.preview
+      - payrollImport.undo
+      - payrollPunch.deviceKeyCreate
+      - payrollPunch.deviceKeyList
+      - payrollPunch.deviceKeyRevoke
+      - payrollPunch.employeeLocations
+      - payrollPunch.locationAssign
+      - payrollPunch.locationCreate
+      - payrollPunch.locationDelete
+      - payrollPunch.locationList
+      - payrollPunch.locationUpdate
+      - payrollPunch.punches
+      - payrollPunch.review
+      - payrollPunch.selfie
+      - payrollPunch.settings
+      - payrollPunch.updateSettings
+      - payrollSelf.acceptConsent
+      - payrollSelf.attendance
+      - payrollSelf.form16Years
+      - payrollSelf.leaveApply
+      - payrollSelf.leaveCancel
+      - payrollSelf.leaveOverview
+      - payrollSelf.me
+      - payrollSelf.payslips
+      - payrollSelf.punch
+      - payrollSelf.workplaces
       # --- Store policy pages ---
       # Long-text editor with preview, set up once per store in Settings → Online Store.
       - store.getPolicies

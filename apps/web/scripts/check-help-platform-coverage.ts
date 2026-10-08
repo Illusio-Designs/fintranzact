@@ -68,6 +68,7 @@ const WEB_ONLY: Set<string> = new Set([
   "payroll/tds-on-salary.mdx",
   "payroll/form-16-and-24q.mdx",
   "payroll/statutory-files-and-registers.mdx",
+  "payroll/employee-access-and-check-in.mdx",
 
   // Online store admin (desktop-only)
   "online-store/index.mdx",
@@ -114,6 +115,9 @@ const SHARED: Set<string> = new Set([
   // Conceptual guides where content is identical across platforms
   "invoicing/gst-on-invoices.mdx",
   "invoicing/invoice-statuses.mdx",
+
+  // Payroll attendance privacy (the same on every platform)
+  "payroll/attendance-privacy.mdx",
 ]);
 
 // Everything else is dual-platform.

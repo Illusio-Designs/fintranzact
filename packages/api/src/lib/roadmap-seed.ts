@@ -2678,6 +2678,42 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
     ],
   },
   {
+    key: "2026-10-12-payroll-phase-3",
+    updates: [
+      {
+        // Built and tested (shared unit tests, API integration tests against Postgres, web component tests
+        // and mobile jest tests with the camera, location and server injected). NOT run on a real device
+        // (no camera, GPS or biometric hardware) and not run in a browser: see docs/PENDING-OWNER-TASKS.md
+        // section 17 (mobile build and device test, store review for camera and location, privacy policy
+        // wording, CA/legal review of the attendance-photo consent). Built: employee and HR roles (HR
+        // cannot approve or post; an employee reaches only payrollSelf and sign-in/out, enforced for every
+        // procedure by a backstop in the authenticated middleware); invitation by single-use emailed link
+        // and revoke; employee logins use no paid seat; server-clock punches with a selfie, one foreground
+        // location reading, versioned consent, allowed work locations with the off/record/warn/block rules
+        // and HR review of flagged punches; rollup of punches into attendance that never overwrites manual,
+        // leave or locked days; selfie retention (default 90 days) with a scheduled purge; employee
+        // self-service for attendance, payslips, leave and released Form 16; biometric file import with
+        // undo and a device-key REST push. Mobile screens exist for the employee side. Not built: live
+        // tracking, vendor SDKs, detection of a faked location, per-shift locations, phone-only invites.
+        // Phase 4 lines are not touched. The AI assistant never sees selfies, locations or punches.
+        title: "Payroll — Phase 3: mobile attendance, self-service and biometric import",
+        status: "in_progress",
+        done: [
+          "Mobile check-in/out with selfie",
+          "Geo-location capture (and allowed-location rules)",
+          "Employee login and invitation flow",
+          "Self-service: payslips",
+          "Self-service: leave application and approval",
+          "Self-service: attendance view",
+          "Self-service: Form 16 download",
+          "Biometric device attendance import",
+          "HR / Payroll manager role and permissions",
+          "Employee role limited to own records",
+        ],
+      },
+    ],
+  },
+  {
     key: "2026-10-09-ai-phase-1",
     updates: [
       {

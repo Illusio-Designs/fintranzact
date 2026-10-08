@@ -11,6 +11,7 @@ export const STAFF_INVITE_ROLES: Array<{ key: string; label: string }> = [
   { key: "seller_manager", label: "Seller Manager" },
   { key: "seller", label: "Seller" },
   { key: "accountant", label: "Accountant (bookkeeping)" },
+  { key: "hr", label: "HR / Payroll manager" },
 ];
 
 /** The two choices in "Invite my CA". */
@@ -30,5 +31,7 @@ export function changeRoleOptions(callerRole: string | null | undefined): Array<
 /** May the caller change this member's role? An admin cannot touch a CA's access. */
 export function canChangeMemberRole(callerRole: string | null | undefined, memberRole: string): boolean {
   if (memberRole === "owner" || memberRole === "superadmin") return false;
+  // An employee login is managed in Payroll (it is linked to one employee record).
+  if (memberRole === "employee") return false;
   return canManageCa(callerRole) || !isCaRole(memberRole);
 }

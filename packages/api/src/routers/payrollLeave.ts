@@ -8,10 +8,10 @@
  * them. Applications are decided in one leave year: the one the first day is in.
  */
 
-import { and, asc, desc, eq, inArray, lte, gte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { attendanceRecords, employees, leaveApplications, leaveEncashments, leaveLedger, leaveTypes, payrollHolidays, payrollShifts } from "@fintranzact/db";
+import { attendanceRecords, employees, leaveApplications, leaveEncashments, leaveLedger, leaveTypes } from "@fintranzact/db";
 import {
   DEFAULT_LEAVE_TYPES,
   carryForward,
@@ -32,7 +32,8 @@ import { router, viewerProcedure, memberProcedure } from "../trpc.js";
 import { withAudit } from "../lib/audit.js";
 import { assertInBusiness } from "../lib/business-scope.js";
 import { assertPayroll, badRequest, isUniqueViolation, notFound } from "../lib/payroll/access.js";
-import { assertAttendanceOpen, holidayDatesFor, loadPayrollSettings } from "../lib/payroll/data.js";
+import { assertAttendanceOpen, loadPayrollSettings } from "../lib/payroll/data.js";
+import { createLeaveApplication, employeeCalendar, notifyLeaveDecided } from "../lib/payroll/leave-requests.js";
 
 const idInput = z.object({ id: z.string().uuid() });
 const num = (v: string | null | undefined) => Number(v ?? 0);
@@ -58,20 +59,6 @@ async function ensureLopType(tx: Tx, businessId: string) {
     .values({ businessId, code: def.code, name: def.name, isPaid: false, accrualType: "none", accrualDays: "0", carryForward: false, carryForwardMax: "0", encashable: false })
     .returning();
   return row as typeof leaveTypes.$inferSelect;
-}
-
-async function employeeCalendar(tx: Tx, businessId: string, emp: typeof employees.$inferSelect, from: string, to: string) {
-  const settings = await loadPayrollSettings(tx, businessId);
-  let weeklyOffDays = settings.defaultWeeklyOffDays;
-  if (emp.shiftId) {
-    const [shift] = await tx.select().from(payrollShifts).where(eq(payrollShifts.id, emp.shiftId)).limit(1);
-    if (shift) weeklyOffDays = shift.weeklyOffDays;
-  }
-  const hol = await tx
-    .select({ date: payrollHolidays.date, name: payrollHolidays.name, scope: payrollHolidays.scope, stateCode: payrollHolidays.stateCode, branch: payrollHolidays.branch })
-    .from(payrollHolidays)
-    .where(and(eq(payrollHolidays.businessId, businessId), gte(payrollHolidays.date, from), lte(payrollHolidays.date, to)));
-  return { settings, weeklyOffDays, holidays: holidayDatesFor(hol, emp) };
 }
 
 export const payrollLeaveRouter = router({
@@ -219,38 +206,8 @@ export const payrollLeaveRouter = router({
   request: memberProcedure.input(leaveApplySchema).mutation(
     withAudit(async ({ ctx, input }) => {
       await assertPayroll(ctx, "create");
-      const [emp] = await ctx.db.select().from(employees).where(and(eq(employees.id, input.employeeId), eq(employees.businessId, ctx.businessId))).limit(1);
-      if (!emp) throw notFound("Employee");
-      const [type] = await ctx.db.select().from(leaveTypes).where(and(eq(leaveTypes.id, input.leaveTypeId), eq(leaveTypes.businessId, ctx.businessId))).limit(1);
-      if (!type) throw notFound("Leave type");
-      if (!type.isActive) throw badRequest("That leave type is not in use any more.");
-      if (input.fromDate < emp.dateOfJoining) throw badRequest("The leave starts before the employee's joining date.");
-      if (emp.lastWorkingDay && input.toDate > emp.lastWorkingDay) throw badRequest("The leave ends after the employee's last working day.");
-      const cal = await employeeCalendar(ctx.db, ctx.businessId, emp, input.fromDate, input.toDate);
-      const counted = countLeaveDays({ from: input.fromDate, to: input.toDate, weeklyOffDays: cal.weeklyOffDays, holidays: cal.holidays, halfDayStart: input.halfDayStart, halfDayEnd: input.halfDayEnd });
-      if (counted.days <= 0) throw badRequest("Those dates are all weekly offs or holidays, so no leave is needed.");
-      const [overlap] = await ctx.db
-        .select({ id: leaveApplications.id })
-        .from(leaveApplications)
-        .where(and(eq(leaveApplications.employeeId, emp.id), inArray(leaveApplications.status, ["pending", "approved"]), lte(leaveApplications.fromDate, input.toDate), gte(leaveApplications.toDate, input.fromDate)))
-        .limit(1);
-      if (overlap) throw new TRPCError({ code: "CONFLICT", message: "This employee already has leave for some of those dates." });
-      const [row] = await ctx.db
-        .insert(leaveApplications)
-        .values({
-          businessId: ctx.businessId,
-          employeeId: emp.id,
-          leaveTypeId: type.id,
-          fromDate: input.fromDate,
-          toDate: input.toDate,
-          halfDayStart: input.halfDayStart,
-          halfDayEnd: input.halfDayEnd,
-          days: String(counted.days),
-          reason: input.reason || null,
-          createdByUserId: ctx.user.id,
-        })
-        .returning();
-      return row!;
+      const { application } = await createLeaveApplication(ctx.db, { businessId: ctx.businessId, input, createdByUserId: ctx.user.id });
+      return application;
     }, (r) => ({ action: "payroll.leave.apply", entityType: "leaveApplication", entityId: r.id, metadata: { days: r.days, from: r.fromDate, to: r.toDate } })),
   ),
 
@@ -258,7 +215,7 @@ export const payrollLeaveRouter = router({
   decide: memberProcedure.input(z.object({ id: z.string().uuid(), decision: z.enum(["approve", "reject"]), note: z.string().trim().max(300).optional() })).mutation(
     withAudit(async ({ ctx, input }) => {
       await assertPayroll(ctx, "update");
-      return ctx.db.transaction(async (tx) => {
+      const decidedRow = await ctx.db.transaction(async (tx) => {
         const [app] = await tx.select().from(leaveApplications).where(and(eq(leaveApplications.id, input.id), eq(leaveApplications.businessId, ctx.businessId))).for("update").limit(1);
         if (!app) throw notFound("Leave application");
         if (app.status !== "pending") throw badRequest(`This application is already ${app.status}.`);
@@ -329,6 +286,9 @@ export const payrollLeaveRouter = router({
           .returning();
         return row!;
       });
+      const [emp] = await ctx.db.select({ id: employees.id, email: employees.email, name: employees.name }).from(employees).where(eq(employees.id, decidedRow.employeeId)).limit(1);
+      if (emp) await notifyLeaveDecided(ctx.db, { employee: emp, decision: decidedRow.status as "approved" | "rejected", fromDate: decidedRow.fromDate, toDate: decidedRow.toDate, note: decidedRow.decisionNote });
+      return decidedRow;
     }, (r) => ({ action: `payroll.leave.${r.status === "approved" ? "approve" : "reject"}`, entityType: "leaveApplication", entityId: r.id, metadata: { paidDays: r.paidDays, lopDays: r.lopDays } })),
   ),
 

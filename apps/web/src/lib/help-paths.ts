@@ -123,6 +123,9 @@ export const HELP_NAV: HelpNavSection[] = [
       { label: "TDS on salary", slug: "payroll/tds-on-salary" },
       { label: "Form 16 and Form 24Q", slug: "payroll/form-16-and-24q" },
       { label: "Statutory files and registers", slug: "payroll/statutory-files-and-registers" },
+      { label: "Employee access, check-ins and device import", slug: "payroll/employee-access-and-check-in" },
+      { label: "Using the employee app", slug: "payroll/employee-guide" },
+      { label: "Attendance photos and location: privacy", slug: "payroll/attendance-privacy" },
     ],
   },
   {

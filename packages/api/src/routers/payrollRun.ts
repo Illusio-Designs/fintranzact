@@ -28,7 +28,7 @@ import {
 import { router, viewerProcedure, memberProcedure } from "../trpc.js";
 import { withAudit } from "../lib/audit.js";
 import { emailService } from "../lib/email.js";
-import { assertPayroll, notFound, badRequest } from "../lib/payroll/access.js";
+import { assertPayroll, assertPayrollPosting, notFound, badRequest } from "../lib/payroll/access.js";
 import { generatePayslipPDF } from "../lib/payroll/payslip-pdf.js";
 import {
   addAdjustment,
@@ -194,7 +194,7 @@ export const payrollRunRouter = router({
   /** Step 5: post the approved run to the books (one balanced journal entry). Posting twice changes nothing. */
   post: memberProcedure.input(idInput).mutation(
     withAudit(async ({ ctx, input }) => {
-      await assertPayroll(ctx, "update");
+      await assertPayrollPosting(ctx);
       return postRun(ctx.db, { businessId: ctx.businessId, runId: input.id, actor: actorOf(ctx) });
     }, (r) => ({ action: "payroll.run.post", entityType: "payrollRun", entityId: r.run.id, metadata: { journalEntryId: r.journalEntryId, created: r.created } })),
   ),
@@ -202,7 +202,7 @@ export const payrollRunRouter = router({
   /** Step 6: record the payment of net salaries out of a bank or cash account. */
   markPaid: memberProcedure.input(markPaidSchema).mutation(
     withAudit(async ({ ctx, input }) => {
-      await assertPayroll(ctx, "update");
+      await assertPayrollPosting(ctx);
       return markRunPaid(ctx.db, { businessId: ctx.businessId, runId: input.runId, bankAccountId: input.bankAccountId, paidOn: input.paidOn, reference: input.reference || null, actor: actorOf(ctx) });
     }, (r) => ({ action: "payroll.run.markPaid", entityType: "payrollRun", entityId: r.run.id, metadata: { created: r.created } })),
   ),

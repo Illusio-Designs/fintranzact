@@ -32,6 +32,20 @@ interface PayrollCtx {
  */
 export async function assertPayroll(ctx: PayrollCtx, action: Action): Promise<void> {
   requireCan(ctx.ability, action, "Payroll");
+  await assertPayrollAddon(ctx, action);
+}
+
+/**
+ * Employee self-service (payrollSelf.*): the CASL permission on "PayrollSelf" (only the employee role),
+ * then the same add-on rules as the rest of Payroll. Employee logins are included in the Payroll add-on
+ * (no per-login charge) but only work while the organisation has it (or its trial).
+ */
+export async function assertSelfService(ctx: PayrollCtx, action: Action): Promise<void> {
+  requireCan(ctx.ability, action, "PayrollSelf");
+  await assertPayrollAddon(ctx, action);
+}
+
+export async function assertPayrollAddon(ctx: { tenantId: string }, action: Action): Promise<void> {
   if (action !== "read") {
     await requireAddon(ctx.tenantId, "payroll");
     return;
@@ -42,6 +56,16 @@ export async function assertPayroll(ctx: PayrollCtx, action: Action): Promise<vo
   // Read-only organisation: the add-on is off, but what it already has stays readable.
   if (ent.readOnly) return;
   throw entitlementError("addon_required", { addon: "payroll" });
+}
+
+/**
+ * Posting to the books (a run's journal entry, its payment, a statutory payment) is bookkeeping:
+ * Payroll "update" plus the PayrollPosting permission, which accountants, owners and admins hold
+ * and the HR / Payroll manager role does not.
+ */
+export async function assertPayrollPosting(ctx: PayrollCtx): Promise<void> {
+  requireCan(ctx.ability, "create", "PayrollPosting");
+  await assertPayroll(ctx, "update");
 }
 
 /** True when the signed-in role may see full identity and bank numbers (Payroll "manage": owners and admins). */

@@ -1,0 +1,87 @@
+---
+title: Employee access, check-ins and device import
+description: "For HR and payroll managers: invite employees to their own login, set work locations and the check-in rules, review flagged check-ins, import biometric device files and release Form 16."
+sidebar:
+  order: 13
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+
+<ForDesktop>
+
+This page is for the person who runs payroll or HR. Employees use their own app: see [Using the employee app](/help/payroll/employee-guide). It is part of the Payroll add-on.
+
+## Who can do what
+
+| Role | What it can do here |
+|---|---|
+| Owner, admin | Everything, including approving runs and posting them to the books |
+| Accountant | Payroll work, and posting runs to the books |
+| **HR** | Employees, attendance, leave, payroll runs up to calculating, invitations, work locations, reviewing check-ins, device import and Form 16 release. HR cannot approve a run, post to the books or see full PAN, Aadhaar or bank numbers |
+| **Employee** | Only their own check-ins, attendance, payslips, leave and released Form 16. Nothing else in the organization |
+
+Add an HR person from **Team** and choose the **HR / Payroll manager** role. An employee is not added from Team: you invite them from Payroll, below.
+
+## Invite an employee
+
+1. Open **Payroll → Employee app** and find the employee. They need an email address on their record.
+2. Choose **Invite**. They get an email with a link that works **once** and for **7 days**.
+3. They create a login (or sign in) with **the same email address you invited**, and are taken straight to their own screens.
+
+The status shows **Not invited**, **Invited**, **Expired** or **Active**. Choose **Revoke** to end access at any time. When you mark an employee as **exited**, their access ends automatically.
+
+An employee login **does not use one of your paid team seats** and is not charged per person. It is included in the Payroll add-on.
+
+An employee cannot open invoices, parties, reports, settings, the team list or the AI assistant. Those requests are refused by the server, not only hidden in the screen.
+
+## Work locations and the check-in rules
+
+Open **Payroll → Check-ins → Settings**.
+
+- **Check-in** switches the feature on or off.
+- **Selfie required** asks for a selfie with every check-in and check-out.
+- **Location rule** decides what happens when an employee is outside an allowed place:
+  - **Off**: the location is not asked for.
+  - **Record** (the default): the location is saved and a punch outside the places is **flagged for your review**.
+  - **Warn**: the employee is told they are outside, the punch is saved and flagged.
+  - **Block**: a punch outside the allowed places is refused.
+- **Selfie retention** is how many days selfies are kept, from 7 to 365 (90 by default). Older selfies are deleted automatically. If you shorten it, older selfies are deleted straight away.
+
+Add each place under **Work locations** with a name, a map position and a **radius in metres**. Then assign the places an employee may check in from. An employee with no places assigned uses all of the business's places. A reading with an accuracy worse than 100 m is treated as "too imprecise" and flagged rather than counted as inside.
+
+Phones can report a fake location. The app passes that hint on when the phone does, and such a punch is flagged, but **a faked location cannot always be detected**. Treat the location as supporting evidence, and review flagged punches.
+
+## Review check-ins
+
+**Payroll → Check-ins** lists punches with their flags: late, outside the work location, no location, location too imprecise, missing check-out and phone clock off. Open one to see the selfie and the place on the map.
+
+- **Approve** keeps the punch.
+- **Reject** removes it from attendance. The day is recalculated.
+
+Only owners, admins and HR see selfies and locations. The time of a punch is always the **server's** time, not the phone's.
+
+### How punches become attendance
+
+Punches are paired into days: a first check-in and the last check-out of the day, including a shift that ends after midnight. A day is **present** when the hours are at least 75% of the standard shift, **half day** from 50%, and late arrivals are flagged after the grace period. Overtime is only added when you have set it up. Calculated days are written as attendance with the source "punch". They **never overwrite** a day you marked by hand, a leave day, or any day in a month that a payroll run has locked.
+
+## Import a biometric device file
+
+Open **Payroll → Device import**. Export the attendance log from your device or its software as CSV or tab-separated text.
+
+1. Paste or choose the file. The columns are guessed (employee code, date and time, direction) and you can change them.
+2. **Preview** shows matched rows, **unknown employee codes**, duplicates and invalid rows. Nothing is saved yet.
+3. **Import** saves the punches and recalculates the affected days.
+
+Times without a time zone are read as India time. Importing the same file twice does not create duplicates. To replace a file, **undo** the batch in the history and import the corrected one. Months locked by a payroll run are not changed.
+
+### Devices that can send punches themselves
+
+Under **Device import → Device keys** create a key for a device or its bridge program. The key is shown **once**. The device sends punches to `POST /api/attendance/push` with the key. See the developer reference for the format. Revoke a key to stop it immediately.
+
+## Release Form 16
+
+Employees can download their own Form 16 only after you release the financial year. Open **Payroll → Employee app → Form 16** and release the year when your CA has reviewed the working copies. You can withdraw a release. The file is the same **working copy for CA review** described in [Form 16 and Form 24Q](/help/payroll/form-16-and-24q), not a certificate from TRACES.
+
+For what is collected and how long it is kept, see [Attendance photos and location: privacy](/help/payroll/attendance-privacy).
+
+</ForDesktop>

@@ -140,3 +140,7 @@ The three new tables are in `TABLE_REGISTRY` and `ROW_SCHEMAS`; new columns on e
 ## Not built in Phase 2
 
 Mobile, CLI and MCP (parity exceptions); loans and recurring deductions as records; bonus and gratuity payments, full and final settlement (Phase 4); self-service, biometrics (Phase 3); surcharge, senior-citizen slabs and s.206AA; state PT rules beyond monthly slabs (half-yearly or annual PT frequencies); reversing or deleting a recorded statutory payment (use a correcting journal entry); an NPS or other employer-contribution deduction in TDS; and the CA review itself.
+
+## Phase 3
+
+Mobile attendance with a selfie and location, employee logins and self-service, HR and employee roles, and biometric import are described in [`payroll-self-service.md`](payroll-self-service.md).

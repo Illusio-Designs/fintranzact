@@ -5,7 +5,7 @@ import { Listbox } from "@/components/ui/Listbox";
 import { toast } from "@/hooks/useToast";
 import { cn, formatDate } from "@/lib/utils";
 import { memberRoleOptions, canEditMemberRole, isCaManager, STAFF_ROLE_OPTIONS, type InvitableRole } from "@/lib/team-roles";
-import { caRoleDescription, isCaRole, lastOpenedText, relativeTime } from "@fintranzact/shared";
+import { STAFF_ROLE_DESCRIPTIONS, caRoleDescription, isCaRole, lastOpenedText, relativeTime } from "@fintranzact/shared";
 import { RoleBadge } from "./RoleBadge";
 import { CaPartnerBadge } from "./CaPartnerBadge";
 import { InviteLinkBox } from "./InviteLinkBox";
@@ -325,6 +325,7 @@ function InviteModal({ open, onClose }: { open: boolean; onClose: () => void }) 
               onChange={setRole}
               options={STAFF_ROLE_OPTIONS}
             />
+            {STAFF_ROLE_DESCRIPTIONS[role] && <p className="mt-1.5 text-xs text-text-tertiary" data-testid="role-description">{STAFF_ROLE_DESCRIPTIONS[role]}</p>}
           </div>
         </form>
       )}

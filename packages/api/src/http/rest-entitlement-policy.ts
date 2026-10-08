@@ -111,6 +111,11 @@ export const REST_ENTITLEMENT_POLICY: Readonly<Record<string, RestEntitlementPol
   // 403 { error, entitlement } body; the add-on, quota and owner switches are enforced by ai.begin.
   "POST /api/ai/stream": "write-gated",
 
+  // Payroll biometric devices push punches with a per-business device key (a hash in the tenant database, not a
+  // user's API key): needs the Payroll add-on, and is refused while the organisation is read-only or suspended
+  // (refuseIfReadOnly) with the standard 403 { error, entitlement } body. Rate limited per key and per address.
+  "POST /api/attendance/push": "write-gated",
+
   // tRPC mount
   "ALL /api/trpc/*": "trpc-gated",
 };

@@ -14,7 +14,8 @@ import { enforceFeatureGates } from "./lib/feature-gate.js";
 import { recordOrgOpened } from "./lib/access-events.js";
 import { requireTenantMembership } from "./lib/tenant-membership.js";
 import { FUNDING_CUSTOMER_MESSAGE, isFundingFailure } from "./lib/sandbox/funding.js";
-import { checkTwoFactorGate } from "./lib/two-factor-gate.js";
+import { checkTwoFactorGate, getGateMembership } from "./lib/two-factor-gate.js";
+import { employeeMayCall, EMPLOYEE_ROLE } from "@fintranzact/shared";
 import { twoFactorDataOf, twoFactorRequiredError } from "./lib/two-factor-error.js";
 
 // ── Middleware context shape interfaces ────────────────────────
@@ -149,9 +150,23 @@ const baseProcedure = t.procedure.use(csrfCheck);
 export const publicProcedure = baseProcedure;
 
 // Middleware: requires authenticated user
-const isAuthenticated = t.middleware(({ ctx, next }) => {
+const isAuthenticated = t.middleware(async ({ ctx, path, next }) => {
   if (!ctx.user) {
     throw new TRPCError({ code: "UNAUTHORIZED", message: "You must be logged in" });
+  }
+  // Payroll self-service logins (role "employee" in the selected organisation) may call only the small
+  // allowlist of self-service procedures and the account-level ones (sign-in, sessions, switching
+  // organisations), whatever any other procedure's own permission check says. This is the backstop
+  // behind the CASL rules: an employee session cannot reach an organisation or business procedure by
+  // accident or by a guessed id (docs/architecture/payroll-self-service.md). It sits in isAuthenticated,
+  // which every authenticated base shares, so it also covers the procedures that read the session's
+  // organisation without hasTenantAccess (billing, API keys, exports). The role comes from the
+  // 30s-cached lookup that twoFactorGate uses (invalidated when a membership changes or is removed).
+  if (ctx.tenantId && !employeeMayCall(path)) {
+    const { entry } = await getGateMembership(ctx.tenantId, ctx.user.id);
+    if (entry?.role === EMPLOYEE_ROLE) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Your login is for employee self-service only." });
+    }
   }
   return next({ ctx: { ...ctx, user: ctx.user } });
 });

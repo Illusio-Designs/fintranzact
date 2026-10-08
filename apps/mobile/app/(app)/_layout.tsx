@@ -46,10 +46,23 @@ export default function AppLayout() {
     }
   }, [session?.user, session?.tenantId, tenantList]);
 
-  // Fetch businesses once tenant is selected
-  const { data: businesses } = trpc.business.list.useQuery(undefined, {
-    enabled: !!session?.user && !!session?.tenantId,
+  // An employee login (Payroll self-service) gets a small restricted tab set and never loads the
+  // accounting lists below: the server refuses an employee every other call
+  // (docs/architecture/payroll-self-service.md).
+  const isEmployee = session?.role === "employee";
+  const { data: workplaces } = trpc.payrollSelf.workplaces.useQuery(undefined, {
+    enabled: !!session?.user && !!session?.tenantId && isEmployee,
   });
+
+  // Fetch businesses once tenant is selected
+  const { data: ownBusinesses } = trpc.business.list.useQuery(undefined, {
+    enabled: !!session?.user && !!session?.tenantId && !isEmployee,
+  });
+  // For an employee the "businesses" are the workplaces they are linked to.
+  const businesses = useMemo(
+    () => (isEmployee ? workplaces?.map((w) => ({ id: w.businessId, name: w.businessName })) : ownBusinesses),
+    [isEmployee, workplaces, ownBusinesses],
+  ) as typeof ownBusinesses;
 
   // A member blocked by the organisation's two-factor policy cannot load the
   // business list; they are sent to the Security screen instead of waiting on it.
@@ -102,7 +115,7 @@ export default function AppLayout() {
 
   // Plan limit: hide "Create New Business" when at limit
   const { data: canCreateBiz } = trpc.business.canCreate.useQuery(undefined, {
-    enabled: !!session?.user && !!session?.tenantId,
+    enabled: !!session?.user && !!session?.tenantId && !isEmployee,
   });
 
   const handleCreateNewBusiness = useCallback(() => {
@@ -111,7 +124,7 @@ export default function AppLayout() {
 
   // Low stock badge (only when business is validated against the business list)
   const { data: _lowStockCount } = trpc.item.lowStockCount.useQuery(undefined, {
-    enabled: businessValidated,
+    enabled: businessValidated && !isEmployee,
   });
 
   // Not logged in — the root layout's auth gate handles the login redirect.
@@ -212,6 +225,7 @@ export default function AppLayout() {
           <Tabs.Screen
             name="(home)"
             options={{
+              ...(isEmployee ? { href: null } : {}),
               title: "Home",
               tabBarIcon: ({ color, focused }) => <TabIcon name="home-outline" color={color} focused={focused} />,
             }}
@@ -219,6 +233,7 @@ export default function AppLayout() {
           <Tabs.Screen
             name="(invoices)"
             options={{
+              ...(isEmployee ? { href: null } : {}),
               title: "Invoices",
               tabBarIcon: ({ color, focused }) => <TabIcon name="receipt-outline" color={color} focused={focused} />,
             }}
@@ -226,6 +241,7 @@ export default function AppLayout() {
           <Tabs.Screen
             name="(parties)"
             options={{
+              ...(isEmployee ? { href: null } : {}),
               title: "Parties",
               tabBarIcon: ({ color, focused }) => <TabIcon name="people-outline" color={color} focused={focused} />,
             }}
@@ -233,6 +249,7 @@ export default function AppLayout() {
           <Tabs.Screen
             name="(payments)"
             options={{
+              ...(isEmployee ? { href: null } : {}),
               title: "Payments",
               tabBarIcon: ({ color, focused }) => <TabIcon name="card-outline" color={color} focused={focused} />,
             }}
@@ -252,8 +269,42 @@ export default function AppLayout() {
           <Tabs.Screen
             name="(more)"
             options={{
+              ...(isEmployee ? { href: null } : {}),
               title: "More",
               tabBarIcon: ({ color, focused }) => <TabIcon name="grid-outline" color={color} focused={focused} />,
+            }}
+          />
+          {/* Payroll self-service: the only tabs an employee login sees (hidden for everyone else). */}
+          <Tabs.Screen
+            name="(me-home)"
+            options={{
+              ...(isEmployee ? {} : { href: null }),
+              title: "Check in",
+              tabBarIcon: ({ color, focused }) => <TabIcon name="finger-print-outline" color={color} focused={focused} />,
+            }}
+          />
+          <Tabs.Screen
+            name="(me-attendance)"
+            options={{
+              ...(isEmployee ? {} : { href: null }),
+              title: "Attendance",
+              tabBarIcon: ({ color, focused }) => <TabIcon name="calendar-outline" color={color} focused={focused} />,
+            }}
+          />
+          <Tabs.Screen
+            name="(me-payslips)"
+            options={{
+              ...(isEmployee ? {} : { href: null }),
+              title: "Payslips",
+              tabBarIcon: ({ color, focused }) => <TabIcon name="document-text-outline" color={color} focused={focused} />,
+            }}
+          />
+          <Tabs.Screen
+            name="(me-leave)"
+            options={{
+              ...(isEmployee ? {} : { href: null }),
+              title: "Leave",
+              tabBarIcon: ({ color, focused }) => <TabIcon name="airplane-outline" color={color} focused={focused} />,
             }}
           />
         </Tabs>
