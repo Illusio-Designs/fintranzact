@@ -468,7 +468,7 @@ export function buildGratuityRegister(asOf: string, rows: ReadonlyArray<{ employ
 }
 
 /** Bonus basis for one employee for the year: each month's wages capped at the ceiling (when configured), summed. */
-export function computeBonusBasis(monthlyWagesPaise: readonly number[], rules: StatutoryRates["bonus"]): { wagesPaise: number; cappedWagesPaise: number; bonusPaise: number | null } {
+export function computeBonusBasis(monthlyWagesPaise: readonly number[], rules: Pick<StatutoryRates["bonus"], "wageCeilingRupees" | "percent">): { wagesPaise: number; cappedWagesPaise: number; bonusPaise: number | null } {
   const ceiling = rupeesToPaise(rules.wageCeilingRupees);
   const wagesPaise = monthlyWagesPaise.reduce((s, w) => s + w, 0);
   const cappedWagesPaise = ceiling > 0 ? monthlyWagesPaise.reduce((s, w) => s + Math.min(w, ceiling), 0) : wagesPaise;
