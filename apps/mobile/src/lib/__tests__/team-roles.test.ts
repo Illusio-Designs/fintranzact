@@ -2,7 +2,7 @@ import { STAFF_INVITE_ROLES, CA_INVITE_CHOICES, canChangeMemberRole, canManageCa
 
 describe("mobile team roles", () => {
   it("the normal invite list has no CA roles", () => {
-    expect(STAFF_INVITE_ROLES.map((r) => r.key)).toEqual(["admin", "seller_manager", "seller", "accountant"]);
+    expect(STAFF_INVITE_ROLES.map((r) => r.key)).toEqual(["admin", "seller_manager", "seller", "accountant", "hr"]);
   });
   it("Invite my CA offers view only and view-and-file with the shared descriptions", () => {
     expect(CA_INVITE_CHOICES.map((c) => [c.key, c.title])).toEqual([["auditor", "View only"], ["ca_filing", "View and file returns"]]);
@@ -15,8 +15,8 @@ describe("mobile team roles", () => {
     expect(canManageCa(undefined)).toBe(false);
   });
   it("change-role sheet shows CA roles to the owner only", () => {
-    expect(changeRoleOptions("owner").map((r) => r.key)).toEqual(["admin", "seller_manager", "seller", "accountant", "auditor", "ca_filing"]);
-    expect(changeRoleOptions("admin").map((r) => r.key)).toEqual(["admin", "seller_manager", "seller", "accountant"]);
+    expect(changeRoleOptions("owner").map((r) => r.key)).toEqual(["admin", "seller_manager", "seller", "accountant", "hr", "auditor", "ca_filing"]);
+    expect(changeRoleOptions("admin").map((r) => r.key)).toEqual(["admin", "seller_manager", "seller", "accountant", "hr"]);
   });
   it("an admin cannot change a CA member's role", () => {
     expect(canChangeMemberRole("admin", "auditor")).toBe(false);

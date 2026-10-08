@@ -172,7 +172,7 @@ const isAuthenticated = t.middleware(async ({ ctx, path, next }) => {
 });
 
 // Middleware: requires tenant + injects ctx.db
-const hasTenantAccess = t.middleware(async ({ ctx, path, next }) => {
+const hasTenantAccess = t.middleware(async ({ ctx, next }) => {
   if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED" });
   if (!ctx.tenantId) throw new TRPCError({ code: "BAD_REQUEST", message: "No organization selected" });
 

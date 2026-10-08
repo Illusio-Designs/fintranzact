@@ -8,7 +8,7 @@
  * them. Applications are decided in one leave year: the one the first day is in.
  */
 
-import { and, asc, desc, eq, inArray, lte, gte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, lte, sql } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { attendanceRecords, employees, leaveApplications, leaveEncashments, leaveLedger, leaveTypes } from "@fintranzact/db";
