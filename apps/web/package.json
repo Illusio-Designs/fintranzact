@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "gen:help-index": "tsx scripts/gen-help-index.ts",
+    "build": "tsx scripts/gen-help-index.ts && tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "check:api-reference": "node scripts/check-api-reference.mjs",

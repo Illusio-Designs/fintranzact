@@ -5,7 +5,7 @@ ungated-exempt = public/protected base AND allowlisted (auth, billing, platform 
 inline-guarded = public/protected base, but the router calls assertWritable itself (INLINE_WRITE_GUARDED);
 ungated = public/protected base with no check at all: must be empty of business-data writes.
 
-mutations: 402 (gated 330, exempt 9, ungated-exempt 60, inline-guarded 3, ungated 0)
+mutations: 403 (gated 331, exempt 9, ungated-exempt 60, inline-guarded 3, ungated 0)
 
 | procedure | base | status |
 |---|---|---|
@@ -17,6 +17,7 @@ mutations: 402 (gated 330, exempt 9, ungated-exempt 60, inline-guarded 3, ungate
 | ai.confirmAction | authorized | gated |
 | ai.deleteConversation | authorized | gated |
 | ai.updateAction | authorized | gated |
+| ai.updatePreferences | authorized | gated |
 | ai.updateSettings | tenant | gated |
 | apiKey.create | protected | inline-guarded |
 | apiKey.revoke | protected | ungated-exempt |

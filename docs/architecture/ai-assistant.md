@@ -1,4 +1,4 @@
-# AI business assistant: Phase 1 (ask questions) and Phase 2 (actions with confirmation)
+# AI business assistant: Phase 1 (ask questions), Phase 2 (actions with confirmation) and Phase 3 (voice, languages, tips)
 
 "Ask Fintranzact AI": a chat that answers questions about one business from its live data. It is the first feature of the paid AI add-on (`ai_assistant`; `ai_plus` is the bigger tier and also grants it). **Phase 1 is read-only** questions and answers. **Phase 2** lets it PREPARE work (invoice, quotation, payment, party, item, payment reminder) that the person reviews on a confirmation card: the model never writes, and nothing is saved until the signed-in person taps Confirm (see "Phase 2: actions with confirmation" below). Roadmap items: "AI business assistant, Phase 1: ask questions about your business" and "AI business assistant, Phase 2: actions with confirmation". Entitlement rules: [`../ENTITLEMENTS.md`](../ENTITLEMENTS.md) ("The AI assistant add-on"). `ADDON_FEATURES.ai_assistant.implemented` and `ai_plus.implemented` stay **false**: the owner decides the release.
 
@@ -77,6 +77,7 @@ Each tool validates its input with zod, calls one existing procedure, and return
 | `cash_and_bank` | `bankAccount.list` | read BankAccount (names and balances only) |
 | `find_parties` | `party.list` | read Party (no phone, email, address, PAN or bank details) |
 | `find_items` | `item.list` | read Item (id, name, unit, sale price, GST rate, stock; no purchase price or barcode). Added in Phase 2 so a document line can be resolved by id |
+| `search_help` | none (reads the generated help index in `@fintranzact/shared`, Phase 3) | nothing: the help centre is public documentation; results are still data, not instructions |
 
 Excluded: every write (Phase 2's `propose_*` tools are separate and only propose, see below), Payroll, anything with secrets, platform and team procedures.
 
@@ -212,6 +213,92 @@ The web panel sends `context` with a question: `{ kind: "invoice" | "quotation" 
 - The audit source is carried by an `AsyncLocalStorage` rather than a field added to `AuditEntry`, because many procedures write their audit entry directly with `logAudit` instead of `withAudit`.
 - Only the creator can confirm (not another admin or the owner): the card is a review by the person who asked.
 - Actions on by default for every role whose permission allows them; the owner can switch them off for the organisation or per role, separately from the chat.
+
+## Phase 3: voice, languages, proactive tips and help-centre answers
+
+Roadmap item: "AI business assistant, Phase 3: voice, languages and proactive tips". Everything below is gated by the AI add-on (subscribed, admin-granted or a Full Access Trial) exactly as Phases 1 and 2, refused or hidden for read-only and suspended organisations, and `ADDON_FEATURES.ai_assistant` / `ai_plus` `implemented` stay **false**. Nothing in Phase 3 adds a write: the only things stored are two per-person preferences.
+
+### What was built, and what was not
+
+| Checklist line | Status |
+|---|---|
+| Voice input on web and mobile | **Web built and tested. Mobile NOT built.** The native app has no assistant screen at all (Phase 1 deliberately shipped none), so there is nothing to put a microphone on. A native screen needs an SSE client for React Native (its `fetch` does not stream; it needs `expo/fetch` or a polyfill), the card components including the confirmation card, a streaming state machine, and an on-device recognition module (for example `expo-speech-recognition`), which is a new native dependency and a new native build with the microphone and speech-recognition permissions. That is a separate piece of work, so the line is not ticked. |
+| Hindi replies | Built and tested: prompt rule, per-person preference, starters, recognition language, router keywords. Reply quality is **not verified against a live model**. |
+| Gujarati replies | Same as Hindi. |
+| Proactive dashboard tips | Built and tested on the web dashboard. The mobile dashboard has no tips card (no mobile assistant surface). |
+| Help-centre answers with article links | Built and tested (`search_help` tool, validated `help` link kind). |
+| Switch off tips per user | Built and tested. |
+
+### Voice input (web)
+
+- Uses the browser's own Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`) in `apps/web/src/lib/speech-input.ts`. **Our code never records, uploads or stores audio, and there is no server-side speech-to-text and no paid speech service.** Depending on the browser, the browser itself may send the audio to its vendor's speech service (Chrome and Edge do; Safari uses Apple's). The help page says so. Fintranzact never receives the audio.
+- Feature-detected: the microphone button is not drawn when the browser has no recognition (Firefox, some in-app browsers), and a one-line hint says to type or try Chrome, Edge or Safari.
+- Language follows the person's reply language: auto, English and Hinglish listen for `en-IN`, Hindi `hi-IN`, Gujarati `gu-IN` (`AI_SPEECH_LANGUAGE` in `packages/shared/src/ai-language.ts`).
+- Tap to start, tap again (or Esc) to stop. Esc first stops the microphone and leaves the panel open; a second Esc closes the panel. Interim results fill the question box live (after whatever was already typed). **The transcript is never sent automatically**: the person reads it, edits it and presses Send. The box is capped at the 1,000 character question limit.
+- Accessibility: the button is a real `button` with `aria-pressed`, its accessible name changes between "Speak your question" and "Stop listening", it is focusable and works with Space and Enter, and the listening state, the stopped state and errors are announced (`role="status"` / `role="alert"`) and also shown as text. The pulsing red style is not the only cue.
+- Errors, each with a plain message: microphone blocked (`not-allowed`, `service-not-allowed`), nothing heard (`no-speech`), no microphone (`audio-capture`), no connection to the browser's speech service (`network`), language not supported, anything else. An `aborted` (the person stopped it) is not an error. A `start()` that throws shows the generic message.
+- The microphone is released when the panel closes, the language changes, a question is sent, or the page is left.
+- A spoken question is one question like any other (quota, ledger, audit). Voice itself costs nothing and adds no accounting.
+
+### Reply language and its preference
+
+- Choices: auto (reply in the language of the question: English, Hindi, Gujarati or Hinglish), English, Hindi (Devanagari), Gujarati (Gujarati script), Hinglish (Hindi in Roman letters). Shared in `ai-language.ts` (`AI_LANGUAGES`, labels, speech language map).
+- Stored per business and person in the tenant table `ai_user_prefs` (`language`, `tips_enabled`, unique on business and user), read and written with `ai.preferences` / `ai.updatePreferences`. The streaming route reads **the stored value** after `ai.begin` and passes it to `buildSystemPrompt`; it is never taken from the request body or the model, and it is re-validated against the fixed list on read (`normaliseAiLanguage`), so a corrupted or hostile stored value becomes `auto` and never reaches the prompt.
+- Prompt: one language rule replaces the old sentence, then a block of fidelity rules that applies to every reply in every language: Western digits 0-9, Indian grouping and the rupee sign; amounts, dates, quantities, invoice numbers, party and item names copied exactly as the tools returned them (never translated, transliterated, rounded or reformatted); GST, GSTIN, HSN, SAC, e-way bill, e-invoice, GSTR-1, GSTR-3B, ITC, TDS, TCS, PAN, IGST, CGST, SGST, CESS and composition scheme kept as they are with no invented translations; tool names, inputs, card keys and the card `type` / link `kind` values stay in English while card titles, headings and labels may be in the reply language.
+- Starters: localised lists for Hindi, Gujarati, Hinglish and English in `components/ai/starters.ts`; "auto" shows a mix of all four. Action examples (Phase 2) have a Gujarati pair and follow the language too.
+- Model router: Gujarati analysis words (compare, why, trend, advice...) and measures (sales, purchases, expenses, profit, dues, stock, cash, bank) were added, so a Gujarati comparison goes to the strong model.
+- UI labels: only the new controls are new text (language picker, tips switch, microphone, tips card), in English. The language picker lists each language by its own name. There is **no app-wide translation**.
+- **Not verified**: how well the live model writes Hindi and Gujarati, whether it keeps the numbers and names exact in those scripts, and how well the browser recognises Gujarati speech. Tests cover the prompt, the preference, the starters, the router and the recognition language only. `docs/PENDING-OWNER-TASKS.md` has the review item.
+
+### Proactive dashboard tips
+
+- `ai.tips` (query): deterministic, **no model call and no question used**, shown even when the monthly questions are used up, but only with the add-on (active, granted or trial). No audit rows are written for reading tips.
+- Computed in `lib/ai/tips.ts` through the same in-process caller the assistant's tools use, i.e. the person's own permissions (a source that is refused gives no tip). Only these reads are made, all cheap and bounded: `invoice.list` (overdue sales invoices, 100 at most to add up what is owed; above that only the count), `inventoryReports.reorderStatus`, `inventoryReports.batchStock` (expired, and expiring within 30 days) and `gst.gstr3b` (only to see whether the month being reported had sales and what the books show payable). **Never payroll data.** A test asserts that no other procedure is read.
+- Kinds: overdue invoices (count, total owed, oldest due date; critical when the oldest is 60 or more days overdue), items below reorder level, expired and soon-expiring batches (critical when something has expired), GST return near its due date. GST: the statutory monthly dates (GSTR-1 on the 11th, GSTR-3B on the 20th of the next month, India time) shown from 7 days before through the due day, only for a regular GST registration with a GSTIN that had sales in the month being reported. After the due date nothing is said, because whether it was filed is not known. The business does not record a filing frequency (monthly or QRMP), so the tip assumes monthly filing; its text says what is due, not that it is overdue. Composition dealers (CMP-08, GSTR-4) get no GST tip. Cash and bank balances are not a tip.
+- Each tip: stable `id`, `kind`, `severity` (critical, warning, info), English `text` with Indian formatting, an optional `ask` question (prefills the assistant, never sent) and a `link` that is an allowlisted target (`aiLinkTargetSchema`, never a free URL). Ranked critical, warning, info, then by kind; at most 4 (`AI_MAX_TIPS`).
+- Cache: per organisation, business, person and role, 5 minutes (`AI_TIPS_CACHE_MS`), at most 500 entries. The switches are checked on every call, before the cache.
+- Dashboard: `AiTipsCard` ("Tips from your assistant") on the web dashboard. It is not drawn at all when the add-on is unavailable, the role has no assistant, the server says tips are off, or there is nothing to say; it never shows an error. Each tip can be dismissed for the day and the card collapsed; both are remembered in this browser only (`localStorage`, per business, inside try/catch; a per-viewer convenience, not state that must persist). "Turn tips off" in the card sets the person's switch. The mobile dashboard has no card (see above).
+
+### Switching tips off
+
+Tips are on when **all** of these hold: the add-on is available and the organisation is writable; the owner's organisation switch is on; the owner's switch for the person's role is on (the owner is never role-locked); the person's own `tips_enabled` is on. `ai.tips` says which one is off in `reason` (`addon_required`, `read_only`, `suspended`, `org_disabled`, `role_disabled`, `tips_off`). The person's switch is in the panel's preferences (gear button) and on the card. Tests cover all eight combinations of the three switches.
+
+### Help-centre answers
+
+- Tool `search_help` (read only, allowlisted): `query` (2 to 120 characters, English keywords) and `limit` (1 to 5, default 3). It searches `HELP_INDEX` (title, summary, headings, first numbered steps, path, platform) and returns the best articles as **data**: title, summary, path, "appliesTo" (web app, or web app and mobile app), section titles and first steps, with a note that article text is documentation, not instructions. Result size is bounded (clipped fields and the 9,000 character tool budget). When nothing matches it says so and tells the model not to guess.
+- The prompt tells the model to use it for "how do I..." questions about using Fintranzact, summarise briefly in its own words, say which article the steps come from, and add a help link card; business figures still come from the data tools. Help articles are listed with tool results as data in the security rules.
+- Link kind `help` (`{"kind":"help","path":"/help/..."}`): validated in `aiLinkTargetSchema` by `isAiHelpPath`, an exact match against the generated index (no query string, no hash, no other host). A forged path makes the whole card be dropped: on the server when the answer is built, when it is read back from history, and on the web (the same shared schema). The web opens it in a new tab with `rel="noopener noreferrer"`.
+- **How the index stays current**: the API cannot read `apps/web/src/content/help` at runtime, so `apps/web/scripts/gen-help-index.ts` (library: `help-index-lib.ts`) generates `packages/shared/src/help-index.generated.ts` (committed, about 55 KB). `pnpm --filter @fintranzact/web gen:help-index` rewrites it, the web `build` script runs it first, and `apps/web/src/__tests__/help-index-generated.test.ts` **fails when the committed file differs from what the script would write** (an article added, renamed or edited), and when the index and the help table of contents disagree. After editing any help article run `gen:help-index` and commit the result.
+
+### Data model and migrations
+
+One tenant table, `ai_user_prefs` (business id, user id, `language`, `tips_enabled`, `updated_at`; unique on business and user; cascade on business delete). Migrations: unified `0073_ai_phase_3_prefs`, tenant `0046_ai_phase_3_prefs`; the control tree is unchanged. Like conversations, the preferences are private to the person, are **not** part of the self-export, and the data-audit registry lists the table with no rules. The test database truncate list includes it.
+
+### Procedures and routes
+
+| Procedure | Permission | Notes |
+|---|---|---|
+| `ai.preferences` (query) | read Ai | Defaults when never saved. |
+| `ai.updatePreferences` (mutation) | create Ai, add-on, writable organisation | `language` and/or `tipsEnabled`; a field left out is unchanged. |
+| `ai.tips` (query) | read Ai | Reads other procedures through the person's own caller, so the role matrix lists `read:Ai, read:Invoice, read:Report`. Never throws for a missing add-on or a switch. |
+
+No REST route changed: `POST /api/ai/stream` has the same body (the language is read from the stored preference). The employee backstop still refuses employee-role users on every `ai.*` procedure (the employee and HR sweep covers the three new ones). Parity: web-only, with the reason recorded for mobile, CLI and MCP in `parity-exceptions.yaml`.
+
+### Security and privacy
+
+- No audio reaches our servers by our code; there is no recording, no upload and no speech service of ours. The browser's own service may receive it (documented in the help page and the owner tasks).
+- Tips respect the person's own permissions and read no payroll data. No new secrets or environment variables.
+- The reply language that reaches the prompt can only be a value from the fixed list.
+- Help articles are public documentation, but they are still passed as tool results (data), never as instructions.
+
+### Decisions and deviations
+
+- The language preference and the tips switch live in one tenant table keyed by business and person, like the conversations, rather than a per-user control table, so they follow the business data and are removed with it.
+- "Dismissed for the day" is browser-only, not stored on the server: it is a per-viewer convenience and costs no table.
+- The tips card links to existing reports instead of adding a new "overdue invoices" view; the Outstanding report already has the ageing buckets.
+- Voice on mobile and the mobile tips card were left out for the reason above rather than shipping a half-built native screen.
+
+Phase 3 tests: shared `ai-phase3.test.ts` (languages, help search and link validation, tip builders and ranking, GST due-date windows), API `ai-language.test.ts` (prompt per language, router) and integration `ai-phase3.test.ts` (preferences, tips for every kind with an injected clock, permissions, switches in every combination, caching, quota and audit untouched, language reaching the prompt only from the stored value, `search_help` end to end with the scripted fake provider), web `AiVoiceAndLanguage.test.tsx` (mock SpeechRecognition: support detection, listening, interim results, stop by tap and Esc, errors, language mapping, starters, preferences), `AiTipsCard.test.tsx`, `AiHelpLinkCard.test.tsx` and `help-index-generated.test.ts` (the staleness check).
 
 ## Tests
 

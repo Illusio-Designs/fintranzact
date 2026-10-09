@@ -12,6 +12,7 @@
 import { z } from "zod";
 import { istDateParts } from "./dates.js";
 import { gstOnPaise } from "./billing.js";
+import { isAiHelpPath } from "./ai-help.js";
 
 // ── Tiers and quotas ─────────────────────────────────────────────────────────
 
@@ -288,10 +289,12 @@ export const AI_LINK_PAGE_PATHS: Record<(typeof AI_LINK_PAGES)[number], string> 
   gst: "/gst",
 };
 
-const linkTargetSchema = z.discriminatedUnion("kind", [
+export const aiLinkTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("invoice"), id: z.string().uuid() }),
   z.object({ kind: z.literal("report"), report: z.enum(AI_LINK_REPORTS) }),
   z.object({ kind: z.literal("page"), page: z.enum(AI_LINK_PAGES) }),
+  /** Phase 3: a help-centre article. The path must be one that exists in the generated help index; anything else is dropped. */
+  z.object({ kind: z.literal("help"), path: z.string().max(120).refine(isAiHelpPath, "Not a help-centre article") }),
 ]);
 
 export const aiTableCardSchema = z
@@ -313,7 +316,7 @@ export const aiBarChartCardSchema = z.object({
 export const aiLinkCardSchema = z.object({
   type: z.literal("link"),
   label: aiCleanText(60),
-  target: linkTargetSchema,
+  target: aiLinkTargetSchema,
 });
 
 export const aiCardSchema = z.union([aiTableCardSchema, aiBarChartCardSchema, aiLinkCardSchema]);
@@ -371,6 +374,7 @@ export function aiLinkHref(card: AiLinkCard): { to: string; search?: Record<stri
   const t = card.target;
   if (t.kind === "invoice") return { to: "/invoices", search: { id: t.id } };
   if (t.kind === "report") return { to: "/reports", search: { report: t.report } };
+  if (t.kind === "help") return { to: t.path };
   return { to: AI_LINK_PAGE_PATHS[t.page] };
 }
 
