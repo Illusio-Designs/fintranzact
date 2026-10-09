@@ -41,7 +41,21 @@ The salary for the month of the last working day is paid by the **normal payroll
 4. **Post to books** and **Mark as paid** (owner, admin or accountant).
 5. **Statement (PDF)** gives the employee a settlement statement at any time after the first calculation.
 
-An employee with a settlement that is more than a draft cannot be brought back with Reactivate. **There is no way to reverse a posted settlement**; correct it with a journal entry, as with payroll runs.
+An employee with a live settlement that is more than a draft cannot be brought back with Reactivate.
+
+## Reversing a posted settlement
+
+If a settlement was posted by mistake (the wrong employee, the wrong date or wrong figures), an **owner, admin or accountant** (never HR) can press **Reverse settlement** on a posted settlement. You must give a **reason**, which is kept on the record and in the audit log. Reversing:
+
+- posts a mirror entry that **exactly negates** the original (the original entry is marked voided and points to it, and the date is the same, so the period must not be locked);
+- **puts the loan balances back**: the loans it recovered are active again with the balance restored (the loan history keeps both lines; nothing is deleted) and a new repayment schedule starts next month at the same EMI;
+- **gives the encashed leave back** to the balance;
+- gives the **gratuity back to the Gratuity Provision** (the entry drew it) and **frees the bonus**, so a bonus run takes the employee in again;
+- turns the settlement into **Reversed**, which is final. Its statement PDF stays available.
+
+It does **not** bring the employee back: they stay shown as having left. Start a **new settlement** from the list (a reversed one does not count as the employee's settlement) and the loans are recovered in it as before. Reactivating the employee first is a separate decision for HR and is allowed once the settlement is reversed.
+
+A settlement that has been **paid** cannot be reversed straight away. Press **Reverse payment** first (reason required): the money goes back into the account it was paid from, a mirror entry negates the payment entry, and the settlement returns to **Posted to books**. You can then mark it paid again, or reverse the settlement. An approved settlement that is not posted yet cannot be reversed; post it and then reverse it, or correct it with a journal entry. Entries a settlement posted cannot be voided by hand from Journal entries: use these buttons so the loans and leave are put back too.
 
 ## Books
 

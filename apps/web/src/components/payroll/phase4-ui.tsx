@@ -16,7 +16,7 @@ const TONES = {
 } as const;
 
 const BONUS_TONE: Record<BonusRunStatus, keyof typeof TONES> = { draft: "neutral", calculated: "info", pending_approval: "warn", approved: "good", posted: "good", paid: "done" };
-const FNF_TONE: Record<FnfStatus, keyof typeof TONES> = { draft: "neutral", pending_approval: "warn", approved: "good", posted: "good", paid: "done" };
+const FNF_TONE: Record<FnfStatus, keyof typeof TONES> = { draft: "neutral", pending_approval: "warn", approved: "good", posted: "good", paid: "done", reversed: "bad" };
 const LOAN_TONE: Record<LoanStatus, keyof typeof TONES> = { pending_approval: "warn", approved: "good", active: "info", closed: "done", rejected: "bad", cancelled: "neutral" };
 
 export function BonusStatusBadge({ status }: { status: string }) {

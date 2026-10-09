@@ -10,6 +10,7 @@ import {
   buildRepaymentSchedule,
   canTransitionBonusRun,
   canTransitionFnf,
+  fnfReverseSchema,
   computeEmiPaise,
   computeEmployeeBonus,
   computeFnf,
@@ -309,6 +310,13 @@ describe("full and final", () => {
     expect(canTransitionFnf("draft", "pending_approval")).toBe(true);
     expect(canTransitionFnf("approved", "draft")).toBe(false);
     expect(canTransitionFnf("posted", "paid")).toBe(true);
+    // Reversal: only a posted settlement is reversed (terminal); a paid one goes back to posted when its payment is reversed.
+    expect(canTransitionFnf("posted", "reversed")).toBe(true);
+    expect(canTransitionFnf("paid", "reversed")).toBe(false);
+    expect(canTransitionFnf("paid", "posted")).toBe(true);
+    expect(canTransitionFnf("reversed", "posted")).toBe(false);
+    expect(fnfReverseSchema.safeParse({ id: "0b3f2d9e-6c1a-4c3e-9a55-0d6a2f8c1e11", reason: "abc" }).success).toBe(false);
+    expect(fnfReverseSchema.safeParse({ id: "0b3f2d9e-6c1a-4c3e-9a55-0d6a2f8c1e11", reason: "  Wrong employee  " })).toMatchObject({ success: true, data: { reason: "Wrong employee" } });
     expect(canTransitionBonusRun("approved", "posted")).toBe(true);
     expect(canTransitionBonusRun("posted", "calculated")).toBe(false);
   });

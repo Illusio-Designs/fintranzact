@@ -381,6 +381,8 @@
 | payrollFnf.markPaid | mutation | authorized | create:PayrollPosting, update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollFnf.post | mutation | authorized | create:PayrollPosting, update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollFnf.reopen | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollFnf.reverse | mutation | authorized | create:PayrollPosting, update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollFnf.reversePayment | mutation | authorized | create:PayrollPosting, update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollFnf.statementPdf | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollFnf.submit | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollFnf.update | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |

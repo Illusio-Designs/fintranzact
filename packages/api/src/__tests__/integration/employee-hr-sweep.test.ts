@@ -181,7 +181,7 @@ describe("employee and HR sweep over every tRPC procedure", () => {
       "payrollSalary.templateDelete", "payrollRun.approve", "payrollRun.post", "payrollRun.markPaid", "payrollStatutory.recordPayment", "payrollStatutory.saveRates", "payrollStatutory.updateBusinessSettings",
       // Phase 4: approving needs Payroll "manage", posting and paying need PayrollPosting; HR prepares only.
       "payrollBonus.approve", "payrollBonus.post", "payrollBonus.markPaid",
-      "payrollFnf.approve", "payrollFnf.post", "payrollFnf.markPaid",
+      "payrollFnf.approve", "payrollFnf.post", "payrollFnf.markPaid", "payrollFnf.reverse", "payrollFnf.reversePayment",
       "payrollLoan.approve", "payrollLoan.reject", "payrollLoan.disburse", "payrollLoan.prepay", "payrollLoan.foreclose", "payrollLoan.updateSettings",
       "payrollGratuity.postProvision",
     ]);

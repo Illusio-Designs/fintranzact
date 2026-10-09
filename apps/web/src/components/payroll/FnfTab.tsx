@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@fintranzact/api";
-import { FNF_STATUSES, FNF_STATUS_LABELS, LEAVE_ENCASHMENT_BASES, LEAVE_ENCASHMENT_BASIS_LABELS, type LeaveEncashmentBasis } from "@fintranzact/shared";
+import { FNF_FLOW_STATUSES, FNF_REVERSAL_REASON_MIN, FNF_STATUS_LABELS, LEAVE_ENCASHMENT_BASES, LEAVE_ENCASHMENT_BASIS_LABELS, type LeaveEncashmentBasis } from "@fintranzact/shared";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -66,7 +66,7 @@ function FnfList({ onOpen }: { onOpen: (id: string) => void }) {
       <LetterPanel />
       {starting && (
         <StartDialog
-          settledEmployeeIds={new Set(rows.map((r) => r.employeeId))}
+          settledEmployeeIds={new Set(rows.filter((r) => r.status !== "reversed").map((r) => r.employeeId))}
           onClose={() => setStarting(false)}
           onCreated={(id) => {
             void utils.payrollFnf.list.invalidate();
@@ -115,6 +115,7 @@ function FnfDetail({ id, onBack }: { id: string; onBack: () => void }) {
   const utils = trpc.useUtils();
   const { data, isLoading } = trpc.payrollFnf.get.useQuery({ id });
   const [paying, setPaying] = useState(false);
+  const [reversing, setReversing] = useState<null | "settlement" | "payment">(null);
   const [confirm, setConfirm] = useState<null | { title: string; description: string; label: string; run: () => void }>(null);
   const refresh = () => {
     void utils.payrollFnf.get.invalidate({ id });
@@ -136,6 +137,22 @@ function FnfDetail({ id, onBack }: { id: string; onBack: () => void }) {
       refresh();
     },
     onError: onError("Could not record the payment"),
+  });
+  const reverse = trpc.payrollFnf.reverse.useMutation({
+    onSuccess: () => {
+      toast({ title: "Settlement reversed", variant: "success" });
+      setReversing(null);
+      refresh();
+    },
+    onError: onError("Could not reverse the settlement"),
+  });
+  const reversePayment = trpc.payrollFnf.reversePayment.useMutation({
+    onSuccess: () => {
+      toast({ title: "Payment reversed", variant: "success" });
+      setReversing(null);
+      refresh();
+    },
+    onError: onError("Could not reverse the payment"),
   });
   const del = trpc.payrollFnf.delete.useMutation({
     onSuccess: () => {
@@ -180,11 +197,20 @@ function FnfDetail({ id, onBack }: { id: string; onBack: () => void }) {
           {status === "pending_approval" && <button className="btn-secondary" disabled={busy} onClick={() => reopen.mutate({ id })}>Back to draft</button>}
           {status === "approved" && <button className="btn-primary" disabled={busy} onClick={() => post.mutate({ id })}>Post to books</button>}
           {status === "posted" && <button className="btn-primary" disabled={busy} onClick={() => setPaying(true)}>Mark as paid</button>}
+          {status === "posted" && <button className="btn-secondary" disabled={busy} onClick={() => setReversing("settlement")}>Reverse settlement</button>}
+          {status === "paid" && <button className="btn-secondary" disabled={busy} onClick={() => setReversing("payment")}>Reverse payment</button>}
           <button className="btn-secondary" onClick={() => void statement()}>Statement (PDF)</button>
           {status === "draft" && <button className="btn-secondary" disabled={del.isPending} onClick={() => setConfirm({ title: "Delete this draft settlement?", description: "Nothing has been approved or posted yet.", label: "Delete", run: () => del.mutate({ id }) })}>Delete</button>}
         </div>
       </div>
-      <Steps steps={FNF_STATUSES} labels={FNF_STATUS_LABELS} current={status} />
+      {status === "reversed" ? (
+        <Notice testId="fnf-reversed">
+          This settlement was reversed{s.reversedAt ? ` on ${formatDate(s.reversedAt)}` : ""}{s.reversedByName ? ` by ${s.reversedByName}` : ""}. Reason: {s.reversalReason}. The entry in the books, the loan recoveries and the leave encashment were undone; the employee is still shown as having left. Start a new settlement from the list if one is still needed.
+        </Notice>
+      ) : (
+        <Steps steps={FNF_FLOW_STATUSES} labels={FNF_STATUS_LABELS} current={status} />
+      )}
+      {s.paymentReversedAt && status === "posted" && <Notice testId="fnf-payment-reversed">The payment was reversed on {formatDate(s.paymentReversedAt)}. Reason: {s.paymentReversalReason}.</Notice>}
       {status === "pending_approval" && !approval.canApprove && approval.reason && <Notice>{approval.reason}</Notice>}
       <Notice testId="fnf-salary">{salary.message}</Notice>
       <Notice testId="fnf-tds">{data.tdsWarning}</Notice>
@@ -220,8 +246,47 @@ function FnfDetail({ id, onBack }: { id: string; onBack: () => void }) {
           onSubmit={(v) => markPaid.mutate({ id, bankAccountId: v.bankAccountId, paidOn: v.date, reference: v.reference })}
         />
       )}
+      {reversing && (
+        <ReversalDialog
+          kind={reversing}
+          pending={reverse.isPending || reversePayment.isPending}
+          net={formatCurrency(s.netPayable)}
+          onClose={() => setReversing(null)}
+          onSubmit={(reason) => (reversing === "payment" ? reversePayment.mutate({ id, reason }) : reverse.mutate({ id, reason }))}
+        />
+      )}
       <ConfirmDialog open={!!confirm} title={confirm?.title ?? ""} description={confirm?.description} confirmLabel={confirm?.label} onCancel={() => setConfirm(null)} onConfirm={() => { confirm?.run(); setConfirm(null); }} />
     </div>
+  );
+}
+
+/** Asks for the reason (mandatory) before a reversal, and says plainly what it does. */
+function ReversalDialog({ kind, net, pending, onClose, onSubmit }: { kind: "settlement" | "payment"; net: string; pending?: boolean; onClose: () => void; onSubmit: (reason: string) => void }) {
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const isPayment = kind === "payment";
+  function confirm() {
+    const r = reason.trim();
+    if (r.length < FNF_REVERSAL_REASON_MIN) return setError("Give the reason for the reversal.");
+    setError(null);
+    onSubmit(r);
+  }
+  return (
+    <Modal open onClose={onClose} title={isPayment ? "Reverse the payment?" : "Reverse this settlement?"}>
+      <div className="space-y-3">
+        <p className="text-sm text-text-secondary">
+          {isPayment
+            ? `This puts ${net} back into the account it was paid from and the settlement returns to "Posted to books". Use it when the payment was recorded wrongly. You can mark it as paid again afterwards.`
+            : "This reverses the entry in the books exactly, puts the loan balances it recovered back on the loans, gives the encashed leave back and frees the bonus. It cannot be undone. The employee is not brought back; start a new settlement if one is still needed."}
+        </p>
+        <InputField label="Reason" required value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is it being reversed?" />
+        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <button className="btn-secondary" onClick={onClose}>Cancel</button>
+          <button className="btn-primary" disabled={pending} onClick={confirm}>{isPayment ? "Reverse payment" : "Reverse settlement"}</button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

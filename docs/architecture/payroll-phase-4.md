@@ -72,7 +72,29 @@ Created for an exited employee on or after the last working day (`createFnf`; on
 
 `approve` (maker-checker) re-works the plan and refuses if leave, loans or bonus moved since it was calculated; then writes the leave ledger rows (`encashment`, period key `fnf:<id>`, idempotent) and the loan recoveries (event `fnf_recovered`, open instalments replaced, loan closed when nothing is left). `post`: Dr leave encashment and other dues 5201, arrears 5200, bonus 5202, gratuity 2441 then 5205; Cr 2442 (net), 1260 (loans), 2410 (notice and other recoveries), 2434 (TDS), dated the last working day. A settlement with nothing due is "posted" with no entry. `markPaid`: Dr 2442 / Cr bank or cash and a bank transaction. Statement PDF at any time after the first calculation.
 
-**Reversal: none exists** for a settlement (as for a payroll run). A draft can be deleted or reopened; after approval correct with a journal entry. The data audit checks the totals, that a posted settlement has a balanced entry equal to the amounts due, and a paid one a payment entry for the net.
+**Reversal of an approved (not posted) settlement: none** (as for a payroll run); a draft can be deleted or reopened, and an approved one is posted and then reversed, or corrected with a journal entry. A **posted** or **paid** settlement can be reversed: see "Reversing a posted settlement" below. The data audit checks the totals, that a posted settlement has a balanced entry equal to the amounts due, a paid one a payment entry for the net, and that a reversed one negates its entry and puts back every loan recovery.
+
+### Reversing a posted settlement (`payrollFnf.reverse`, `payrollFnf.reversePayment`)
+
+Status machine now: `draft -> pending_approval -> approved -> posted -> paid`, plus **`reversed`** (terminal; reached only from `posted`) and `paid -> posted` through `reversePayment`. `status` is a text column, so no enum migration; migration unified `0072_payroll_fnf_reversal`, tenant `0045_payroll_fnf_reversal` (control: none) adds the reversal columns, the new loan-event index, and **changes the unique index "one settlement per employee" to a partial index (`WHERE status <> 'reversed'`)** so a new settlement can be prepared after a reversal (the reversed row stays on record).
+
+**Who and how.** `PayrollPosting` (owner, admin, accountant; never HR) plus `Payroll:update`, like `post` and `markPaid`; add-on gated, refused while read-only. A **mandatory reason** (5 to 500 characters) is kept in `reversal_reason` / `payment_reversal_reason` and in the audit log (`payroll.fnf.reverse`, `payroll.fnf.reversePayment`, with the reason and the loans touched). Both are **idempotent** (a second call returns the first result, `created: false`, and writes nothing). Concurrency: the settlement row and the employee row are locked, the loan rows too.
+
+**What `reverse` does, in one transaction.**
+
+| Effect of the settlement | Reversal |
+|---|---|
+| Accrual journal entry (Dr expenses and 2441 / Cr 2442, 1260, 2410, 2434) | A mirror entry on the **same date** with every line's debit and credit swapped (`reverseJournalEntry` in `books.ts`, the same marking as the manual `journal.void`: the mirror has `reverses_entry_id`, the original `is_voided` and `voided_by_entry_id`). Reports include both, so the pair nets to zero account by account. The period of that date must be open (otherwise it is refused with the lock message). A settlement with nothing due has no entry and nothing to mirror. |
+| Loan recoveries (`fnf_recovered`, loan closed, open instalments superseded, balance instalment added) | The loan log is **append-only**: one `fnf_reversed` event per loan puts the principal back (outstanding = principal - recoveries + puts back), a loan the settlement closed becomes `active` again, and the remaining schedule is **replaced, never edited** (open instalments superseded, a new schedule for the restored balance at the loan's own EMI from next month). The unique partial index `employee_loan_events_fnf_idx` (loan, settlement, `fnf_recovered`) is untouched: a later settlement has another id, so it can recover the loan again; a second unique index (loan, settlement, `fnf_reversed`) makes the reversal idempotent. Refused if putting back would exceed the principal lent (the loan moved since). |
+| Leave encashed (`leave_ledger` kind `encashment`, key `fnf:<id>`) | A compensating `adjustment` row per leave type (key `fnf-reversed:<id>`) restores the balance; the encashment row stays. |
+| Gratuity drawn from the provision (2441) | Given back by the mirror entry itself: the provision balance is derived from the books, there is no separate "paid" flag. |
+| Bonus due (`inputs.bonusFinancialYear`) | A bonus run counts only approved, posted or paid settlements, so a reversed one frees the employee: the next bonus calculation takes them in. |
+| Employee exit state | **Not touched.** The employee stays `exited`; HR re-opens the exit (`reactivate` is allowed because the settlement is reversed; a reversed row is never deleted by it) or prepares a new settlement. |
+| The settlement | `status = reversed` (terminal), `reversed_at`, `reversed_by_*`, `reversal_reason`, `reversal_journal_entry_id`; the original accrual entry id stays. Editing, submitting, approving, posting and paying a reversed settlement are refused. The statement PDF stays available (status shown as "reversed"). |
+
+A **paid** settlement is refused with "Reverse the payment first". `reversePayment` (paid -> posted) mirrors the payment entry (Dr 2442 / Cr bank or cash, negated, same date), puts the net back into the account it left (a deposit bank transaction dated the payment date, reference type `fnf_settlement_reversal`) and clears the paid fields; the settlement can then be paid again or reversed. Limits: a bank transaction that was already **reconciled against a bank statement line** is not detected (the reversal adds a deposit; reconcile it again by hand); the reversal posts on the original dates, so it needs those periods open (it never posts into a locked period); an **approved but not posted** settlement is not reversible (post it first); interest accrued is not modelled (principal only, as in the settlement); a loan whose balance moved after the settlement (prepaid, rescheduled) is refused with a message to correct it by journal entry. Entries posted by a settlement cannot be voided by hand in `journal.void` (the settlement owns them).
+
+Data audit: `fnf_settlements` rules `status-matches-links` (reversal entry only on a reversed settlement), `reversed-negates-original` (account by account, original voided by the mirror, payment reversal likewise), `reversed-puts-loans-back`; the three loan rules count `fnf_reversed` as a put back.
 
 ## 4. Relieving letter
 
@@ -104,7 +126,7 @@ Reused, not rebuilt: the Phase 2 wages, attendance, leave, bonus and gratuity re
 ## Not built, and known limits
 
 - Set-on / set-off, minimum-bonus-versus-surplus logic, tax on gratuity, TDS on a settlement (manual amount only), perquisite tax on cheap loans, an actuarial gratuity valuation.
-- Reversing an approved settlement or an approved bonus run; writing off a loan balance.
+- Reversing an approved (not yet posted) settlement, or an approved bonus run (a posted or paid settlement can be reversed, see above); writing off a loan balance.
 - The employee-side loan or settlement view; mobile, CLI and MCP surfaces.
 - Registers as PDF; the statutory form of any state.
 - Accrued interest in a settlement (principal only); day-count interest.

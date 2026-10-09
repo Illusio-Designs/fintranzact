@@ -11,7 +11,7 @@
  * recovered in a full and final settlement is the PRINCIPAL outstanding only.
  */
 
-import { and, asc, desc, eq, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lte, ne, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
   employeeLoanEvents,
@@ -60,6 +60,8 @@ export const LOAN_MAKER_CHECKER_MESSAGE =
 
 /** Event kinds that reduce the principal outstanding. */
 export const PRINCIPAL_RECOVERY_KINDS = ["emi_recovered", "prepaid", "foreclosed", "fnf_recovered"] as const;
+/** `fnf_reversed` puts back what a reversed settlement had recovered: it counts against the recoveries. */
+export const PRINCIPAL_PUT_BACK_KIND = "fnf_reversed";
 
 function todayIst(): string {
   const p = istDateParts(new Date());
@@ -84,9 +86,9 @@ async function lockLoan(tx: Tx, businessId: string, loanId: string): Promise<Loa
 /** Principal still outstanding, paise. */
 export async function outstandingPaise(tx: Tx, loan: Pick<LoanRow, "id" | "principal">): Promise<number> {
   const [row] = await tx
-    .select({ p: sql<string>`COALESCE(SUM(${employeeLoanEvents.principal}), 0)::text` })
+    .select({ p: sql<string>`COALESCE(SUM(CASE WHEN ${employeeLoanEvents.kind} = 'fnf_reversed' THEN -${employeeLoanEvents.principal} ELSE ${employeeLoanEvents.principal} END), 0)::text` })
     .from(employeeLoanEvents)
-    .where(and(eq(employeeLoanEvents.loanId, loan.id), inArray(employeeLoanEvents.kind, [...PRINCIPAL_RECOVERY_KINDS])));
+    .where(and(eq(employeeLoanEvents.loanId, loan.id), inArray(employeeLoanEvents.kind, [...PRINCIPAL_RECOVERY_KINDS, PRINCIPAL_PUT_BACK_KIND])));
   return rupeesToPaise(loan.principal) - rupeesToPaise(row?.p ?? "0");
 }
 
@@ -435,7 +437,7 @@ export async function listLoans(db: TenantDatabase, businessId: string, filter: 
   const sums = await db
     .select({
       loanId: employeeLoanEvents.loanId,
-      principal: sql<string>`COALESCE(SUM(${employeeLoanEvents.principal}) FILTER (WHERE ${employeeLoanEvents.kind} IN ('emi_recovered', 'prepaid', 'foreclosed', 'fnf_recovered')), 0)::text`,
+      principal: sql<string>`COALESCE(SUM(CASE WHEN ${employeeLoanEvents.kind} = 'fnf_reversed' THEN -${employeeLoanEvents.principal} ELSE ${employeeLoanEvents.principal} END) FILTER (WHERE ${employeeLoanEvents.kind} IN ('emi_recovered', 'prepaid', 'foreclosed', 'fnf_recovered', 'fnf_reversed')), 0)::text`,
       interest: sql<string>`COALESCE(SUM(${employeeLoanEvents.interest}) FILTER (WHERE ${employeeLoanEvents.kind} IN ('emi_recovered', 'prepaid', 'foreclosed')), 0)::text`,
     })
     .from(employeeLoanEvents)
@@ -507,7 +509,8 @@ export async function loadLoanDues(tx: Tx, businessId: string, month: string, em
       ),
     )
     .orderBy(asc(employeeLoans.number), asc(employeeLoanInstallments.seq));
-  const withFnf: Array<{ employeeId: string }> = await tx.select({ employeeId: fnfSettlements.employeeId }).from(fnfSettlements).where(and(eq(fnfSettlements.businessId, businessId), inArray(fnfSettlements.employeeId, employeeIds)));
+  // A reversed settlement recovers nothing any more, so it does not keep the employee's loans out of a run.
+  const withFnf: Array<{ employeeId: string }> = await tx.select({ employeeId: fnfSettlements.employeeId }).from(fnfSettlements).where(and(eq(fnfSettlements.businessId, businessId), inArray(fnfSettlements.employeeId, employeeIds), ne(fnfSettlements.status, "reversed")));
   const fnfSet = new Set(withFnf.map((f) => f.employeeId));
   type MutableDue = { loanId: string; loanNumber: string; installments: LoanDue["installments"][number][] };
   const byLoan = new Map<string, MutableDue>();
@@ -634,4 +637,47 @@ export async function recoverLoansInFnf(
       await tx.insert(employeeLoanInstallments).values({ loanId: loan.id, businessId: input.businessId, seq: (mx?.n ?? 0) + 1, dueMonth: input.date.slice(0, 7), principal: paiseToRupees(after), interest: "0", note: "Balance after full and final settlement" });
     }
   }
+}
+
+/**
+ * Reversal of a settlement puts back what it recovered. For each loan the settlement recovered (`fnf_recovered`): an
+ * `fnf_reversed` event restores the principal (the log is append-only, nothing is deleted; a unique index makes this
+ * idempotent), a loan the settlement closed is made active again, and the remaining schedule is replaced (never edited) by a
+ * new one for the restored balance at the loan's own EMI, from the next month. Refuses when the restored balance would exceed
+ * the principal lent (something else moved the loan since). Returns the loans touched with the amount put back, paise.
+ */
+export async function reverseLoanRecoveriesOfFnf(
+  tx: Tx,
+  input: { businessId: string; settlementId: string; date: string; actor: Actor },
+): Promise<Array<{ loanId: string; loanNumber: string; amountPaise: number }>> {
+  const events: Array<typeof employeeLoanEvents.$inferSelect> = await tx
+    .select()
+    .from(employeeLoanEvents)
+    .where(and(eq(employeeLoanEvents.businessId, input.businessId), eq(employeeLoanEvents.settlementId, input.settlementId), eq(employeeLoanEvents.kind, "fnf_recovered")))
+    .orderBy(asc(employeeLoanEvents.loanId));
+  const out: Array<{ loanId: string; loanNumber: string; amountPaise: number }> = [];
+  for (const ev of events) {
+    const loan = await lockLoan(tx, input.businessId, ev.loanId);
+    const [done] = await tx
+      .select({ id: employeeLoanEvents.id })
+      .from(employeeLoanEvents)
+      .where(and(eq(employeeLoanEvents.loanId, loan.id), eq(employeeLoanEvents.settlementId, input.settlementId), eq(employeeLoanEvents.kind, "fnf_reversed")))
+      .limit(1);
+    if (done) continue;
+    const amount = rupeesToPaise(ev.principal);
+    const before = await outstandingPaise(tx, loan);
+    const after = before + amount;
+    if (after > rupeesToPaise(loan.principal)) {
+      throw badRequest(`${loan.number}: putting back ₹${paiseToRupees(amount)} would make the balance more than the principal lent. The loan changed after the settlement; correct it with a journal entry instead.`);
+    }
+    await addEvent(tx, loan, { kind: "fnf_reversed", date: input.date, principalPaise: amount, balancePaise: after, settlementId: input.settlementId, note: "Full and final settlement reversed", actor: input.actor });
+    if (loan.status === "closed" && after > 0) {
+      await tx.update(employeeLoans).set({ status: "active", closedAt: null, updatedAt: new Date() }).where(eq(employeeLoans.id, loan.id));
+    }
+    if (after > 0) {
+      await rebuildSchedule(tx, { ...loan, status: "active" } as LoanRow, { emiPaise: rupeesToPaise(loan.emi), balancePaise: after, firstMonth: addMonths(currentMonthIst(), 1) });
+    }
+    out.push({ loanId: loan.id, loanNumber: loan.number, amountPaise: amount });
+  }
+  return out;
 }

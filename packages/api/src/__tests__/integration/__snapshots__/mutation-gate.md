@@ -5,7 +5,7 @@ ungated-exempt = public/protected base AND allowlisted (auth, billing, platform 
 inline-guarded = public/protected base, but the router calls assertWritable itself (INLINE_WRITE_GUARDED);
 ungated = public/protected base with no check at all: must be empty of business-data writes.
 
-mutations: 400 (gated 328, exempt 9, ungated-exempt 60, inline-guarded 3, ungated 0)
+mutations: 402 (gated 330, exempt 9, ungated-exempt 60, inline-guarded 3, ungated 0)
 
 | procedure | base | status |
 |---|---|---|
@@ -223,6 +223,8 @@ mutations: 400 (gated 328, exempt 9, ungated-exempt 60, inline-guarded 3, ungate
 | payrollFnf.markPaid | authorized | gated |
 | payrollFnf.post | authorized | gated |
 | payrollFnf.reopen | authorized | gated |
+| payrollFnf.reverse | authorized | gated |
+| payrollFnf.reversePayment | authorized | gated |
 | payrollFnf.submit | authorized | gated |
 | payrollFnf.update | authorized | gated |
 | payrollGratuity.postProvision | authorized | gated |

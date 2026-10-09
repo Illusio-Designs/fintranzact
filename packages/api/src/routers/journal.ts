@@ -1,7 +1,7 @@
 import { eq, and, or, sql, desc } from "drizzle-orm";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { journalEntries, journalEntryLines, chartOfAccounts, journalEntryTemplates, payrollRuns } from "@fintranzact/db";
+import { journalEntries, journalEntryLines, chartOfAccounts, journalEntryTemplates, payrollRuns, fnfSettlements } from "@fintranzact/db";
 import { escapeLike } from "../lib/escape-like.js";
 import {
   createJournalEntrySchema,
@@ -299,6 +299,16 @@ export const journalRouter = router({
         .limit(1);
       if (payrollOwner) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "This entry was posted by a payroll run and cannot be voided here. Payroll entries are final once the run is approved." });
+      }
+
+      // The same for a full and final settlement: it is reversed with payrollFnf.reverse / reversePayment, which undo the loans and leave too.
+      const [fnfOwner] = await ctx.db
+        .select({ id: fnfSettlements.id })
+        .from(fnfSettlements)
+        .where(and(eq(fnfSettlements.businessId, ctx.businessId), or(eq(fnfSettlements.accrualJournalEntryId, existing.id), eq(fnfSettlements.paymentJournalEntryId, existing.id), eq(fnfSettlements.reversalJournalEntryId, existing.id), eq(fnfSettlements.paymentReversalJournalEntryId, existing.id))))
+        .limit(1);
+      if (fnfOwner) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "This entry was posted by a full and final settlement and cannot be voided here. Reverse the settlement (or its payment) from Payroll, which also puts back the loans and leave." });
       }
 
       if (existing.isVoided) {

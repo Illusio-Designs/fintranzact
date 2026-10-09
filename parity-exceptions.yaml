@@ -179,6 +179,8 @@ exceptions:
       - payrollFnf.markPaid
       - payrollFnf.post
       - payrollFnf.reopen
+      - payrollFnf.reverse
+      - payrollFnf.reversePayment
       - payrollFnf.statementPdf
       - payrollFnf.submit
       - payrollFnf.update
@@ -841,6 +843,8 @@ exceptions:
       - payrollFnf.markPaid
       - payrollFnf.post
       - payrollFnf.reopen
+      - payrollFnf.reverse
+      - payrollFnf.reversePayment
       - payrollFnf.statementPdf
       - payrollFnf.submit
       - payrollFnf.update
@@ -1382,6 +1386,8 @@ exceptions:
       - payrollFnf.markPaid
       - payrollFnf.post
       - payrollFnf.reopen
+      - payrollFnf.reverse
+      - payrollFnf.reversePayment
       - payrollFnf.statementPdf
       - payrollFnf.submit
       - payrollFnf.update

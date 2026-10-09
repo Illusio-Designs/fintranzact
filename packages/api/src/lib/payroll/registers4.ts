@@ -92,14 +92,16 @@ export async function buildDeductionsRegisterFile(db: TenantDatabase, businessId
     .from(employeeLoanEvents)
     .innerJoin(employeeLoans, eq(employeeLoans.id, employeeLoanEvents.loanId))
     .innerJoin(employees, eq(employees.id, employeeLoanEvents.employeeId))
-    .where(and(eq(employeeLoanEvents.businessId, businessId), gte(employeeLoanEvents.eventDate, start), lte(employeeLoanEvents.eventDate, end), inArray(employeeLoanEvents.kind, ["disbursed", "emi_recovered", "prepaid", "foreclosed", "fnf_recovered"])));
+    .where(and(eq(employeeLoanEvents.businessId, businessId), gte(employeeLoanEvents.eventDate, start), lte(employeeLoanEvents.eventDate, end), inArray(employeeLoanEvents.kind, ["disbursed", "emi_recovered", "prepaid", "foreclosed", "fnf_recovered", "fnf_reversed"])));
   for (const ev of events) {
     const label = ev.kind === "advance" ? "Advance" : "Loan";
     if (ev.e.kind === "disbursed") {
       rows.push({ period: ev.e.eventDate, employeeCode: ev.code, name: ev.name, kind: "advance_given", description: `${label} ${ev.loanNumber}`, amountPaise: rupeesToPaise(ev.e.balanceAfter) });
     } else {
-      const amount = rupeesToPaise(ev.e.principal) + rupeesToPaise(ev.e.interest);
-      if (amount > 0) rows.push({ period: ev.e.eventDate, employeeCode: ev.code, name: ev.name, kind: "loan_recovery", description: `${label} ${ev.loanNumber} (${ev.e.kind.replace(/_/g, " ")})`, amountPaise: amount });
+      // A reversed settlement puts its recovery back: shown as a negative recovery so the register nets to what was kept.
+      const sign = ev.e.kind === "fnf_reversed" ? -1 : 1;
+      const amount = sign * (rupeesToPaise(ev.e.principal) + rupeesToPaise(ev.e.interest));
+      if (amount !== 0) rows.push({ period: ev.e.eventDate, employeeCode: ev.code, name: ev.name, kind: "loan_recovery", description: `${label} ${ev.loanNumber} (${ev.e.kind.replace(/_/g, " ")})`, amountPaise: amount });
     }
   }
   rows.sort((a, b) => a.period.localeCompare(b.period) || a.employeeCode.localeCompare(b.employeeCode));
