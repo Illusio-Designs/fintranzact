@@ -196,7 +196,7 @@ describe("encrypted secrets", () => {
   it("round-trips a key secret and never stores plaintext", () => {
     const stored = encryptGatewaySecret("my-razorpay-key-secret");
     expect(stored).not.toContain("my-razorpay-key-secret");
-    expect(stored).toMatch(/^v\d+:[0-9a-f]+:[0-9a-f]+:[0-9a-f]*$/i);
+    expect(stored).toMatch(/^v\d+:(?:[\w-]+:)?[0-9a-f]+:[0-9a-f]+:[0-9a-f]*$/i);
     expect(decryptGatewaySecret(stored)).toBe("my-razorpay-key-secret");
   });
 

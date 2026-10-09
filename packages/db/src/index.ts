@@ -30,6 +30,12 @@ export {
   reEncryptField,
   isEncrypted,
   getKeyVersion,
+  getCiphertextKeyId,
+  getCurrentKeyId,
+  hasEncryptionKey,
+  isOnCurrentKey,
+  decryptFieldStrict,
+  EncryptionError,
   encryptDbPassword,
   decryptDbPassword,
 } from "./crypto.js";

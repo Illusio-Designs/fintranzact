@@ -84,7 +84,8 @@ The web and store frontends are deployed by Vercel's Git integration (see `apps/
 | `GOV_RATE_E_WAY_BILL_PAISE` | No | Price per e-way bill, in paise, before GST. Default `200` | `200` |
 | `GOV_RATE_GSTR1_PAISE` | No | Price per GSTR-1 filing, in paise, before GST. Default `0` | `0` |
 | `GOV_RATE_GSTR3B_PAISE` | No | Price per GSTR-3B filing, in paise, before GST. Default `0` | `0` |
-| `ENCRYPTION_KEY_PREVIOUS` | No | Previous encryption key — set only during key rotation | |
+| `ENCRYPTION_KEYS_PREVIOUS` | No | Previous encryption keys (comma separated, decrypt-only) — set during and after a key rotation; see [key rotation](security/key-rotation.md). `ENCRYPTION_KEY_PREVIOUS` (one key) is still read | |
+| `ENCRYPTION_KEY_ID` | No | Optional label for the current key (default: a fingerprint of the key) | |
 | `RESEND_API_KEY` | Yes | Email service API key (email-change links, invites) | `re_xxx` |
 | `EMAIL_FROM` | No | From address for emails | `Fintranzact <noreply@fintranzact.com>` |
 | `MULTI_TENANT` | No | Enable multi-tenancy | `true` |

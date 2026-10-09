@@ -46,7 +46,7 @@ never commit it, never paste it in chat).
 | `DATABASE_URL` | Reference to the Railway Postgres `DATABASE_URL` | Fills itself when referenced |
 | `NODE_ENV` | `production` | |
 | `PORT` | `3000` | |
-| `ENCRYPTION_KEY` | 64 hex characters | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Never change it later: saved Razorpay and e-invoice credentials become unreadable |
+| `ENCRYPTION_KEY` | 64 hex characters | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Do not just replace it later (saved Razorpay and e-invoice credentials would become unreadable): rotate it with [`docs/security/key-rotation.md`](security/key-rotation.md), see section 19 |
 | `CORS_ORIGINS` | Your web address, e.g. `https://fintranzact-web.vercel.app` | |
 | `APP_URL` | Same web address | Used for email links and for sending customers back after paying |
 | `API_URL` | Your public API address, `https://fintranzact-production.up.railway.app` | Shown in the webhook URLs businesses copy |

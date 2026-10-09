@@ -1,64 +1,148 @@
 /**
- * Field-level AES-256-GCM encryption with key versioning and rotation support.
+ * Field-level AES-256-GCM encryption with key ids and rotation support.
+ * Design and procedure: docs/security/key-rotation.md.
  *
- * Key management:
- *   ENCRYPTION_KEY          — current key used for all new encrypts (64-char hex = 32 bytes)
- *   ENCRYPTION_KEY_PREVIOUS — old key used only for decryption during rotation
+ * Configuration:
+ *   ENCRYPTION_KEY           current key, used for every new encryption (64-char hex = 32 bytes)
+ *   ENCRYPTION_KEY_ID        optional label for the current key ([A-Za-z0-9_-]{1,32}); default is
+ *                            the first 4 bytes of a SHA-256 of the key (never the key itself)
+ *   ENCRYPTION_KEYS_PREVIOUS previous keys, decrypt-only. Comma separated or a JSON array; each
+ *                            entry is "<64 hex>" or "<label>=<64 hex>"
+ *   ENCRYPTION_KEY_PREVIOUS  single previous key (older name, still read)
+ *   DB_ENCRYPTION_KEY        accepted as an alias for ENCRYPTION_KEY
  *
- * Backward compatibility:
- *   - DB_ENCRYPTION_KEY is accepted as a fallback alias for ENCRYPTION_KEY
- *   - Legacy format (iv:tag:cipher without version prefix) is treated as version 1
- *   - Plaintext values are detected and returned as-is during decryption
- *   - encryptDbPassword / decryptDbPassword kept as aliases for existing callers
+ * Formats (all still readable):
+ *   v3:{keyId}:{iv}:{tag}:{ciphertext}   written today
+ *   v2:{iv}:{tag}:{ciphertext}           written before key ids existed (decrypts with any configured key)
+ *   {iv}:{tag}:{ciphertext}              legacy, implicitly version 1
+ *   anything else                        plaintext, returned as is by decryptField
  *
- * Versioned format: v{version}:{iv_hex}:{authTag_hex}:{ciphertext_hex}
- * Legacy format:    {iv_hex}:{authTag_hex}:{ciphertext_hex}  (implicitly version 1)
+ * The cipher (AES-256-GCM, 16-byte random IV, no AAD) is the same in every version, so a v2 value
+ * decrypts with the same key as before.
  */
 
-import { randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
+import { createHash, randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
-const CURRENT_KEY_VERSION = 2; // Version stamped on all new encryptions
+const CURRENT_KEY_VERSION = 3; // Version stamped on all new encryptions
+
+/** Thrown by the strict helpers. The message never contains key material or plaintext. */
+export class EncryptionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "EncryptionError";
+  }
+}
 
 // ── Key loading ─────────────────────────────────────────────────────────────
 
+interface KeyEntry {
+  id: string;
+  key: Buffer;
+}
+
+const HEX64_RE = /^[0-9a-fA-F]{64}$/;
+const KEY_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
+
+function derivedKeyId(key: Buffer): string {
+  return createHash("sha256").update("fintranzact-key-id\0").update(key).digest("hex").slice(0, 8);
+}
+
 function parseKey(hex: string | undefined, envName: string): Buffer | null {
   if (!hex) return null;
-  if (hex.length !== 64) {
+  if (!HEX64_RE.test(hex)) {
     throw new Error(`${envName} must be a 64-character hex string (32 bytes)`);
   }
   return Buffer.from(hex, "hex");
 }
 
-function getCurrentKey(): Buffer | null {
-  return parseKey(
-    process.env.ENCRYPTION_KEY || process.env.DB_ENCRYPTION_KEY,
-    "ENCRYPTION_KEY",
-  );
+function getCurrentEntry(): KeyEntry | null {
+  const key = parseKey(process.env.ENCRYPTION_KEY || process.env.DB_ENCRYPTION_KEY, "ENCRYPTION_KEY");
+  if (!key) return null;
+  const label = process.env.ENCRYPTION_KEY_ID?.trim();
+  if (label && !KEY_ID_RE.test(label)) {
+    throw new Error("ENCRYPTION_KEY_ID must be 1-32 characters of letters, digits, '_' or '-'");
+  }
+  return { id: label || derivedKeyId(key), key };
 }
 
-function getPreviousKey(): Buffer | null {
-  return parseKey(process.env.ENCRYPTION_KEY_PREVIOUS, "ENCRYPTION_KEY_PREVIOUS");
+function splitPreviousList(raw: string): string[] {
+  const t = raw.trim();
+  if (!t) return [];
+  if (t.startsWith("[")) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(t);
+    } catch {
+      throw new Error("ENCRYPTION_KEYS_PREVIOUS is not valid JSON or a comma separated list");
+    }
+    if (!Array.isArray(parsed) || parsed.some((v) => typeof v !== "string")) {
+      throw new Error("ENCRYPTION_KEYS_PREVIOUS JSON must be an array of strings");
+    }
+    return (parsed as string[]).map((v) => v.trim()).filter(Boolean);
+  }
+  return t.split(",").map((v) => v.trim()).filter(Boolean);
+}
+
+function getPreviousEntries(): KeyEntry[] {
+  const out: KeyEntry[] = [];
+  const single = parseKey(process.env.ENCRYPTION_KEY_PREVIOUS, "ENCRYPTION_KEY_PREVIOUS");
+  if (single) out.push({ id: derivedKeyId(single), key: single });
+  for (const item of splitPreviousList(process.env.ENCRYPTION_KEYS_PREVIOUS ?? "")) {
+    const eq = item.indexOf("=");
+    const label = eq === -1 ? "" : item.slice(0, eq).trim();
+    const hex = eq === -1 ? item : item.slice(eq + 1).trim();
+    if (label && !KEY_ID_RE.test(label)) {
+      throw new Error("ENCRYPTION_KEYS_PREVIOUS has an entry with an invalid key label");
+    }
+    const key = parseKey(hex, "ENCRYPTION_KEYS_PREVIOUS");
+    if (key) out.push({ id: label || derivedKeyId(key), key });
+  }
+  return out;
+}
+
+/** True when an encryption key is configured (otherwise values pass through as plaintext). */
+export function hasEncryptionKey(): boolean {
+  return getCurrentEntry() !== null;
+}
+
+/** Id of the current key (the label or the derived fingerprint), or null with no key. Safe to log. */
+export function getCurrentKeyId(): string | null {
+  return getCurrentEntry()?.id ?? null;
 }
 
 // ── Format detection ────────────────────────────────────────────────────────
 
+const V3_RE = /^v3:([A-Za-z0-9_-]{1,32}):([0-9a-f]+):([0-9a-f]+):([0-9a-f]*)$/i;
 const VERSIONED_RE = /^v(\d+):([0-9a-f]+):([0-9a-f]+):([0-9a-f]*)$/i;
 const LEGACY_RE = /^([0-9a-f]+):([0-9a-f]+):([0-9a-f]+)$/i;
 
 interface ParsedCiphertext {
   version: number;
+  keyId: string | null;
   iv: Buffer;
   authTag: Buffer;
   ciphertext: Buffer;
 }
 
 function parseCiphertext(stored: string): ParsedCiphertext | null {
+  const v3 = stored.match(V3_RE);
+  if (v3) {
+    return {
+      version: 3,
+      keyId: v3[1],
+      iv: Buffer.from(v3[2], "hex"),
+      authTag: Buffer.from(v3[3], "hex"),
+      ciphertext: Buffer.from(v3[4], "hex"),
+    };
+  }
+
   const vMatch = stored.match(VERSIONED_RE);
   if (vMatch) {
     return {
       version: Number(vMatch[1]),
+      keyId: null,
       iv: Buffer.from(vMatch[2], "hex"),
       authTag: Buffer.from(vMatch[3], "hex"),
       ciphertext: Buffer.from(vMatch[4], "hex"),
@@ -69,6 +153,7 @@ function parseCiphertext(stored: string): ParsedCiphertext | null {
   if (lMatch) {
     return {
       version: 1,
+      keyId: null,
       iv: Buffer.from(lMatch[1], "hex"),
       authTag: Buffer.from(lMatch[2], "hex"),
       ciphertext: Buffer.from(lMatch[3], "hex"),
@@ -80,12 +165,12 @@ function parseCiphertext(stored: string): ParsedCiphertext | null {
 
 // ── Core encrypt / decrypt ──────────────────────────────────────────────────
 
-function rawEncrypt(plaintext: string, key: Buffer, version: number): string {
+function rawEncrypt(plaintext: string, entry: KeyEntry): string {
   const iv = randomBytes(IV_LENGTH);
-  const cipher = createCipheriv(ALGORITHM, key, iv);
+  const cipher = createCipheriv(ALGORITHM, entry.key, iv);
   const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const authTag = cipher.getAuthTag();
-  return `v${version}:${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted.toString("hex")}`;
+  return `v${CURRENT_KEY_VERSION}:${entry.id}:${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted.toString("hex")}`;
 }
 
 function rawDecrypt(parsed: ParsedCiphertext, key: Buffer): string {
@@ -95,21 +180,55 @@ function rawDecrypt(parsed: ParsedCiphertext, key: Buffer): string {
   return decrypted.toString("utf8");
 }
 
+/** Configured keys in the order to try them: those whose id matches the value first, then the rest. */
+function candidateKeys(parsed: ParsedCiphertext, currentOnly = false): Buffer[] {
+  const cur = getCurrentEntry();
+  if (!cur) return [];
+  if (currentOnly) return [cur.key];
+  const all = [cur, ...getPreviousEntries()];
+  if (!parsed.keyId) return all.map((e) => e.key);
+  return [...all.filter((e) => e.id === parsed.keyId), ...all.filter((e) => e.id !== parsed.keyId)].map((e) => e.key);
+}
+
+function tryDecrypt(parsed: ParsedCiphertext, currentOnly = false): string | null {
+  for (const key of candidateKeys(parsed, currentOnly)) {
+    try {
+      return rawDecrypt(parsed, key);
+    } catch {
+      // wrong key or tampered value: try the next one
+    }
+  }
+  return null;
+}
+
 // ── Public API ──────────────────────────────────────────────────────────────
 
 /**
- * Check whether a stored value looks encrypted (versioned or legacy format).
+ * Check whether a stored value looks encrypted (any version).
  */
 export function isEncrypted(value: string): boolean {
-  return VERSIONED_RE.test(value) || LEGACY_RE.test(value);
+  return V3_RE.test(value) || VERSIONED_RE.test(value) || LEGACY_RE.test(value);
 }
 
 /**
- * Get the key version stamped on an encrypted value, or 0 for plaintext.
+ * Get the format version stamped on an encrypted value, or 0 for plaintext.
  */
 export function getKeyVersion(stored: string): number {
   const parsed = parseCiphertext(stored);
   return parsed ? parsed.version : 0;
+}
+
+/** Key id recorded in a v3 value; null for v1/v2 values and plaintext. */
+export function getCiphertextKeyId(stored: string): string | null {
+  return parseCiphertext(stored)?.keyId ?? null;
+}
+
+/** True when the value is a v3 envelope written under the current key id. */
+export function isOnCurrentKey(stored: string): boolean {
+  const cur = getCurrentEntry();
+  if (!cur) return false;
+  const parsed = parseCiphertext(stored);
+  return !!parsed && parsed.version === CURRENT_KEY_VERSION && parsed.keyId === cur.id;
 }
 
 /**
@@ -117,73 +236,71 @@ export function getKeyVersion(stored: string): number {
  * Returns plaintext if no key is configured (development/self-hosted fallback).
  */
 export function encryptField(plaintext: string): string {
-  const key = getCurrentKey();
-  if (!key) return plaintext;
-  return rawEncrypt(plaintext, key, CURRENT_KEY_VERSION);
+  const cur = getCurrentEntry();
+  if (!cur) return plaintext;
+  return rawEncrypt(plaintext, cur);
 }
 
 /**
- * Decrypt an encrypted string. Tries current key first, falls back to previous key.
- * Handles legacy (unversioned) format and plaintext gracefully.
+ * Decrypt an encrypted string with the current key, then the previous keys.
+ * Handles legacy (unversioned) format and plaintext gracefully. When no key
+ * works it returns the stored value unchanged (kept for existing callers; the
+ * rotation tool and new code use decryptFieldStrict, which fails closed).
  */
 export function decryptField(stored: string): string {
-  const key = getCurrentKey();
-  if (!key) return stored;
+  if (!hasEncryptionKey()) return stored;
 
   const parsed = parseCiphertext(stored);
   if (!parsed) return stored; // Plaintext passthrough
 
-  // Try current key first
-  try {
-    return rawDecrypt(parsed, key);
-  } catch {
-    // Fall through to previous key
-  }
-
-  // Try previous key (rotation window)
-  const prevKey = getPreviousKey();
-  if (prevKey) {
-    try {
-      return rawDecrypt(parsed, prevKey);
-    } catch {
-      // Both keys failed
-    }
-  }
-
-  // If both keys fail and this looks like legacy format, treat as plaintext.
-  // This handles the edge case where a hex:hex:hex value was actually plaintext
-  // that coincidentally matched the pattern (extremely unlikely but safe).
-  return stored;
+  const plain = tryDecrypt(parsed);
+  return plain === null ? stored : plain;
 }
 
 /**
- * Re-encrypt a stored value with the current key.
- * If already on the current key version, returns unchanged.
- * Useful for key rotation: decrypt with any key, re-encrypt with current.
+ * Decrypt, failing closed. Throws EncryptionError when no key is configured or no configured
+ * key opens the value (wrong key, missing previous key or tampered data). The error carries
+ * the key id recorded in the value, which is not secret, and never the value or any key.
+ * Plaintext (not in an encrypted format) is returned as is: callers that must reject it
+ * check isEncrypted first. With currentKeyOnly the previous keys are ignored (the rotation
+ * tool's final verification).
+ */
+export function decryptFieldStrict(stored: string, opts: { currentKeyOnly?: boolean } = {}): string {
+  const parsed = parseCiphertext(stored);
+  if (!parsed) return stored;
+  if (!hasEncryptionKey()) throw new EncryptionError("ENCRYPTION_KEY is not configured; cannot decrypt");
+  const plain = tryDecrypt(parsed, opts.currentKeyOnly === true);
+  if (plain === null) {
+    throw new EncryptionError(
+      `Unable to decrypt: no configured encryption key opens this value (format v${parsed.version}, key id ${parsed.keyId ?? "none"}), or it was modified`,
+    );
+  }
+  return plain;
+}
+
+/**
+ * Re-encrypt a stored value under the current key and key id.
+ * Already on the current key: returned unchanged. Plaintext is encrypted.
+ * Throws EncryptionError when the value is encrypted but no configured key opens it
+ * (it never wraps undecryptable data in a new layer of encryption).
  */
 export function reEncryptField(stored: string): string {
-  const key = getCurrentKey();
-  if (!key) return stored;
+  const cur = getCurrentEntry();
+  if (!cur) return stored;
 
   const parsed = parseCiphertext(stored);
-  if (!parsed) {
-    // Plaintext — encrypt it
-    return rawEncrypt(stored, key, CURRENT_KEY_VERSION);
-  }
+  if (!parsed) return rawEncrypt(stored, cur); // Plaintext — encrypt it
 
-  if (parsed.version === CURRENT_KEY_VERSION) {
-    // Try to decrypt with current key to verify it actually uses the current key
+  if (parsed.version === CURRENT_KEY_VERSION && parsed.keyId === cur.id) {
     try {
-      rawDecrypt(parsed, key);
+      rawDecrypt(parsed, cur.key);
       return stored; // Already on current key
     } catch {
-      // Same version number but different key — need to re-encrypt
+      // Same key id but it does not open: fall through to the strict path
     }
   }
 
-  // Decrypt with whatever key works, then re-encrypt with current
-  const plaintext = decryptField(stored);
-  return rawEncrypt(plaintext, key, CURRENT_KEY_VERSION);
+  return rawEncrypt(decryptFieldStrict(stored), cur);
 }
 
 // ── Backward-compatible aliases ─────────────────────────────────────────────
