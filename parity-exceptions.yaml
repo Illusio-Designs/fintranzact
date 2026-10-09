@@ -23,6 +23,9 @@ exceptions:
       # Phase 2 (actions with confirmation): the confirmation card (review, edit, confirm, cancel) is part of that web chat; the
       # native app has no card component or chat to host it, so action, updateAction, confirmAction and cancelAction have no mobile
       # screens. Everything they run (invoice, payment, party, item, reminder) is available natively through the normal screens.
+      # Phase 3 (voice, languages, tips): voice input, the reply language, the dashboard tips card and the help links all live in the
+      # web chat panel and the web dashboard. The native app still has no assistant screen: a native one needs its own streaming client,
+      # card components and an on-device speech module (a new native build), so preferences and tips have no mobile screens yet.
       - ai.action
       - ai.begin
       - ai.cancelAction
@@ -30,9 +33,12 @@ exceptions:
       - ai.conversation
       - ai.conversations
       - ai.deleteConversation
+      - ai.preferences
       - ai.settings
       - ai.status
+      - ai.tips
       - ai.updateAction
+      - ai.updatePreferences
       - ai.updateSettings
       - platform.aiCredits
       - platform.aiPrices
@@ -696,9 +702,12 @@ exceptions:
       - ai.conversation
       - ai.conversations
       - ai.deleteConversation
+      - ai.preferences
       - ai.settings
       - ai.status
+      - ai.tips
       - ai.updateAction
+      - ai.updatePreferences
       - ai.updateSettings
       - platform.aiCredits
       - platform.aiPrices
@@ -1245,9 +1254,12 @@ exceptions:
       - ai.conversation
       - ai.conversations
       - ai.deleteConversation
+      - ai.preferences
       - ai.settings
       - ai.status
+      - ai.tips
       - ai.updateAction
+      - ai.updatePreferences
       - ai.updateSettings
       - platform.aiCredits
       - platform.aiPrices

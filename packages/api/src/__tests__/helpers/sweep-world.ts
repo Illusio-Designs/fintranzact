@@ -208,6 +208,8 @@ const PNG_1PX =
 export const INPUT_OVERRIDES: Record<string, (ids: Record<string, string>) => unknown> = {
   // The card's edits are a record with key-pattern validation the generator can't see.
   "ai.updateAction": () => ({ edits: { notes: "x" } }),
+  // Phase 3: at least one field must be given (the generated input is empty).
+  "ai.updatePreferences": () => ({ language: "hi" }),
   "business.uploadLogo": () => ({ data: { dataUrl: PNG_1PX } }),
   "business.uploadSignature": () => ({ data: { dataUrl: PNG_1PX } }),
   // Exactly one of paymentId / expenseId / bankTransactionId.

@@ -3,6 +3,10 @@
  * history, and `begin`, which starts a question (permission, add-on, switches,
  * quota, history, ledger row, audit).
  *
+ * Phase 3 (voice, languages, tips): `preferences` / `updatePreferences` are the
+ * person's own reply language and tips switch; `tips` is the dashboard's
+ * deterministic tips (no model, no question used).
+ *
  * Phase 2 (actions with confirmation): `action`, `updateAction`, `confirmAction`
  * and `cancelAction`. They are plain user-initiated procedures, called by the
  * buttons of a confirmation card. They are NOT tools: nothing in the chat
@@ -20,7 +24,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, eq } from "drizzle-orm";
 import { controlDb, tenantMembers } from "@fintranzact/db";
-import { AI_MAX_QUESTION_CHARS, AI_ROLE_LABELS, AI_SWITCHABLE_ROLES, aiEditsSchema, aiSettingsSchema } from "@fintranzact/shared";
+import { AI_MAX_QUESTION_CHARS, AI_ROLE_LABELS, AI_SWITCHABLE_ROLES, aiEditsSchema, aiSettingsSchema, aiUserPrefsUpdateSchema } from "@fintranzact/shared";
 import { router, viewerProcedure, tenantProcedure, createCallerFactory } from "../trpc.js";
 import { requireCan } from "../lib/permissions.js";
 import { assertAi, assertAiActionsOn, assertAiSwitchedOn } from "../lib/ai/access.js";
@@ -28,6 +32,8 @@ import { cancelAiAction, confirmAiAction, getAiActionCard, updateAiAction } from
 import type { AiActionCtx } from "../lib/ai/actions/types.js";
 import { aiStatus, beginQuestion, deleteConversation, getConversation, listConversations, type AiCtx } from "../lib/ai/service.js";
 import { getAiSettings, saveAiSettings } from "../lib/ai/settings.js";
+import { getAiUserPrefs, saveAiUserPrefs } from "../lib/ai/prefs.js";
+import { resolveAiTips, type AiTipsResult } from "../lib/ai/tips.js";
 import { PLAN_MANAGER_ROLES } from "../lib/plan-manager.js";
 
 const idInput = z.object({ id: z.string().uuid() });
@@ -55,6 +61,17 @@ async function actionCtx(ctx: Parameters<typeof aiCtx>[0] & { user: { id: string
   const { appRouter } = await import("../router.js");
   const caller = createCallerFactory(appRouter)(ctx as never);
   return { ...aiCtx(ctx), user: { id: ctx.user.id, name: ctx.user.name ?? null }, caller };
+}
+
+/**
+ * The dashboard tips: read through a caller built from this very request context, so every
+ * figure behind a tip is checked with the person's own permissions (lib/ai/tips.ts).
+ */
+async function tipsFor(ctx: Parameters<typeof aiCtx>[0] & { tenantId: string }): Promise<AiTipsResult> {
+  // Imported when needed: router.ts imports this file.
+  const { appRouter } = await import("../router.js");
+  const caller = createCallerFactory(appRouter)(ctx as never);
+  return resolveAiTips({ tenantId: ctx.tenantId, businessId: ctx.businessId, userId: ctx.user.id, role: ctx.role, db: ctx.db }, caller);
 }
 
 /** Add-on, owner's switches (assistant and actions) for anything that changes or runs an action. */
@@ -128,6 +145,32 @@ export const aiRouter = router({
         role: r.role,
       };
     }),
+
+  // ── Phase 3: preferences and dashboard tips ────────────────────────────────
+
+  /** The person's own reply language and tips switch (defaults when never saved). */
+  preferences: viewerProcedure.query(async ({ ctx }) => {
+    requireCan(ctx.ability, "read", "Ai");
+    return getAiUserPrefs(ctx.db, ctx.businessId, ctx.user.id);
+  }),
+
+  /** Change the reply language and/or switch the dashboard tips on or off, for this person only. A field left out is unchanged. */
+  updatePreferences: viewerProcedure.input(aiUserPrefsUpdateSchema).mutation(async ({ ctx, input }) => {
+    await assertAi(ctx, "create");
+    return saveAiUserPrefs(ctx.db, ctx.businessId, ctx.user.id, input);
+  }),
+
+  /**
+   * Proactive tips for the dashboard: overdue invoices, items below reorder level,
+   * expiring batches and GST returns near their due date. Deterministic (no model),
+   * costs no question, computed through the person's own permissions and cached for
+   * a few minutes. Never throws for a missing add-on or a switch: `available` and
+   * `reason` say why there are none.
+   */
+  tips: viewerProcedure.query(async ({ ctx }) => {
+    requireCan(ctx.ability, "read", "Ai");
+    return tipsFor(ctx);
+  }),
 
   // ── Phase 2: actions with confirmation ─────────────────────────────────────
 
