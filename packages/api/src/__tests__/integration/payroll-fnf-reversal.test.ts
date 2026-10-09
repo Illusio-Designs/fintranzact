@@ -15,7 +15,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { and, eq, inArray } from "drizzle-orm";
-import { auditLog, bankAccounts, businessMembers, chartOfAccounts, employeeLoanEvents, employeeLoanInstallments, employeeLoans, employees, fnfSettlements, journalEntries, journalEntryLines, leaveLedger } from "@fintranzact/db";
+import { auditLog, bankAccounts, businessMembers, chartOfAccounts, employeeLoanEvents, employeeLoanInstallments, employees, fnfSettlements, journalEntries, journalEntryLines, leaveLedger } from "@fintranzact/db";
 import { defaultStatutoryRates } from "@fintranzact/shared";
 import { createTenant, createUser, addMember, createBusiness, createBankAccount, grantAddon, type TestUser, type TestTenant, type TestBusiness } from "../helpers/fixtures.js";
 import { createTestCaller } from "../helpers/create-test-caller.js";

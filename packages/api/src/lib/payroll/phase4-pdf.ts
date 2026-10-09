@@ -358,8 +358,8 @@ export function generateRegisterPDF(r: RegisterPdfInput): Promise<Buffer> {
 
   // Natural width of each column (header words included), capped; right alignment for numeric columns.
   doc.font("NotoSans").fontSize(REG.font);
-  const width = new Array<number>(cols).fill(0);
-  const numeric = new Array<boolean>(cols).fill(true);
+  const width = Array.from({ length: cols }, () => 0);
+  const numeric = Array.from({ length: cols }, () => true);
   for (let c = 0; c < cols; c++) {
     doc.font("NotoSans-Bold").fontSize(REG.font - 0.5);
     for (const word of clean(r.header[c]).split(" ")) width[c] = Math.max(width[c]!, doc.widthOfString(word));
