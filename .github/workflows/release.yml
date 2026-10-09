@@ -184,7 +184,7 @@ jobs:
         run: node -e "const fs=require('fs'),f='apps/desktop/src-tauri/tauri.conf.json',c=JSON.parse(fs.readFileSync(f));c.version=process.env.GITHUB_REF_NAME.replace(/^v/,'');fs.writeFileSync(f,JSON.stringify(c,null,2)+'\n')"
 
       - name: Build Tauri
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           API_URL: ${{ secrets.API_URL || 'https://api.fintranzact.com' }}
