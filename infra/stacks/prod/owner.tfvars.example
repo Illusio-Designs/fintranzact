@@ -1,0 +1,36 @@
+# Copy to owner.tfvars (it is git-ignored) and fill in YOUR values.
+# Apply with a profile plus this file:
+#   terraform apply -var-file=../../profiles/lean.tfvars -var-file=owner.tfvars
+#
+# Nothing in this file is a secret.
+
+web_domain   = "app.example.com"
+store_domain = "store.example.com"
+api_domain   = "api.example.com"
+
+# Only if the domain's DNS is hosted in AWS Route 53 (else leave out and follow SETUP.md).
+# route53_zone_id = "Z0123456789ABCDEFGHIJ"
+
+# Second apply only, when DNS is NOT in Route 53 and the validation records exist:
+# certs_ready = true
+
+alert_email        = "you@example.com"
+monthly_budget_usd = 100  # lean: about 80 to 110, launch: about 220 to 260 (see docs/infra/COST.md)
+credits_total_usd  = 1000 # the Activate credits you were granted
+
+# FIRST apply only: no secrets or image exist yet, so start with zero API tasks.
+# After secrets are set and the first deploy ran, set this to 1 (lean) or 2 (launch).
+api_desired_count = 0
+
+# Created at first start of the API (the password is a secret: PLATFORM_ADMIN_PASSWORD).
+platform_admin_email = "you@example.com"
+platform_admin_name  = "Your Name"
+
+# Non-secret settings of the API (see .env.example). Examples:
+# api_extra_environment = {
+#   EMAIL_FROM    = "Fintranzact <noreply@example.com>"
+#   CONTACT_INBOX = "support@example.com"
+# }
+
+# Add names here AFTER you stored their values in Secrets Manager:
+# enabled_optional_secrets = ["RESEND_API_KEY", "SANDBOX_API_KEY", "SANDBOX_API_SECRET", "TURNSTILE_SECRET_KEY"]

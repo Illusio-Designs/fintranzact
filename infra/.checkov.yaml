@@ -1,0 +1,66 @@
+# Checkov policy scan for infra/. ANY finding that is not listed here fails the
+# pull request. Each skip below was reviewed; the reason is on the line above it.
+# Re-review this list when you change a profile (for example turning Multi-AZ or
+# Performance Insights on makes the matching skip unnecessary).
+framework:
+  - terraform
+quiet: true
+compact: true
+skip-download: true
+skip-check:
+  # ALB: HTTP :80 only redirects to HTTPS (a conditional block Checkov cannot see);
+  # target group is HTTP inside the VPC after TLS ends at the load balancer; port 80
+  # must be open to the internet for that redirect.
+  - CKV_AWS_2
+  - CKV_AWS_103
+  - CKV2_AWS_20
+  - CKV_AWS_260
+  - CKV_AWS_378
+  # WAF on the load balancer is a profile flag (enable_waf_alb): on in launch, off in lean to save cost.
+  - CKV2_AWS_28
+  # CloudFront and WAF: WAF is attached by variable (Checkov cannot follow it). CloudFront
+  # access logs, origin failover and geo restriction are not required; WAF logs cover requests,
+  # Indian customers need no geo block, and there is a single origin by design.
+  - CKV2_AWS_47
+  - CKV_AWS_86
+  - CKV_AWS_310
+  - CKV_AWS_374
+  # S3: access logging, event notifications and cross-region replication are deliberately
+  # not enabled (CloudTrail records API activity; replication would move data out of India).
+  # KMS default encryption: the static-site buckets hold only public website files and
+  # ALB log delivery supports only SSE-S3; the state and audit buckets DO use a KMS key.
+  - CKV_AWS_18
+  - CKV2_AWS_62
+  - CKV_AWS_144
+  - CKV_AWS_145
+  # KMS key policies use the standard "account root" statement plus service principals.
+  - CKV2_AWS_64
+  - CKV_AWS_109
+  - CKV_AWS_111
+  - CKV_AWS_356
+  # Log groups use default AWS encryption; retention is 180 days (CERT-In) not 1 year
+  # (variable log_retention_days, set 365 if you want the longer period).
+  - CKV_AWS_158
+  - CKV_AWS_338
+  # CloudTrail to CloudWatch Logs and SNS, GuardDuty org-level, Config all-resources:
+  # extra cost and complexity for a one-account start; flags exist to add them later.
+  - CKV2_AWS_10
+  - CKV_AWS_252
+  - CKV2_AWS_3
+  - CKV2_AWS_48
+  # RDS: Multi-AZ, Performance Insights and Enhanced Monitoring are profile flags
+  # (off in lean to save cost, on in launch).
+  - CKV_AWS_157
+  - CKV_AWS_118
+  - CKV_AWS_353
+  - CKV_AWS_354
+  # ECS: Container Insights is a flag (cost); exec sessions are logged to CloudWatch.
+  - CKV_AWS_65
+  - CKV_AWS_224
+  # Secrets: API keys of third parties are rotated by hand (docs/infra/OPERATIONS.md);
+  # the database master password is rotated by RDS itself.
+  - CKV2_AWS_57
+  # Security group of the on-demand admin task is attached only while the task runs.
+  - CKV2_AWS_5
+  # Route 53 alias records point at resources created in the same stack.
+  - CKV2_AWS_23
