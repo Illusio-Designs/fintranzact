@@ -8,7 +8,7 @@ const EL = "99999999-9999-4999-8999-999999999999";
 
 const h = vi.hoisted(() => {
   const fns = {
-    create: vi.fn(), update: vi.fn(), calculate: vi.fn(), submit: vi.fn(), approve: vi.fn(), reopen: vi.fn(), post: vi.fn(), pay: vi.fn(), del: vi.fn(),
+    create: vi.fn(), update: vi.fn(), calculate: vi.fn(), submit: vi.fn(), approve: vi.fn(), reopen: vi.fn(), post: vi.fn(), pay: vi.fn(), del: vi.fn(), reverse: vi.fn(), reversePayment: vi.fn(),
     saveTemplate: vi.fn(), letter: vi.fn(), invalidate: vi.fn(), toast: vi.fn(), statement: vi.fn(), download: vi.fn(),
   };
   const mutation = (fn: (v: unknown) => void, result: unknown = { id: "77777777-7777-4777-8777-777777777777" }) => (o?: { onSuccess?: (r: unknown) => void }) => ({
@@ -46,6 +46,8 @@ vi.mock("@/lib/trpc", () => ({
       post: { useMutation: h.mutation(h.post) },
       markPaid: { useMutation: h.mutation(h.pay) },
       delete: { useMutation: h.mutation(h.del) },
+      reverse: { useMutation: h.mutation(h.reverse) },
+      reversePayment: { useMutation: h.mutation(h.reversePayment) },
     },
   },
 }));
@@ -198,6 +200,47 @@ describe("FnfTab", () => {
     open("approved");
     fireEvent.click(actions().getByRole("button", { name: "Statement (PDF)" }));
     await waitFor(() => expect(h.download).toHaveBeenCalledWith("full-and-final-FF-0001.pdf", "application/pdf", "JVBERi0="));
+  });
+
+  it("reversing a posted settlement asks for a reason first, then reverses", () => {
+    open("posted");
+    fireEvent.click(actions().getByRole("button", { name: "Reverse settlement" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent("It cannot be undone");
+    expect(dialog).toHaveTextContent("The employee is not brought back");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reverse settlement" }));
+    expect(h.reverse).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("Give the reason for the reversal.");
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: "  Settled against the wrong exit date " } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reverse settlement" }));
+    expect(h.reverse).toHaveBeenCalledWith({ id: FNF, reason: "Settled against the wrong exit date" });
+  });
+
+  it("a paid settlement offers only the payment reversal; a reversed one offers nothing and says why", () => {
+    open("paid");
+    expect(actions().queryByRole("button", { name: "Reverse settlement" })).not.toBeInTheDocument();
+    fireEvent.click(actions().getByRole("button", { name: "Reverse payment" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent("back into the account it was paid from");
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: "Paid from the wrong account" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reverse payment" }));
+    expect(h.reversePayment).toHaveBeenCalledWith({ id: FNF, reason: "Paid from the wrong account" });
+  });
+
+  it("a reversed settlement shows the reason and no action but the statement", () => {
+    open("reversed", { reversedAt: "2026-06-21T05:00:00.000Z", reversedByName: "Ramesh Kumar", reversalReason: "Wrong exit date" });
+    expect(screen.getByTestId("fnf-reversed")).toHaveTextContent("Reason: Wrong exit date");
+    expect(actions().queryByRole("button", { name: /Reverse|Post|Mark as paid|Approve/ })).not.toBeInTheDocument();
+    expect(actions().getByRole("button", { name: "Statement (PDF)" })).toBeInTheDocument();
+  });
+
+  it("an employee whose settlement was reversed can have a new one started", () => {
+    h.list.data = [{ ...settlement("reversed"), employeeName: "Deepak Menon", employeeCode: "E104" }];
+    render(<FnfTab />);
+    fireEvent.click(screen.getByRole("button", { name: "+ New settlement" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("combobox", { name: /Employee who has left/ }));
+    expect(screen.getByRole("option", { name: /Deepak/ })).toBeInTheDocument();
   });
 
   it("shows no error toast while the settlement is loading", () => {

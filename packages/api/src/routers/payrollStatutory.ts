@@ -57,7 +57,7 @@ import {
   buildStateSheetFiles,
   buildWageRegisterFile,
 } from "../lib/payroll/filings.js";
-import { buildDeductionsRegisterFile, buildEmploymentRegisterFile, buildFnfRegisterFile, buildOvertimeRegisterFile } from "../lib/payroll/registers4.js";
+import { buildDeductionsRegisterFile, buildEmploymentRegisterFile, buildFnfRegisterFile, buildOvertimeRegisterFile, registerAsPdf } from "../lib/payroll/registers4.js";
 import { generateForm16WorkingCopyPDF } from "../lib/payroll/form16-pdf.js";
 import { loadStatutoryFlags, loadStatutoryRates, loadDeclarations } from "../lib/payroll/statutory.js";
 
@@ -347,7 +347,11 @@ export const payrollStatutoryRouter = router({
       } };
     }),
 
-  /** A register as a CSV: wages and attendance (a month), leave (a leave year), bonus and gratuity (computed from existing data; no payments). */
+  /**
+   * A register as a CSV (the default) or, with `format: "pdf"`, as a landscape PDF built from the same rows: wages and attendance
+   * (a month), leave (a leave year), bonus, gratuity, employment, deductions, overtime and settlements (computed from existing
+   * data; no payments). The PDF response has the same keys as the CSV one (`text` is empty) plus `base64` and `pages`.
+   */
   register: viewerProcedure
     .input(
       z.object({
@@ -356,31 +360,35 @@ export const payrollStatutoryRouter = router({
         financialYear: z.number().int().min(2020).max(2100).optional(),
         leaveYear: z.number().int().min(2000).max(2200).optional(),
         asOf: isoDateSchema.optional(),
+        format: z.enum(["csv", "pdf"]).default("csv"),
       }),
     )
     .query(async ({ ctx, input }) => {
       await assertPayroll(ctx, "update");
       const month = input.month ?? currentMonth();
-      switch (input.register) {
-        case "wages":
-          return buildWageRegisterFile(ctx.db, ctx.businessId, month);
-        case "attendance":
-          return buildAttendanceRegisterFile(ctx.db, ctx.businessId, month);
-        case "leave":
-          return buildLeaveRegisterFile(ctx.db, ctx.businessId, input.leaveYear);
-        case "bonus":
-          return buildBonusRegisterFile(ctx.db, ctx.businessId, fyOf(input));
-        case "gratuity":
-          return buildGratuityRegisterFile(ctx.db, ctx.businessId, input.asOf ?? new Date().toISOString().slice(0, 10), fyOf(input));
-        // Phase 4 working registers (reformatted from existing data).
-        case "employment":
-          return buildEmploymentRegisterFile(ctx.db, ctx.businessId);
-        case "deductions":
-          return buildDeductionsRegisterFile(ctx.db, ctx.businessId, fyOf(input));
-        case "overtime":
-          return buildOvertimeRegisterFile(ctx.db, ctx.businessId, fyOf(input));
-        case "fnf":
-          return buildFnfRegisterFile(ctx.db, ctx.businessId, fyOf(input));
-      }
+      const file = await (async () => {
+        switch (input.register) {
+          case "wages":
+            return buildWageRegisterFile(ctx.db, ctx.businessId, month);
+          case "attendance":
+            return buildAttendanceRegisterFile(ctx.db, ctx.businessId, month);
+          case "leave":
+            return buildLeaveRegisterFile(ctx.db, ctx.businessId, input.leaveYear);
+          case "bonus":
+            return buildBonusRegisterFile(ctx.db, ctx.businessId, fyOf(input));
+          case "gratuity":
+            return buildGratuityRegisterFile(ctx.db, ctx.businessId, input.asOf ?? new Date().toISOString().slice(0, 10), fyOf(input));
+          // Phase 4 working registers (reformatted from existing data).
+          case "employment":
+            return buildEmploymentRegisterFile(ctx.db, ctx.businessId);
+          case "deductions":
+            return buildDeductionsRegisterFile(ctx.db, ctx.businessId, fyOf(input));
+          case "overtime":
+            return buildOvertimeRegisterFile(ctx.db, ctx.businessId, fyOf(input));
+          case "fnf":
+            return buildFnfRegisterFile(ctx.db, ctx.businessId, fyOf(input));
+        }
+      })();
+      return input.format === "pdf" ? registerAsPdf(ctx.db, ctx.businessId, input.register, file) : file;
     }),
 });

@@ -156,7 +156,7 @@ Shipped **EMPTY on purpose** (a bonus run refuses to calculate until they are se
 - [ ] **Notice-period recovery:** shortfall days x **gross monthly salary / 30** (half days allowed), rounded half up. Confirm.
 - [ ] **Bonus due** is only a suggestion at the **lowest** percentage on the wages of the financial year of the exit (to the exit month).
 - [ ] **TDS on the settlement is NOT computed** beyond a manual amount line and a warning. Leave encashment and gratuity have their own exemption rules and the settlement is not part of the Phase 2 TDS projection.
-- [ ] **No reversal** of an approved settlement (none exists for payroll runs either): correct with a journal entry.
+- [ ] **Reversal:** a settlement that is **approved but not posted** cannot be reversed (correct it with a journal entry). A **posted** one can be reversed by an owner, admin or accountant, with a reason: the books entry is negated on the **same date** (the period must be open), loan recoveries are put back through new log events, encashed leave is given back and the employee stays shown as having left; a **paid** one only after its payment is reversed. Confirm this is acceptable for your clients' audit trail, in particular that a reversal is dated the original day and not the day it was made.
 - [ ] **Books:** Dr Salary - Allowances (leave encashment and other dues), Salary & Wages (arrears), Salary - Bonus & Incentives, Gratuity Provision / Salary - Gratuity; Cr 2442 Full and Final Settlements Payable (net), 1260 Loans and Advances (loan recovered), 2410 Payroll Deductions Payable (notice and other recoveries) and 2434 TDS on Salary Payable (the manual amount). Dated the last working day.
 
 ### Loans and advances
@@ -171,7 +171,7 @@ Shipped **EMPTY on purpose** (a bonus run refuses to calculate until they are se
 ### Relieving letters and registers
 
 - [ ] The letter wording is the business's own text with placeholders; the shipped default is a plain certificate. **Not digitally signed.** Have a lawyer check the wording.
-- [ ] The employment, deductions and advances, overtime and settlement registers are **working copies**. State and Act formats differ; none is claimed to be a statutory form.
+- [ ] The employment, deductions and advances, overtime and settlement registers are **working copies**. State and Act formats differ; none is claimed to be a statutory form. Each register can also be downloaded as a landscape PDF carrying the same label ("Working copy for CA / legal review. Formats vary by state."); the PDF repeats the CSV's rows and claims nothing more.
 
 ### Sign-off for Phase 4
 

@@ -266,6 +266,9 @@ export const INPUT_OVERRIDES: Record<string, (ids: Record<string, string>) => un
   "payrollLoan.foreclose": () => ({ receivedOn: new Date().toISOString().slice(0, 10) }),
   "payrollBonus.markPaid": () => ({ paidOn: new Date().toISOString().slice(0, 10) }),
   "payrollFnf.markPaid": () => ({ paidOn: new Date().toISOString().slice(0, 10) }),
+  // Reversing a settlement needs a reason of some length (the generator would make one character).
+  "payrollFnf.reverse": () => ({ reason: "Reversed by the sweep test" }),
+  "payrollFnf.reversePayment": () => ({ reason: "Reversed by the sweep test" }),
   "auth.register": () => ({
     username: "sweeper",
     email: `sweep.${randomUUID().slice(0, 8)}@example.in`,

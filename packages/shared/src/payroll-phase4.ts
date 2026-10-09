@@ -305,7 +305,7 @@ export const LOAN_STATUS_LABELS: Record<LoanStatus, string> = {
   rejected: "Rejected",
   cancelled: "Cancelled",
 };
-export const LOAN_EVENT_KINDS = ["issued", "approved", "disbursed", "emi_recovered", "prepaid", "foreclosed", "fnf_recovered", "skipped", "rescheduled", "closed", "rejected", "cancelled"] as const;
+export const LOAN_EVENT_KINDS = ["issued", "approved", "disbursed", "emi_recovered", "prepaid", "foreclosed", "fnf_recovered", "fnf_reversed", "skipped", "rescheduled", "closed", "rejected", "cancelled"] as const;
 export type LoanEventKind = (typeof LOAN_EVENT_KINDS)[number];
 
 const MAX_SCHEDULE_MONTHS = 600;
@@ -511,7 +511,9 @@ export const loanSettingsSchema = z.object({ maxDeductionPercent: z.number().min
 // 4. Full and final settlement
 // ═══════════════════════════════════════════════════════════════════════════
 
-export const FNF_STATUSES = ["draft", "pending_approval", "approved", "posted", "paid"] as const;
+/** The steps a settlement moves through (the stepper). `reversed` is a terminal state reached from posted. */
+export const FNF_FLOW_STATUSES = ["draft", "pending_approval", "approved", "posted", "paid"] as const;
+export const FNF_STATUSES = [...FNF_FLOW_STATUSES, "reversed"] as const;
 export type FnfStatus = (typeof FNF_STATUSES)[number];
 export const FNF_STATUS_LABELS: Record<FnfStatus, string> = {
   draft: "Draft",
@@ -519,13 +521,16 @@ export const FNF_STATUS_LABELS: Record<FnfStatus, string> = {
   approved: "Approved",
   posted: "Posted to books",
   paid: "Paid",
+  reversed: "Reversed",
 };
 export const FNF_NEXT: Record<FnfStatus, readonly FnfStatus[]> = {
   draft: ["draft", "pending_approval"],
   pending_approval: ["draft", "approved"],
   approved: ["posted"],
-  posted: ["paid"],
-  paid: [],
+  posted: ["paid", "reversed"],
+  // Reversing the payment (payrollFnf.reversePayment) puts it back to posted; the settlement itself is reversed from posted.
+  paid: ["posted"],
+  reversed: [],
 };
 export function canTransitionFnf(from: FnfStatus, to: FnfStatus): boolean {
   return FNF_NEXT[from].includes(to);
@@ -679,6 +684,9 @@ export const fnfUpdateSchema = z.object({
   deductions: z.array(fnfManualLine).max(20).optional(),
   note: maybe(text(500)),
 });
+/** Reversing a posted settlement or its payment: the reason is mandatory and is kept in the audit log and on the record. */
+export const FNF_REVERSAL_REASON_MIN = 5;
+export const fnfReverseSchema = z.object({ id: uuid, reason: z.string().trim().min(FNF_REVERSAL_REASON_MIN, "Give the reason for the reversal.").max(500) });
 export const fnfMarkPaidSchema = z.object({ id: uuid, bankAccountId: uuid, paidOn: isoDateSchema, reference: maybe(text(100)) });
 
 // ═══════════════════════════════════════════════════════════════════════════

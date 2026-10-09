@@ -11,8 +11,8 @@ import { MONEY_TOLERANCE, rule } from "../sql-fragments.js";
 
 const RUN_WRITERS = ["payrollRun.calculate / approve / post / markPaid (Payroll runs)"];
 const BONUS_WRITERS = ["payrollBonus.calculate / approve / post / markPaid"];
-const FNF_WRITERS = ["payrollFnf.calculate / approve / post / markPaid"];
-const LOAN_WRITERS = ["payrollLoan.create / approve / disburse / receive / skip / reschedule", "payrollRun.approve (instalment recovery)", "payrollFnf.approve (balance recovery)"];
+const FNF_WRITERS = ["payrollFnf.calculate / approve / post / markPaid / reverse / reversePayment"];
+const LOAN_WRITERS = ["payrollLoan.create / approve / disburse / receive / skip / reschedule", "payrollRun.approve (instalment recovery)", "payrollFnf.approve (balance recovery)", "payrollFnf.reverse (balance put back)"];
 
 export const payrollTables: TableCoverage[] = [
   {
@@ -434,11 +434,42 @@ export const payrollTables: TableCoverage[] = [
          WHERE s.status = 'paid'
            AND (s.paid_on IS NULL OR (s.net_payable > 0 AND (s.paid_from_bank_account_id IS NULL OR s.payment_journal_entry_id IS NULL OR j.d IS NULL OR ABS(j.d - s.net_payable) > ${MONEY_TOLERANCE})))`),
       rule("fnf_settlements", "status-matches-links", "error",
-        "A settlement that is not posted has no accrual entry, and one that is not paid has no payment entry.",
+        "A settlement that is not posted (or reversed after posting) has no accrual entry, one that is not paid has no payment entry, and only a reversed one has a reversal entry.",
         FNF_WRITERS,
         `SELECT s.business_id, s.id::text, s.number || ': status ' || s.status
          FROM fnf_settlements s
-         WHERE (s.status NOT IN ('posted', 'paid') AND s.accrual_journal_entry_id IS NOT NULL) OR (s.status <> 'paid' AND s.payment_journal_entry_id IS NOT NULL)`),
+         WHERE (s.status NOT IN ('posted', 'paid', 'reversed') AND s.accrual_journal_entry_id IS NOT NULL)
+            OR (s.status <> 'paid' AND s.payment_journal_entry_id IS NOT NULL)
+            OR (s.status <> 'reversed' AND s.reversal_journal_entry_id IS NOT NULL)`),
+      rule("fnf_settlements", "reversed-negates-original", "error",
+        "A reversed settlement has a reversal entry that negates its accrual entry exactly, account by account, and the original is marked voided by it. A reversed payment likewise negates the payment entry it replaced.",
+        FNF_WRITERS,
+        `SELECT s.business_id, s.id::text, s.number || ': reversed, entry ' || COALESCE(s.accrual_journal_entry_id::text, 'NULL') || ', reversal ' || COALESCE(s.reversal_journal_entry_id::text, 'NULL')
+         FROM fnf_settlements s
+         WHERE s.status = 'reversed' AND s.accrual_journal_entry_id IS NOT NULL
+           AND (s.reversal_journal_entry_id IS NULL
+                OR NOT EXISTS (SELECT 1 FROM journal_entries o WHERE o.id = s.accrual_journal_entry_id AND o.is_voided AND o.voided_by_entry_id = s.reversal_journal_entry_id)
+                OR NOT EXISTS (SELECT 1 FROM journal_entries r WHERE r.id = s.reversal_journal_entry_id AND r.reverses_entry_id = s.accrual_journal_entry_id)
+                OR EXISTS (SELECT 1 FROM (SELECT account_id, SUM(debit - credit) n FROM journal_entry_lines
+                                          WHERE journal_entry_id IN (s.accrual_journal_entry_id, s.reversal_journal_entry_id) GROUP BY account_id) x
+                           WHERE ABS(x.n) > ${MONEY_TOLERANCE}))
+         UNION ALL
+         SELECT s.business_id, s.id::text, s.number || ': payment reversal entry ' || s.payment_reversal_journal_entry_id::text || ' does not negate a voided payment entry'
+         FROM fnf_settlements s
+         WHERE s.payment_reversal_journal_entry_id IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM journal_entries r JOIN journal_entries o ON o.id = r.reverses_entry_id AND o.is_voided AND o.voided_by_entry_id = r.id
+                           WHERE r.id = s.payment_reversal_journal_entry_id
+                             AND NOT EXISTS (SELECT 1 FROM (SELECT account_id, SUM(debit - credit) n FROM journal_entry_lines WHERE journal_entry_id IN (o.id, r.id) GROUP BY account_id) x WHERE ABS(x.n) > ${MONEY_TOLERANCE}))`),
+      rule("fnf_settlements", "reversed-puts-loans-back", "error",
+        "A reversed settlement put back exactly the principal it had recovered from each loan.",
+        FNF_WRITERS,
+        `SELECT s.business_id, s.id::text, s.number || ': loan ' || e.loan_id::text || ' recovered ' || e.rec || ', put back ' || e.back
+         FROM fnf_settlements s
+         JOIN (SELECT settlement_id, loan_id,
+                      SUM(CASE WHEN kind = 'fnf_recovered' THEN principal ELSE 0 END) rec,
+                      SUM(CASE WHEN kind = 'fnf_reversed' THEN principal ELSE 0 END) back
+               FROM employee_loan_events WHERE settlement_id IS NOT NULL AND kind IN ('fnf_recovered', 'fnf_reversed') GROUP BY settlement_id, loan_id) e ON e.settlement_id = s.id
+         WHERE (s.status = 'reversed' AND ABS(e.rec - e.back) > ${MONEY_TOLERANCE}) OR (s.status <> 'reversed' AND e.back > 0)`),
     ],
   },
   {
@@ -462,7 +493,7 @@ export const payrollTables: TableCoverage[] = [
         LOAN_WRITERS,
         `SELECT l.business_id, l.id::text, l.number || ': principal ' || l.principal || ', recovered ' || e.p
          FROM employee_loans l
-         JOIN (SELECT loan_id, SUM(principal) p FROM employee_loan_events WHERE kind IN ('emi_recovered', 'prepaid', 'foreclosed', 'fnf_recovered') GROUP BY loan_id) e ON e.loan_id = l.id
+         JOIN (SELECT loan_id, SUM(CASE WHEN kind = 'fnf_reversed' THEN -principal ELSE principal END) p FROM employee_loan_events WHERE kind IN ('emi_recovered', 'prepaid', 'foreclosed', 'fnf_recovered', 'fnf_reversed') GROUP BY loan_id) e ON e.loan_id = l.id
          WHERE e.p > l.principal + ${MONEY_TOLERANCE}`),
       rule("employee_loans", "disbursed-has-entry", "error",
         "An active or closed loan was disbursed with a journal entry for exactly the principal; one that was never disbursed has none.",
@@ -477,7 +508,7 @@ export const payrollTables: TableCoverage[] = [
         LOAN_WRITERS,
         `SELECT l.business_id, l.id::text, l.number || ': closed with balance ' || (l.principal - COALESCE(e.p, 0))
          FROM employee_loans l
-         LEFT JOIN (SELECT loan_id, SUM(principal) p FROM employee_loan_events WHERE kind IN ('emi_recovered', 'prepaid', 'foreclosed', 'fnf_recovered') GROUP BY loan_id) e ON e.loan_id = l.id
+         LEFT JOIN (SELECT loan_id, SUM(CASE WHEN kind = 'fnf_reversed' THEN -principal ELSE principal END) p FROM employee_loan_events WHERE kind IN ('emi_recovered', 'prepaid', 'foreclosed', 'fnf_recovered', 'fnf_reversed') GROUP BY loan_id) e ON e.loan_id = l.id
          WHERE l.status = 'closed' AND ABS(l.principal - COALESCE(e.p, 0)) > ${MONEY_TOLERANCE}`),
     ],
   },

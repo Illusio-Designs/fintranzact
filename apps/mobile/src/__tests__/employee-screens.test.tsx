@@ -45,7 +45,8 @@ const calls = { applyBusinessList: 0, ownBusinessList: 0, lowStock: 0 };
 const mockApply = jest.fn();
 const mockCancel = jest.fn();
 const mockFetchSlip = jest.fn();
-const state: { role: string; leave: any; slips: any[]; years: any[]; attendance: any } = { role: "employee", leave: null, slips: [], years: [], attendance: null };
+const state: { role: string; leave: any; slips: any[]; years: any[]; attendance: any; loans: any[]; loansError: boolean; statement: any; statementError: boolean } = { role: "employee", leave: null, slips: [], years: [], attendance: null, loans: [], loansError: false, statement: null, statementError: false };
+const mockStatementAsked = jest.fn();
 const q = (read: () => unknown, onUse?: (o?: { enabled?: boolean }) => void) => ({
   useQuery: (_i?: unknown, o?: { enabled?: boolean }) => {
     onUse?.(o);
@@ -69,6 +70,8 @@ jest.mock("../lib/trpc", () => ({
       leaveCancel: { useMutation: () => ({ mutate: mockCancel, isPending: false }) },
       payslips: q(() => state.slips),
       form16Years: q(() => state.years),
+      loans: { useQuery: () => ({ data: state.loansError ? undefined : state.loans, isLoading: false, error: state.loansError ? new Error("boom") : null, refetch: jest.fn() }) },
+      loanStatement: { useQuery: (i: unknown) => { mockStatementAsked(i); return { data: state.statementError ? undefined : state.statement, isLoading: false, error: state.statementError ? new Error("nf") : null, refetch: jest.fn() }; } },
       attendance: q(() => state.attendance),
     },
   },
@@ -163,6 +166,66 @@ describe("EmployeePayslips", () => {
     render(<EmployeePayslips />);
     expect(screen.getByRole("button", { name: "Open Form 16 for 2026-27" })).toBeTruthy();
     expect(screen.getByText(/working copy prepared from your payslips/)).toBeTruthy();
+  });
+});
+
+describe("EmployeeLoans (read only, my own, under the payslips)", () => {
+  const LOAN = "11111111-1111-4111-8111-111111111111";
+  const loan = (over: Record<string, unknown> = {}) => ({
+    id: LOAN, number: "LN-0001", kind: "loan", status: "active", principal: "100000.00", interestRate: "12.00", emi: "8884.88", installmentCount: 12, issueDate: "2026-03-25", disbursedOn: "2026-03-26", purpose: "Medical",
+    outstanding: "82230.24", recoveredPrincipal: "17769.76", recoveredInterest: "2000.00", nextInstalmentMonth: "2026-06", nextInstalmentAmount: "8884.88", remainingInstalments: 10, ...over,
+  });
+  beforeEach(() => {
+    mockStatementAsked.mockReset();
+    state.slips = [];
+    state.years = [];
+    state.loans = [loan()];
+    state.loansError = false;
+    state.statementError = false;
+    state.statement = {
+      loan: loan(),
+      schedule: [{ seq: 1, dueMonth: "2026-04", principal: "7884.88", interest: "1000.00", recovered: "8884.88", status: "paid" }, { seq: 3, dueMonth: "2026-06", principal: "7963.73", interest: "921.15", recovered: "0.00", status: "open" }],
+      events: [{ id: "e1", date: "2026-03-26", kind: "disbursed", description: "Paid to you", principal: "0.00", interest: "0.00", balanceAfter: "100000.00" }, { id: "e2", date: "2026-04-01", kind: "emi_recovered", description: "Instalment recovered from your salary", principal: "7884.88", interest: "1000.00", balanceAfter: "92115.12" }],
+    };
+  });
+
+  it("shows my loan: status, amount, balance, EMI, the next instalment and the instalments left", () => {
+    render(<EmployeePayslips />);
+    expect(screen.getByText("Loans and advances")).toBeTruthy();
+    expect(screen.getByText("Loan LN-0001")).toBeTruthy();
+    expect(screen.getByText("Being repaid, Medical")).toBeTruthy();
+    expect(screen.getByText("Still to repay")).toBeTruthy();
+    expect(screen.getByText(/Next instalment: .*8,884\.88 from your June 2026 salary\./)).toBeTruthy();
+    expect(screen.getByText("10")).toBeTruthy();
+    expect(mockStatementAsked).not.toHaveBeenCalled();
+  });
+
+  it("opens the statement: the schedule in force and what was paid out and recovered", () => {
+    render(<EmployeePayslips />);
+    fireEvent.press(screen.getByRole("button", { name: "Show statement for LN-0001" }));
+    expect(mockStatementAsked).toHaveBeenCalledWith({ id: LOAN });
+    expect(screen.getByText("Repayment schedule")).toBeTruthy();
+    expect(screen.getByText("Paid to you")).toBeTruthy();
+    expect(screen.getByText("Instalment recovered from your salary")).toBeTruthy();
+    fireEvent.press(screen.getByRole("button", { name: "Hide statement for LN-0001" }));
+    expect(screen.queryByText("Paid to you")).toBeNull();
+  });
+
+  it("an approved loan that is not paid out yet says so", () => {
+    state.loans = [loan({ status: "approved", outstanding: "0.00", nextInstalmentMonth: null, nextInstalmentAmount: null, remainingInstalments: 0 })];
+    render(<EmployeePayslips />);
+    expect(screen.getByText("Approved, not paid out yet, Medical")).toBeTruthy();
+    expect(screen.getByText(/will start once it has been paid out to you/)).toBeTruthy();
+  });
+
+  it("shows no loans section for an employee without loans, and says plainly when loading fails", () => {
+    state.loans = [];
+    const { unmount } = render(<EmployeePayslips />);
+    expect(screen.queryByText("Loans and advances")).toBeNull();
+    unmount();
+    state.loansError = true;
+    render(<EmployeePayslips />);
+    expect(screen.getByText(/Could not load your loans/)).toBeTruthy();
   });
 });
 

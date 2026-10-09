@@ -85,5 +85,5 @@ The self-export registry (`lib/tableRegistry.ts`, shared `selfExport/rowSchemas.
 - Phone-only invites (no OTP login exists).
 - Per-shift location assignment (per employee only).
 - Replacing an import in one step (use undo then import).
-- Phase 4 lines (loans, full and final settlement) are untouched.
+- Phase 4: the employee sees only their own loans and advances, read only (`payrollSelf.loans`, `payrollSelf.loanStatement`; see [`payroll-phase-4.md`](payroll-phase-4.md) section 5). Full and final settlements, bonus and gratuity have no employee view.
 - No camera, GPS or device hardware was available where this was built: the capture flows are tested with the camera, location and server injected, and need a test on a real phone (see `PENDING-OWNER-TASKS.md`).

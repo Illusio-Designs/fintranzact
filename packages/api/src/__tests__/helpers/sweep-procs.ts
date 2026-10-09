@@ -142,7 +142,7 @@ function idKind(router: string, name: string): string | undefined {
   if (router === "payrollAttendance") return name.startsWith("holiday") ? "payrollHoliday" : undefined;
   if (router === "payrollLeave") return name.startsWith("type") ? "leaveType" : "leaveApplication";
   if (router === "payrollRun") return "payrollRun";
-  if (router === "payrollSelf") return "leaveApplication";
+  if (router === "payrollSelf") return name === "loanStatement" ? "employeeLoan" : "leaveApplication";
   if (router === "payrollPunch") return name.startsWith("location") ? "workLocation" : "deviceKey";
   // Payroll Phase 4
   if (router === "payrollBonus") return "bonusRun";

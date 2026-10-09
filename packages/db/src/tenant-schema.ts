@@ -3385,7 +3385,7 @@ export const gratuityProvisions = pgTable("gratuity_provisions", {
 ]);
 
 // A full and final settlement (one per employee).
-//   status - draft | pending_approval | approved | posted | paid
+//   status - draft | pending_approval | approved | posted | paid | reversed (terminal; the books entry is negated, the row is kept)
 // The final month's SALARY is not in here: it is paid by the payroll run of the exit month (docs/architecture/payroll-phase-4.md).
 // `inputs` holds what the preparer chose (leave days, notice shortfall, manual TDS and lines); the lines table holds the result.
 export const fnfSettlements = pgTable("fnf_settlements", {
@@ -3426,12 +3426,24 @@ export const fnfSettlements = pgTable("fnf_settlements", {
   paidFromBankAccountId: uuid("paid_from_bank_account_id").references(() => bankAccounts.id),
   paidReference: text("paid_reference"),
   paymentJournalEntryId: uuid("payment_journal_entry_id").references(() => journalEntries.id),
+  // Reversing the payment (status paid -> posted): when, why, and the journal entry that negates the payment entry.
+  paymentReversedAt: timestamp("payment_reversed_at", { withTimezone: true }),
+  paymentReversedByUserId: uuid("payment_reversed_by_user_id"),
+  paymentReversalReason: text("payment_reversal_reason"),
+  paymentReversalJournalEntryId: uuid("payment_reversal_journal_entry_id").references(() => journalEntries.id),
+  // Reversing the settlement (status posted -> reversed): the original accrual entry stays in accrual_journal_entry_id.
+  reversedAt: timestamp("reversed_at", { withTimezone: true }),
+  reversedByUserId: uuid("reversed_by_user_id"),
+  reversedByName: text("reversed_by_name"),
+  reversalReason: text("reversal_reason"),
+  reversalJournalEntryId: uuid("reversal_journal_entry_id").references(() => journalEntries.id),
   createdByUserId: uuid("created_by_user_id"),
   createdByName: text("created_by_name"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 }, (t) => [
-  uniqueIndex("fnf_settlements_employee_idx").on(t.businessId, t.employeeId),
+  // One live settlement per employee; a reversed one stays on record and a new one may be prepared after it.
+  uniqueIndex("fnf_settlements_employee_idx").on(t.businessId, t.employeeId).where(sql`${t.status} <> 'reversed'`),
   uniqueIndex("fnf_settlements_number_idx").on(t.businessId, t.number),
 ]);
 
@@ -3514,7 +3526,8 @@ export const employeeLoanInstallments = pgTable("employee_loan_installments", {
   index("employee_loan_installments_due_idx").on(t.businessId, t.dueMonth, t.status),
 ]);
 
-//   kind - issued | approved | disbursed | emi_recovered | prepaid | foreclosed | fnf_recovered | skipped | rescheduled | closed | rejected | cancelled
+//   kind - issued | approved | disbursed | emi_recovered | prepaid | foreclosed | fnf_recovered | fnf_reversed | skipped | rescheduled | closed | rejected | cancelled
+// fnf_reversed puts back the principal a reversed settlement had recovered (the log is append-only: nothing is deleted).
 // `principal` and `interest` are the amounts of the event (recovered or received); `balance_after` the outstanding principal after it.
 export const employeeLoanEvents = pgTable("employee_loan_events", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -3540,6 +3553,8 @@ export const employeeLoanEvents = pgTable("employee_loan_events", {
   // A payroll run recovers a loan at most once (approval is therefore idempotent).
   uniqueIndex("employee_loan_events_run_idx").on(t.loanId, t.runId).where(sql`${t.kind} = 'emi_recovered'`),
   uniqueIndex("employee_loan_events_fnf_idx").on(t.loanId, t.settlementId).where(sql`${t.kind} = 'fnf_recovered'`),
+  // A settlement's recovery is put back at most once (reversal is idempotent).
+  uniqueIndex("employee_loan_events_fnf_reversed_idx").on(t.loanId, t.settlementId).where(sql`${t.kind} = 'fnf_reversed'`),
 ]);
 
 // The business's relieving letter wording (placeholders like {{employee_name}}); one per kind.

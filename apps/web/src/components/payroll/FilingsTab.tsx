@@ -32,6 +32,13 @@ export function FilingsTab() {
   const [quarter, setQuarter] = useState(1);
   const [employeeId, setEmployeeId] = useState("");
   const [month, setMonth] = useState(currentMonth());
+  // Registers: CSV (opens in a spreadsheet) or a landscape PDF. Only a PDF request sends `format`, so a CSV call is exactly as before.
+  const [format, setFormat] = useState<"csv" | "pdf">("csv");
+  const fmt = format === "pdf" ? { format: "pdf" as const } : {};
+  const saveRegister = (r: { filename: string; text: string; contentType: string; base64?: string }) => {
+    if (r.base64) downloadBase64(r.filename, r.contentType, r.base64);
+    else downloadText(r.filename, "text/csv", r.text);
+  };
 
   async function run_<T>(label: string, f: () => Promise<T>, done: (r: T) => { note?: string; skipped?: string[] }) {
     try {
@@ -122,23 +129,27 @@ export function FilingsTab() {
               {Array.from({ length: 18 }, (_, i) => shiftMonth(currentMonth(), -i)).map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
             </SelectField>
             <FyPicker label="Financial year (bonus)" value={fy} onChange={setFy} />
+            <SelectField label="Download as" value={format} onChange={(e) => setFormat(e.target.value as "csv" | "pdf")}>
+              <option value="csv">CSV (opens in a spreadsheet)</option>
+              <option value="pdf">PDF (landscape, for printing)</option>
+            </SelectField>
           </div>
           <div className="flex flex-wrap gap-2">
             {(["wages", "attendance"] as const).map((k) => (
-              <button key={k} className="btn-secondary" onClick={() => void run_(`${k} register`, () => utils.payrollStatutory.register.fetch({ register: k, month }, fetchOpts), (r) => { downloadText(r.filename, "text/csv", r.text); return {}; })}>
+              <button key={k} className="btn-secondary" onClick={() => void run_(`${k} register`, () => utils.payrollStatutory.register.fetch({ register: k, month, ...fmt }, fetchOpts), (r) => { saveRegister(r); return {}; })}>
                 {k === "wages" ? "Wages register" : "Attendance register"}
               </button>
             ))}
-            <button className="btn-secondary" onClick={() => void run_("leave register", () => utils.payrollStatutory.register.fetch({ register: "leave" }, fetchOpts), (r) => { downloadText(r.filename, "text/csv", r.text); return {}; })}>Leave register</button>
-            <button className="btn-secondary" onClick={() => void run_("bonus register", () => utils.payrollStatutory.register.fetch({ register: "bonus", financialYear: fy }, fetchOpts), (r) => { downloadText(r.filename, "text/csv", r.text); return { note: "Computed from payroll data at the percentage in Statutory settings. No bonus is paid from here." }; })}>Bonus register</button>
-            <button className="btn-secondary" onClick={() => void run_("gratuity register", () => utils.payrollStatutory.register.fetch({ register: "gratuity", financialYear: fy }, fetchOpts), (r) => { downloadText(r.filename, "text/csv", r.text); return { note: "Computed from joining dates and last drawn Basic + DA. No gratuity is paid from here." }; })}>Gratuity register</button>
+            <button className="btn-secondary" onClick={() => void run_("leave register", () => utils.payrollStatutory.register.fetch({ register: "leave", ...fmt }, fetchOpts), (r) => { saveRegister(r); return {}; })}>Leave register</button>
+            <button className="btn-secondary" onClick={() => void run_("bonus register", () => utils.payrollStatutory.register.fetch({ register: "bonus", financialYear: fy, ...fmt }, fetchOpts), (r) => { saveRegister(r); return { note: "Computed from payroll data at the percentage in Statutory settings. No bonus is paid from here." }; })}>Bonus register</button>
+            <button className="btn-secondary" onClick={() => void run_("gratuity register", () => utils.payrollStatutory.register.fetch({ register: "gratuity", financialYear: fy, ...fmt }, fetchOpts), (r) => { saveRegister(r); return { note: "Computed from joining dates and last drawn Basic + DA. No gratuity is paid from here." }; })}>Gratuity register</button>
           </div>
           <div className="flex flex-wrap gap-2" aria-label="Other registers">
             {(["employment", "deductions", "overtime", "fnf"] as const).map((k) => (
-              <button key={k} className="btn-secondary" onClick={() => void run_(`${PHASE4_REGISTER_LABELS[k].toLowerCase()}`, () => utils.payrollStatutory.register.fetch({ register: k, financialYear: fy }, fetchOpts), (r) => { downloadText(r.filename, "text/csv", r.text); return { note: "note" in r ? String(r.note) : undefined }; })}>{PHASE4_REGISTER_LABELS[k]}</button>
+              <button key={k} className="btn-secondary" onClick={() => void run_(`${PHASE4_REGISTER_LABELS[k].toLowerCase()}`, () => utils.payrollStatutory.register.fetch({ register: k, financialYear: fy, ...fmt }, fetchOpts), (r) => { saveRegister(r); return { note: "note" in r ? String(r.note) : undefined }; })}>{PHASE4_REGISTER_LABELS[k]}</button>
             ))}
           </div>
-          <p className="text-xs text-text-tertiary">The bonus and gratuity registers are computed from your payroll data; bonus and gratuity are paid from the Bonus, Gratuity and Full and final tabs. The other registers are working copies made from the data above: formats differ by state and by Act (Shops and Establishments, Contract Labour...), so they are for your CA or lawyer to review and are not statutory forms.</p>
+          <p className="text-xs text-text-tertiary">The bonus and gratuity registers are computed from your payroll data; bonus and gratuity are paid from the Bonus, Gratuity and Full and final tabs. The other registers are working copies made from the data above: formats differ by state and by Act (Shops and Establishments, Contract Labour...), so they are for your CA or lawyer to review and are not statutory forms. The PDF is a landscape working copy for printing or sharing, labelled "Working copy for CA / legal review. Formats vary by state."; a register that is too wide for one page is printed in column groups that repeat the employee columns. The CSV has every value in full.</p>
         </div>
       </Panel>
     </div>

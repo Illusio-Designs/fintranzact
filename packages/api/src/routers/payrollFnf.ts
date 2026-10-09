@@ -6,11 +6,11 @@
  */
 
 import { z } from "zod";
-import { MAKER_CHECKER_MESSAGE, approverAllowed, fnfCreateSchema, fnfMarkPaidSchema, fnfUpdateSchema, FNF_TDS_WARNING } from "@fintranzact/shared";
+import { MAKER_CHECKER_MESSAGE, approverAllowed, fnfCreateSchema, fnfMarkPaidSchema, fnfReverseSchema, fnfUpdateSchema, FNF_TDS_WARNING } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure } from "../trpc.js";
 import { withAudit } from "../lib/audit.js";
 import { assertPayroll, assertPayrollPosting } from "../lib/payroll/access.js";
-import { approveFnf, calculateFnf, createFnf, deleteFnf, fnfDetail, fnfStatementData, listFnf, markFnfPaid, postFnf, reopenFnf, submitFnf, updateFnf } from "../lib/payroll/fnf.js";
+import { approveFnf, calculateFnf, createFnf, deleteFnf, fnfDetail, fnfStatementData, listFnf, markFnfPaid, postFnf, reopenFnf, reverseFnf, reverseFnfPayment, submitFnf, updateFnf } from "../lib/payroll/fnf.js";
 import { generateFnfStatementPDF } from "../lib/payroll/phase4-pdf.js";
 
 const idInput = z.object({ id: z.string().uuid() });
@@ -112,6 +112,31 @@ export const payrollFnfRouter = router({
       await assertPayrollPosting(ctx);
       return markFnfPaid(ctx.db, { businessId: ctx.businessId, id: input.id, bankAccountId: input.bankAccountId, paidOn: input.paidOn, reference: input.reference || null, actor: actorOf(ctx) });
     }, (r) => ({ action: "payroll.fnf.markPaid", entityType: "fnfSettlement", entityId: r.settlement.id, metadata: { created: r.created } })),
+  ),
+
+  /**
+   * Reverse a POSTED settlement (terminal). Same role as posting (PayrollPosting: owner, admin, accountant; never HR) and a
+   * mandatory reason. Negates the accrual entry, puts back loan recoveries and encashed leave, frees the bonus; never reactivates
+   * the employee. Refused for a paid settlement (reverse the payment first). Idempotent.
+   */
+  reverse: memberProcedure.input(fnfReverseSchema).mutation(
+    withAudit(async ({ ctx, input }) => {
+      await assertPayrollPosting(ctx);
+      return reverseFnf(ctx.db, { businessId: ctx.businessId, id: input.id, reason: input.reason, actor: actorOf(ctx) });
+    }, (r, input) => ({
+      action: "payroll.fnf.reverse",
+      entityType: "fnfSettlement",
+      entityId: r.settlement.id,
+      metadata: { number: r.settlement.number, reason: input.reason, created: r.created, reversalJournalEntryId: r.journalEntryId, loans: r.loans.map((l) => ({ loanId: l.loanId, amount: l.amountPaise / 100 })) },
+    })),
+  ),
+
+  /** Reverse the payment of a paid settlement (back to posted): the money goes back into the account it left. Same role and reason. Idempotent. */
+  reversePayment: memberProcedure.input(fnfReverseSchema).mutation(
+    withAudit(async ({ ctx, input }) => {
+      await assertPayrollPosting(ctx);
+      return reverseFnfPayment(ctx.db, { businessId: ctx.businessId, id: input.id, reason: input.reason, actor: actorOf(ctx) });
+    }, (r, input) => ({ action: "payroll.fnf.reversePayment", entityType: "fnfSettlement", entityId: r.settlement.id, metadata: { number: r.settlement.number, reason: input.reason, created: r.created, reversalJournalEntryId: r.journalEntryId } })),
   ),
 
   /** The settlement statement as a PDF (base64). */

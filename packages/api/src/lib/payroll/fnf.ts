@@ -10,14 +10,16 @@
  *   deductions - notice-period recovery, a manual TDS amount, other recoveries; then loan and advance balances (last, from
  *                what is left, never below zero).
  * Status: draft (calculated) -> pending_approval -> approved -> posted -> paid. Maker-checker like a payroll run. There is
- * no reversal of an approved settlement (none exists for payroll runs either): correct it with a journal entry.
+ * no reversal before posting (correct an approved settlement with a journal entry); a POSTED settlement can be reversed
+ * (`reverseFnf`, terminal status `reversed`) and a paid one only after its payment is reversed (`reverseFnfPayment`).
  */
 
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import {
   bonusRunLines,
   bonusRuns,
+  bankAccounts,
   businessMembers,
   businesses,
   employees,
@@ -63,10 +65,10 @@ import {
 import { assertPeriodOpen } from "../period-lock.js";
 import { amountInWords } from "../invoice-templates/model.js";
 import { badRequest, notFound } from "./access.js";
-import { bookDate, cashOrBankAccountId, ensurePayrollAccounts, moveBank, writeJournalEntry, type PayrollAccountKey } from "./books.js";
+import { bookDate, cashOrBankAccountId, ensurePayrollAccounts, moveBank, reverseJournalEntry, writeJournalEntry, type PayrollAccountKey } from "./books.js";
 import { loadBonusYear } from "./bonus.js";
 import { provisionBalancePaise, salaryBasisOf } from "./gratuity.js";
-import { activeLoansOf, nextSeriesNumber, recoverLoansInFnf } from "./loans.js";
+import { activeLoansOf, nextSeriesNumber, recoverLoansInFnf, reverseLoanRecoveriesOfFnf } from "./loans.js";
 import { loadPayrollSettings } from "./data.js";
 import { loadStatutoryRates } from "./statutory.js";
 import type { Actor } from "./run.js";
@@ -334,7 +336,8 @@ export async function createFnf(
   if (!emp) throw notFound("Employee");
   if (emp.status !== "exited" || !emp.lastWorkingDay) throw badRequest("Record the employee's exit (with the last working day) before preparing the full and final settlement.");
   if (emp.lastWorkingDay > todayIst()) throw badRequest("The settlement can be prepared on or after the last working day.");
-  const [existing] = await db.select({ id: fnfSettlements.id }).from(fnfSettlements).where(and(eq(fnfSettlements.businessId, input.businessId), eq(fnfSettlements.employeeId, emp.id))).limit(1);
+  // A reversed settlement stays on record; a new one may be prepared after it.
+  const [existing] = await db.select({ id: fnfSettlements.id }).from(fnfSettlements).where(and(eq(fnfSettlements.businessId, input.businessId), eq(fnfSettlements.employeeId, emp.id), ne(fnfSettlements.status, "reversed"))).limit(1);
   if (existing) throw new TRPCError({ code: "CONFLICT", message: "This employee already has a full and final settlement." });
   return db.transaction(async (tx) => {
     const number = await nextSeriesNumber(tx, input.businessId, "fnf");
@@ -577,10 +580,119 @@ export async function markFnfPaid(
     }
     const [updated] = await tx
       .update(fnfSettlements)
-      .set({ status: "paid", paidAt: new Date(), paidOn: input.paidOn, paidByUserId: input.actor.id, paidFromBankAccountId: bankId, paidReference: input.reference ?? null, paymentJournalEntryId: journalEntryId, updatedAt: new Date() })
+      .set({ status: "paid", paidAt: new Date(), paidOn: input.paidOn, paidByUserId: input.actor.id, paidFromBankAccountId: bankId, paidReference: input.reference ?? null, paymentJournalEntryId: journalEntryId, paymentReversedAt: null, paymentReversedByUserId: null, paymentReversalReason: null, paymentReversalJournalEntryId: null, updatedAt: new Date() })
       .where(eq(fnfSettlements.id, s.id))
       .returning();
     return { settlement: updated as FnfRow, journalEntryId, created: true };
+  });
+}
+
+// ── Reversal ─────────────────────────────────────────────────────────────────
+
+/**
+ * Reverse the PAYMENT of a settlement (paid -> posted): a mirror of the payment entry (Dr bank or cash / Cr 2442), the money
+ * back into the bank account it left (a bank transaction), and the paid fields cleared. The reason is kept on the record.
+ * Idempotent: a second call finds the payment already reversed and returns the first result. Refused unless the settlement is
+ * paid (or was paid and reversed). Needs the period of the payment entry open.
+ */
+export async function reverseFnfPayment(
+  db: TenantDatabase,
+  input: { businessId: string; id: string; reason: string; actor: Actor },
+): Promise<{ settlement: FnfRow; journalEntryId: string | null; created: boolean }> {
+  const first = await getFnf(db, input.businessId, input.id);
+  if (first.status === "posted" && first.paymentReversedAt) return { settlement: first, journalEntryId: first.paymentReversalJournalEntryId, created: false };
+  requireStatus(first, ["paid"], "Reversing the payment");
+  await assertPeriodOpen(db, input.businessId, [first.paidOn ?? todayIst()]);
+  return db.transaction(async (tx) => {
+    const s = await lockFnf(tx, input.businessId, input.id);
+    if (s.status === "posted" && s.paymentReversedAt) return { settlement: s, journalEntryId: s.paymentReversalJournalEntryId, created: false };
+    requireStatus(s, ["paid"], "Reversing the payment");
+    const net = rupeesToPaise(s.netPayable);
+    let journalEntryId: string | null = null;
+    if (net > 0) {
+      if (!s.paymentJournalEntryId || !s.paidFromBankAccountId) throw badRequest("The payment of this settlement has no journal entry or bank account on record, so it cannot be reversed here. Correct it with a journal entry.");
+      const [acct] = await tx.select({ id: bankAccounts.id }).from(bankAccounts).where(and(eq(bankAccounts.id, s.paidFromBankAccountId), eq(bankAccounts.businessId, input.businessId))).limit(1);
+      if (!acct) throw badRequest("The bank or cash account this settlement was paid from no longer exists, so the payment cannot be reversed here.");
+      const mirror = await reverseJournalEntry(tx, { businessId: input.businessId, entryId: s.paymentJournalEntryId, narration: `Reversal of the payment of full and final settlement ${s.number}: ${input.reason}`, userId: input.actor.id, userName: input.actor.name });
+      await moveBank(tx, { businessId: input.businessId, bankAccountId: s.paidFromBankAccountId, direction: "in", paise: net, date: bookDate(s.paidOn ?? todayIst()), description: `Reversal: full and final ${s.number} payment`, referenceType: "fnf_settlement_reversal", referenceId: s.id });
+      journalEntryId = mirror.id;
+    }
+    const [updated] = await tx
+      .update(fnfSettlements)
+      .set({
+        status: "posted",
+        paidAt: null,
+        paidOn: null,
+        paidByUserId: null,
+        paidFromBankAccountId: null,
+        paidReference: null,
+        paymentJournalEntryId: null,
+        paymentReversedAt: new Date(),
+        paymentReversedByUserId: input.actor.id,
+        paymentReversalReason: input.reason,
+        paymentReversalJournalEntryId: journalEntryId,
+        updatedAt: new Date(),
+      })
+      .where(eq(fnfSettlements.id, s.id))
+      .returning();
+    return { settlement: updated as FnfRow, journalEntryId, created: true };
+  });
+}
+
+/**
+ * Reverse a POSTED settlement (posted -> reversed, terminal). Everything it did is undone by appending, never deleting:
+ *   books    - a mirror of the accrual entry with every line swapped (the original is marked voided and points at it);
+ *   loans    - an `fnf_reversed` event per loan it recovered puts the principal back, closed loans become active, and the
+ *              remaining schedule is replaced for the restored balance;
+ *   leave    - a compensating `adjustment` row per leave type it encashed;
+ *   gratuity - it was drawn from the provision (2441) by the entry itself, so the mirror gives it back;
+ *   bonus    - the settlement no longer counts as approved, so a bonus run takes the employee in again.
+ * The employee is NOT reactivated: HR re-opens the exit or prepares a new settlement (allowed once this one is reversed).
+ * A paid settlement is refused until its payment is reversed (`reverseFnfPayment`). Idempotent: a second call returns the
+ * first result. The period of the accrual entry must be open (the mirror is dated the same day).
+ */
+export async function reverseFnf(
+  db: TenantDatabase,
+  input: { businessId: string; id: string; reason: string; actor: Actor },
+): Promise<{ settlement: FnfRow; journalEntryId: string | null; created: boolean; loans: Array<{ loanId: string; loanNumber: string; amountPaise: number }> }> {
+  const first = await getFnf(db, input.businessId, input.id);
+  if (first.status === "reversed") return { settlement: first, journalEntryId: first.reversalJournalEntryId, created: false, loans: [] };
+  if (first.status === "paid") throw badRequest("This settlement has been paid. Reverse the payment first (which puts the money back into the account it left), then reverse the settlement.");
+  requireStatus(first, ["posted"], "Reversing");
+  await assertPeriodOpen(db, input.businessId, [first.lastWorkingDay]);
+  return db.transaction(async (tx) => {
+    const s = await lockFnf(tx, input.businessId, input.id);
+    if (s.status === "reversed") return { settlement: s, journalEntryId: s.reversalJournalEntryId, created: false, loans: [] };
+    if (s.status === "paid") throw badRequest("This settlement has been paid. Reverse the payment first, then reverse the settlement.");
+    requireStatus(s, ["posted"], "Reversing");
+    // Serialise with the payroll run approval for this employee, like approval does.
+    await tx.select({ id: employees.id }).from(employees).where(eq(employees.id, s.employeeId)).for("update");
+
+    let journalEntryId: string | null = null;
+    if (s.accrualJournalEntryId) {
+      const mirror = await reverseJournalEntry(tx, { businessId: input.businessId, entryId: s.accrualJournalEntryId, narration: `Reversal of full and final settlement ${s.number}: ${input.reason}`, userId: input.actor.id, userName: input.actor.name });
+      journalEntryId = mirror.id;
+    }
+    const loans = await reverseLoanRecoveriesOfFnf(tx, { businessId: input.businessId, settlementId: s.id, date: todayIst(), actor: input.actor });
+
+    // Leave encashed in the settlement comes back to the balance (compensating rows, same leave year as the encashment).
+    const encashed: Array<typeof leaveLedger.$inferSelect> = await tx
+      .select()
+      .from(leaveLedger)
+      .where(and(eq(leaveLedger.businessId, input.businessId), eq(leaveLedger.employeeId, s.employeeId), eq(leaveLedger.kind, "encashment"), eq(leaveLedger.periodKey, `fnf:${s.id}`)));
+    for (const row of encashed) {
+      await tx
+        .insert(leaveLedger)
+        .values({ businessId: input.businessId, employeeId: s.employeeId, leaveTypeId: row.leaveTypeId, leaveYear: row.leaveYear, entryDate: todayIst(), kind: "adjustment", days: String(Math.abs(Number(row.days))), periodKey: `fnf-reversed:${s.id}`, note: `Full and final ${s.number} reversed: leave encashment put back`, createdByUserId: input.actor.id })
+        .onConflictDoNothing();
+    }
+
+    const [updated] = await tx
+      .update(fnfSettlements)
+      .set({ status: "reversed", reversedAt: new Date(), reversedByUserId: input.actor.id, reversedByName: input.actor.name, reversalReason: input.reason, reversalJournalEntryId: journalEntryId, updatedAt: new Date() })
+      .where(eq(fnfSettlements.id, s.id))
+      .returning();
+    return { settlement: updated as FnfRow, journalEntryId, created: true, loans };
   });
 }
 
@@ -649,7 +761,7 @@ export async function fnfStatementData(db: TenantDatabase, businessId: string, i
 // The F&F-versus-payroll-run relation, read by the run side: employees whose settlement already exists.
 export async function employeesWithSettlement(db: Reader, businessId: string, employeeIds: string[]): Promise<Set<string>> {
   if (employeeIds.length === 0) return new Set();
-  const rows = await db.select({ employeeId: fnfSettlements.employeeId }).from(fnfSettlements).where(and(eq(fnfSettlements.businessId, businessId), inArray(fnfSettlements.employeeId, employeeIds)));
+  const rows = await db.select({ employeeId: fnfSettlements.employeeId }).from(fnfSettlements).where(and(eq(fnfSettlements.businessId, businessId), inArray(fnfSettlements.employeeId, employeeIds), ne(fnfSettlements.status, "reversed")));
   return new Set(rows.map((r) => r.employeeId));
 }
 

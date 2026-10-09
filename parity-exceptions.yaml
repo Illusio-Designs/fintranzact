@@ -153,7 +153,7 @@ exceptions:
       # Year-end and exit processing is HR and finance desk work on the web: bonus runs (with the Bonus settings the CA verifies),
       # the gratuity estimate and provision, full and final settlements (with their approval and posting), loans and advances
       # (issue, approval, disbursement, prepayment, skip), the relieving letter template and its PDF. Mobile has no Payroll area for
-      # HR (see Phase 1); the employee app deliberately gets no loan or settlement view (payrollSelf is unchanged in Phase 4).
+      # HR (see Phase 1); the employee app gets a read-only view of the employee's own loans (payrollSelf.loans and loanStatement, used by the mobile Loans screen) and still no settlement view.
       - payrollBonus.approve
       - payrollBonus.bankFile
       - payrollBonus.calculate
@@ -179,6 +179,8 @@ exceptions:
       - payrollFnf.markPaid
       - payrollFnf.post
       - payrollFnf.reopen
+      - payrollFnf.reverse
+      - payrollFnf.reversePayment
       - payrollFnf.statementPdf
       - payrollFnf.submit
       - payrollFnf.update
@@ -841,6 +843,8 @@ exceptions:
       - payrollFnf.markPaid
       - payrollFnf.post
       - payrollFnf.reopen
+      - payrollFnf.reverse
+      - payrollFnf.reversePayment
       - payrollFnf.statementPdf
       - payrollFnf.submit
       - payrollFnf.update
@@ -871,6 +875,8 @@ exceptions:
       - payrollSelf.leaveApply
       - payrollSelf.leaveCancel
       - payrollSelf.leaveOverview
+      - payrollSelf.loanStatement
+      - payrollSelf.loans
       - payrollSelf.me
       - payrollSelf.payslips
       - payrollSelf.punch
@@ -1382,6 +1388,8 @@ exceptions:
       - payrollFnf.markPaid
       - payrollFnf.post
       - payrollFnf.reopen
+      - payrollFnf.reverse
+      - payrollFnf.reversePayment
       - payrollFnf.statementPdf
       - payrollFnf.submit
       - payrollFnf.update
@@ -1412,6 +1420,8 @@ exceptions:
       - payrollSelf.leaveApply
       - payrollSelf.leaveCancel
       - payrollSelf.leaveOverview
+      - payrollSelf.loanStatement
+      - payrollSelf.loans
       - payrollSelf.me
       - payrollSelf.payslips
       - payrollSelf.punch

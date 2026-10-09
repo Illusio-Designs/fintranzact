@@ -160,7 +160,7 @@ function rupees(paise: number): string {
  */
 export async function writeJournalEntry(
   tx: Tx,
-  input: { businessId: string; entryDate: Date; narration: string; userId: string; userName: string | null; lines: JournalLineInput[] },
+  input: { businessId: string; entryDate: Date; narration: string; userId: string; userName: string | null; lines: JournalLineInput[]; reversesEntryId?: string },
 ): Promise<{ id: string; entryNumber: string }> {
   const lines = input.lines.filter((l) => l.debitPaise > 0 || l.creditPaise > 0);
   const debit = lines.reduce((s, l) => s + l.debitPaise, 0);
@@ -183,6 +183,7 @@ export async function writeJournalEntry(
       entryDate: input.entryDate,
       narration: input.narration,
       source: "system",
+      reversesEntryId: input.reversesEntryId ?? null,
       createdByUserId: input.userId,
       createdByName: input.userName,
     })
@@ -197,6 +198,33 @@ export async function writeJournalEntry(
     })),
   );
   return entry;
+}
+
+/**
+ * Negates a journal entry the way the manual "void" does (journal.void): a mirror entry on the same date with every line's debit
+ * and credit swapped, `reverses_entry_id` pointing at the original, and the original marked voided and pointing at the mirror.
+ * Reports include both, so the pair nets to zero. Refuses an entry that is already voided. Run it inside the caller's transaction
+ * (and check the period lock first). Returns the mirror entry.
+ */
+export async function reverseJournalEntry(
+  tx: Tx,
+  input: { businessId: string; entryId: string; narration: string; userId: string; userName: string | null },
+): Promise<{ id: string; entryNumber: string }> {
+  const [orig] = await tx.select().from(journalEntries).where(and(eq(journalEntries.id, input.entryId), eq(journalEntries.businessId, input.businessId))).for("update").limit(1);
+  if (!orig) throw new TRPCError({ code: "NOT_FOUND", message: "The journal entry to reverse was not found." });
+  if (orig.isVoided) throw new TRPCError({ code: "BAD_REQUEST", message: `Journal entry ${orig.entryNumber} is already voided, so it cannot be reversed again.` });
+  const lines: Array<{ accountId: string; debit: string; credit: string; narration: string | null }> = await tx.select({ accountId: journalEntryLines.accountId, debit: journalEntryLines.debit, credit: journalEntryLines.credit, narration: journalEntryLines.narration }).from(journalEntryLines).where(eq(journalEntryLines.journalEntryId, orig.id));
+  const mirror = await writeJournalEntry(tx, {
+    businessId: input.businessId,
+    entryDate: orig.entryDate,
+    narration: input.narration,
+    userId: input.userId,
+    userName: input.userName,
+    reversesEntryId: orig.id,
+    lines: lines.map((l) => ({ accountId: l.accountId, debitPaise: rupeesToPaise(l.credit), creditPaise: rupeesToPaise(l.debit), narration: l.narration ?? undefined })),
+  });
+  await tx.update(journalEntries).set({ isVoided: true, voidedByEntryId: mirror.id, updatedAt: new Date() }).where(eq(journalEntries.id, orig.id));
+  return mirror;
 }
 
 /**
