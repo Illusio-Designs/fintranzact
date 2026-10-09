@@ -503,3 +503,37 @@ false, so none of it is on sale. Design and every assumption:
    digitally signed.
 5. **Try it in a browser.** The screens were tested with component tests only, never
    in a real browser: run a bonus year, a loan, and a settlement end to end once.
+
+---
+
+## 19. AWS hosting setup (move from Railway and Vercel to AWS Mumbai)
+
+The infrastructure code is written and checked offline (`infra/`, docs in `docs/infra/`); nothing is applied
+because the AWS account does not exist. These steps need you. Full detail and exact commands:
+`docs/infra/SETUP.md`. Cost: lean about 90 to 120 USD a month, launch about 185 to 275 USD
+(`docs/infra/COST.md`; check the AWS Pricing Calculator, these are estimates).
+
+1. **Apply for AWS Activate credits first**, right after creating the account (step 2): the form
+   needs the account ID. Credits take days to approve; do not create billable resources until they show under
+   Billing, Credits. Put the **expiry date** and reminders (60 and 14 days before) in your calendar.
+2. **Create the AWS account** with a team-readable business email, company card, Mumbai region.
+3. **Secure it**: MFA on the root user (plus a spare device), no root access keys, billing alerts on.
+4. **Set up SSO** (IAM Identity Center) with MFA for yourself and install Terraform (or OpenTofu), the AWS CLI, `jq`.
+5. **Choose the three domain names** (`app.`, `store.`, `api.`) and decide where DNS lives (Route 53 is easiest). Check which
+   address the mobile app uses (it defaults to `https://api.fintranzact.com`).
+6. **Run the bootstrap** (`infra/bootstrap`): state bucket, GitHub sign-in, deploy role. Note the role ARN.
+7. **Copy `infra/stacks/prod/owner.tfvars.example` to `owner.tfvars`**, fill your domains, alert email and Activate amount, keep
+   `api_desired_count = 0`, and run the first `terraform apply` with `profiles/lean.tfvars`. Confirm the alert email subscription.
+8. **Add the DNS records** (nothing to do with Route 53; two rounds otherwise) and wait for the certificates to be issued.
+9. **Fill in the secrets** in Secrets Manager (day one: `ENCRYPTION_KEY`, `TRIAL_CLAIM_SALT`, `DATABASE_URL`). **Copy `ENCRYPTION_KEY`
+   exactly from Railway**; keep a copy in your password manager. Create the application database user with the admin task.
+10. **Create the GitHub `production` environment** (required reviewer = you) and the repository variables listed in SETUP step 12
+    (variables, not secrets), then run **Actions, Deploy AWS**. Afterwards remove `api_desired_count = 0` and apply again.
+11. **Update services that hold the API address**: Razorpay webhook (`https://api.<domain>/webhooks/razorpay`), Turnstile
+    allowed hostnames, Resend sender domain, Sandbox allow-list (needs a fixed IP only if Sandbox requires it), MSG91.
+12. **Rehearse the data move** with a copy of the Railway database, compare row counts, then do the real cutover in a maintenance
+    window: `docs/infra/MIGRATION-FROM-RAILWAY-VERCEL.md`. Keep Railway and Vercel idle for 14 days as the way back.
+13. **Decide the profile at launch**: move from lean to launch by switching the `-var-file`; decide yes or no on the backup copy in Singapore
+    (it leaves India; ask your lawyer or CA) and on the load-balancer firewall.
+14. **Make a quarterly calendar item** for the backup restore test and a monthly one to read the AWS bill.
+15. **Turn on MFA on every other account** that can change production (GitHub, Razorpay, Sandbox, Resend, Cloudflare, domain registrar, email).
