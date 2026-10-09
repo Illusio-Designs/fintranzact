@@ -13,6 +13,7 @@
     "db:studio": "pnpm --filter @fintranzact/db studio",
     "lint": "pnpm exec oxlint --deny-warnings --ignore-path .gitignore --ignore-pattern '**/target/**' ./packages ./apps",
     "licenses:check": "node scripts/license-check.mjs",
+    "audit:prod": "pnpm --filter @fintranzact/api exec tsx src/bin/audit-check.ts",
     "typecheck": "turbo typecheck",
     "test": "turbo test --concurrency 1",
     "test:api": "pnpm --filter @fintranzact/shared test && pnpm --filter @fintranzact/api test",
@@ -42,7 +43,29 @@
     "overrides": {
       "react": "19.2.0",
       "react-dom": "19.2.0",
-      "lodash": ">=4.18.1"
+      "lodash": ">=4.18.1",
+      "@modelcontextprotocol/sdk@<1.31.0": "^1.31.0",
+      "@xmldom/xmldom@<0.8.15": "^0.8.15",
+      "brace-expansion@<1.1.20": "^1.1.20",
+      "brace-expansion@>=5.0.0 <5.0.11": "^5.0.11",
+      "browserslist@<4.28.7": "^4.28.7",
+      "compression@<1.8.2": "^1.8.2",
+      "fast-uri@<3.1.7": "^3.1.7",
+      "hono@<4.12.25": "^4.12.25",
+      "ip-address@<10.3.1": "^10.3.1",
+      "js-yaml@>=4.0.0 <4.3.2": "^4.3.2",
+      "js-yaml@>=3.0.0 <3.15.2": "^3.15.2",
+      "nanoid@>=5.0.0 <5.1.16": "^5.1.16",
+      "nanoid@<3.3.18": "^3.3.18",
+      "picomatch@<2.3.2": "^2.3.2",
+      "picomatch@>=4.0.0 <4.0.4": "^4.0.4",
+      "postcss@<8.5.18": "^8.5.18",
+      "proxy-addr@<2.0.8": "^2.0.8",
+      "seroval@<1.6.3": "^1.6.3",
+      "shell-quote@<1.9.0": "^1.9.0",
+      "source-map-js@<1.2.2": "^1.2.2",
+      "ws@>=8.0.0 <8.21.0": "^8.21.0",
+      "ws@>=7.0.0 <7.5.11": "^7.5.11"
     }
   },
   "version": "0.9.0"

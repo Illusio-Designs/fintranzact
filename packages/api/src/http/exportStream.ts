@@ -135,6 +135,18 @@ function serializeRow(
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Validate table name is safe for embedding in SQL (registry values only). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** "'id1', 'id2'" for an SQL IN list; throws unless every id is a UUID, so nothing else can reach sql.raw. */
+function quotedUuidList(ids: string[]): string {
+  return ids
+    .map((id) => {
+      if (!UUID_RE.test(id)) throw new Error("Refusing to export: business id is not a UUID");
+      return `'${id}'`;
+    })
+    .join(", ");
+}
+
 function assertSafeTableName(name: string): void {
   if (!/^[a-z_][a-z0-9_]*$/.test(name)) {
     throw new Error(`Unsafe table name: ${name}`);
@@ -252,7 +264,8 @@ export function registerExportRoute(app: Hono): void {
           // Empty tenant — write empty NDJSON file
         } else if (scope.type === "businesses") {
           // Businesses table — only this organisation's businesses
-          const bizIdList = businessIds.map((id) => `'${id}'`).join(", ");
+          const bizIdList = quotedUuidList(businessIds);
+          // nosemgrep: fintranzact-sql-raw-interpolation -- bizIdList holds only quoted UUIDs (quotedUuidList throws otherwise)
           const whereClause = sql.raw(`id IN (${bizIdList})`);
           let offset = 0;
           let done = false;
@@ -279,7 +292,8 @@ export function registerExportRoute(app: Hono): void {
           }
         } else if (scope.type === "direct") {
           // Table has a direct business_id column
-          const bizIdList = businessIds.map((id) => `'${id}'`).join(", ");
+          const bizIdList = quotedUuidList(businessIds);
+          // nosemgrep: fintranzact-sql-raw-interpolation -- bizIdList holds only quoted UUIDs (quotedUuidList throws otherwise)
           const whereClause = sql.raw(`business_id IN (${bizIdList})`);
 
           let offset = 0;
@@ -311,7 +325,8 @@ export function registerExportRoute(app: Hono): void {
           assertSafeTableName(scope.parentTable);
           assertSafeTableName(scope.parentFk);
 
-          const bizIdList = businessIds.map((id) => `'${id}'`).join(", ");
+          const bizIdList = quotedUuidList(businessIds);
+          // nosemgrep: fintranzact-sql-raw-interpolation -- identifiers pass assertSafeTableName, ids are quoted UUIDs
           const whereClause = sql.raw(
             `${scope.parentFk} IN (SELECT id FROM ${scope.parentTable} WHERE business_id IN (${bizIdList}))`,
           );

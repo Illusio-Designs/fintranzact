@@ -11,7 +11,7 @@
  * on instance A. For v1 this is acceptable; v2 can move to Redis.
  */
 
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 const TOKEN_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -70,7 +70,7 @@ export function signExportToken(
   userId: string,
 ): { token: string; expiresAt: Date } {
   const exp = Date.now() + TOKEN_TTL_MS;
-  const nonce = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const nonce = randomBytes(12).toString("base64url");
 
   const payload = b64encode({ tenantId, userId, exp, nonce });
   const sig = sign(payload);

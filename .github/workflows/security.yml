@@ -1,0 +1,179 @@
+# Security scanning. Separate from ci.yml on purpose: the required checks there (Test, Build,
+# Typecheck & Lint, Docker Build (dry run), License Scan, E2E Tests, Check Feature Parity) are
+# not touched, and nothing here is needed by them. Add the four jobs below to branch protection
+# once they have been green for a while.
+#
+# What runs: every pull request to main, every push to main, and weekly (Monday 03:30 UTC, which
+# also catches NEW advisories against UNCHANGED code and scans the full git history for secrets).
+#
+# Design notes (details: docs/security/vulnerability-management.md)
+#   - read-only token; no secrets are used, so fork pull requests run the same jobs safely
+#     (plain `pull_request`, never `pull_request_target`)
+#   - the only third-party action is actions/checkout, pinned by commit SHA. Everything else is a
+#     tool installed from a pinned version: semgrep from PyPI, gitleaks built from the Go module
+#     proxy (verified by go.sum / sum.golang.org), trivy from a pinned container image tag
+#   - no GitHub Advanced Security / CodeQL / SARIF upload is used (not available on private repos
+#     without a paid plan); results go to the job log and the job summary
+#   - scanner output never prints secret values (gitleaks runs with --redact)
+name: Security
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "30 3 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash # -eo pipefail, so `cmd | tee` keeps the failing exit code
+
+env:
+  SEMGREP_VERSION: "1.180.0"
+  GITLEAKS_VERSION: "v8.28.0"
+  TRIVY_IMAGE: "aquasec/trivy:0.58.1"
+
+jobs:
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # actions/checkout v4.2.2. Verify with: git ls-remote https://github.com/actions/checkout v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Enable pnpm (version from package.json)
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit production dependencies
+        # Fails on critical/high advisories that are not in security/audit-allowlist.json, and on any
+        # expired or malformed allowlist entry. Moderate and low are listed, not blocking.
+        run: pnpm audit:prod | tee audit.txt
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Dependency audit"
+            echo '```'
+            tail -n 80 audit.txt 2>/dev/null || echo "no output"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  static-analysis:
+    name: Static analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install Semgrep
+        run: |
+          python3 -m pip install --user "semgrep==${SEMGREP_VERSION}"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Test our rules
+        run: semgrep --test --metrics=off security/semgrep
+
+      - name: Scan with our rules (ERROR blocks, WARNING is reported)
+        run: |
+          semgrep scan --metrics=off --disable-version-check --quiet \
+            --config security/semgrep \
+            --json -o semgrep-ours.json packages apps scripts e2e
+          errors=$(jq '[.results[] | select(.extra.severity == "ERROR")] | length' semgrep-ours.json)
+          warnings=$(jq '[.results[] | select(.extra.severity == "WARNING")] | length' semgrep-ours.json)
+          {
+            echo "### Static analysis (Fintranzact rules)"
+            echo "ERROR findings: $errors (block). WARNING findings: $warnings (reported)."
+            jq -r '.results[] | "- \(.extra.severity) \(.check_id | split(".") | last) \(.path):\(.start.line)"' semgrep-ours.json | sort | uniq -c | head -60
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$errors" -gt 0 ]; then
+            echo "Blocking findings:"
+            jq -r '.results[] | select(.extra.severity == "ERROR") | "\(.path):\(.start.line) \(.check_id | split(".") | last): \(.extra.message)"' semgrep-ours.json
+            exit 1
+          fi
+
+      - name: Scan with public registry rule packs (advisory for now)
+        # Not blocking yet: the public packs change on their own schedule, so a new rule could turn
+        # untouched code red. Review the output weekly; once the existing findings are triaged,
+        # delete `continue-on-error` so ERROR findings block here too.
+        continue-on-error: true
+        run: |
+          semgrep scan --metrics=off --disable-version-check --quiet \
+            --config p/javascript --config p/typescript --config p/nodejs --config p/owasp-top-ten \
+            --severity ERROR --error \
+            packages apps scripts e2e
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0 # history is needed to scan the commits of a pull request and, weekly, all of it
+
+      - name: Build gitleaks (pinned module version, checksum-verified by the Go module proxy)
+        run: |
+          go version
+          GOBIN="$RUNNER_TEMP/bin" go install "github.com/zricethezav/gitleaks/v8@${GITLEAKS_VERSION}"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Scan
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: |
+          # pull request: only its commits. push to main: only the pushed commits.
+          # weekly / manual / a push whose range is unknown: the full history.
+          range=""
+          if [ "$EVENT" = "pull_request" ]; then
+            range="${PR_BASE}..${PR_HEAD}"
+          elif [ "$EVENT" = "push" ] && [ -n "$PUSH_BEFORE" ] && [ "$PUSH_BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            range="${PUSH_BEFORE}..${PUSH_AFTER}"
+          fi
+          if [ -n "$range" ]; then
+            echo "Scanning commits $range"
+            gitleaks detect --source . --config .gitleaks.toml --redact --no-banner --verbose --log-opts="$range"
+          else
+            echo "Scanning the full history"
+            gitleaks detect --source . --config .gitleaks.toml --redact --no-banner --verbose
+          fi
+
+  image-scan:
+    name: Image scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Build the API image (root Dockerfile)
+        run: docker build -t fintranzact-api:scan .
+
+      - name: Scan with Trivy (CRITICAL/HIGH with a fix available fail; expiry dates live in .trivyignore)
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD/.trivyignore:/work/.trivyignore:ro" \
+            "$TRIVY_IMAGE" image \
+              --severity CRITICAL,HIGH \
+              --ignore-unfixed \
+              --ignorefile /work/.trivyignore \
+              --exit-code 1 \
+              --no-progress \
+              fintranzact-api:scan

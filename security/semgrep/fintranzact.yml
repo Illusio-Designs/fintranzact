@@ -1,0 +1,216 @@
+# Fintranzact Semgrep rules: the risks this codebase actually has.
+# Run by .github/workflows/security.yml ("Static analysis") next to the public registry packs.
+# ERROR blocks the job, WARNING is reported only.
+#
+# Reviewed exceptions: put `// nosemgrep: <rule-id> -- <reason>` on the line above (or at the end of)
+# the flagged line. A reviewer must agree with the reason. Tests for these rules:
+#   semgrep --test security/semgrep
+rules:
+  - id: fintranzact-sql-raw-interpolation
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      sql.raw() with a template literal or string concatenation builds SQL from a string. Use a
+      parameterised sql`...${value}...` template; for identifiers validate against an allowlist first,
+      then add `// nosemgrep: fintranzact-sql-raw-interpolation -- <why it is safe>`.
+    metadata:
+      cwe: "CWE-89: SQL Injection"
+      owasp: "A03:2021 Injection"
+    pattern-either:
+      - pattern: sql.raw(`...${$X}...`)
+      - pattern: sql.raw($A + $B)
+
+  - id: fintranzact-db-execute-string-building
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      A query string is built by concatenation or an untagged template and passed to execute/query/unsafe.
+      Use the drizzle sql`...` tag so values are sent as parameters.
+    metadata:
+      cwe: "CWE-89: SQL Injection"
+      owasp: "A03:2021 Injection"
+    # Reviewed baseline: these two files run DDL (CREATE/DROP DATABASE, migration bookkeeping) that
+    # cannot be parameterised. Every identifier goes through validateDbName / sanitisation and the
+    # migration hash is a sha256 hex digest. Do not add other files here without the same review.
+    paths:
+      exclude:
+        - packages/db/src/migrate.ts
+        - packages/db/src/provision-tenant.ts
+    pattern-either:
+      - pattern: $DB.execute(`...${$X}...`)
+      - pattern: $DB.execute($A + $B)
+      - pattern: $DB.unsafe(`...${$X}...`)
+      - pattern: $DB.unsafe($A + $B)
+      - pattern: $DB.query(`...${$X}...`)
+
+  - id: fintranzact-eval
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: eval() and new Function() run strings as code. Do not use them.
+    metadata:
+      cwe: "CWE-95: Eval Injection"
+      owasp: "A03:2021 Injection"
+    pattern-either:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+
+  - id: fintranzact-child-process
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      child_process is imported. Never pass user input to a shell; prefer execFile with an argument
+      array. Build tooling (vite config) is fine.
+    metadata:
+      cwe: "CWE-78: OS Command Injection"
+      owasp: "A03:2021 Injection"
+    pattern-either:
+      - pattern: import $X from "child_process"
+      - pattern: import $X from "node:child_process"
+      - pattern: import {...} from "child_process"
+      - pattern: import {...} from "node:child_process"
+      - pattern: require("child_process")
+      - pattern: require("node:child_process")
+
+  - id: fintranzact-shell-exec-dynamic
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: exec/execSync with a built string runs through a shell. Use execFile/spawn with an argument array.
+    metadata:
+      cwe: "CWE-78: OS Command Injection"
+      owasp: "A03:2021 Injection"
+    pattern-either:
+      - pattern: exec(`...${$X}...`, ...)
+      - pattern: execSync(`...${$X}...`, ...)
+      - pattern: exec($A + $B, ...)
+      - pattern: execSync($A + $B, ...)
+
+  - id: fintranzact-dangerously-set-inner-html
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      dangerouslySetInnerHTML renders unescaped HTML. Only static, developer-written content may reach
+      it (never user input, invoice text, party names, AI output).
+    metadata:
+      cwe: "CWE-79: Cross-site Scripting"
+      owasp: "A03:2021 Injection"
+    pattern: <$EL dangerouslySetInnerHTML={...} />
+
+  - id: fintranzact-insecure-random-for-secret
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      Math.random() is not cryptographically secure. Use crypto.randomBytes / crypto.randomUUID /
+      crypto.getRandomValues for tokens, secrets, nonces, passwords, OTPs and session or API key material.
+    metadata:
+      cwe: "CWE-338: Use of Cryptographically Weak PRNG"
+      owasp: "A02:2021 Cryptographic Failures"
+    patterns:
+      - pattern-either:
+          - pattern: $VAR = <... Math.random() ...>
+          - pattern: const $VAR = <... Math.random() ...>
+          - pattern: let $VAR = <... Math.random() ...>
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: (?i).*(token|secret|password|passwd|nonce|otp|apikey|api_key|session|salt|csrf).*
+
+  - id: fintranzact-math-random-used
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      Math.random() found. Fine for UI effects and non-security ids; if the value is ever used for
+      authentication, authorization, a token or an idempotency key, use crypto instead.
+    metadata:
+      cwe: "CWE-338: Use of Cryptographically Weak PRNG"
+    pattern: Math.random()
+
+  - id: fintranzact-jwt-none-algorithm
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: A JWT is accepted or created with the "none" algorithm (no signature). Pin a real algorithm.
+    metadata:
+      cwe: "CWE-347: Improper Verification of Cryptographic Signature"
+      owasp: "A02:2021 Cryptographic Failures"
+    pattern-either:
+      - pattern: |
+          {..., algorithm: "none", ...}
+      - pattern: |
+          {..., alg: "none", ...}
+      - pattern: |
+          {..., algorithms: [..., "none", ...], ...}
+
+  - id: fintranzact-jwt-decode-without-verify
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: jwt.decode() does not check the signature. Use verify() for anything that decides access.
+    metadata:
+      cwe: "CWE-347: Improper Verification of Cryptographic Signature"
+    pattern-either:
+      - pattern: jwt.decode(...)
+      - pattern: jsonwebtoken.decode(...)
+
+  - id: fintranzact-open-redirect
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      A redirect target comes straight from the URL (query string). Only follow same-origin relative paths:
+      require it to start with a single "/" and not "//" or "/\", or compare against an allowlist.
+    metadata:
+      cwe: "CWE-601: Open Redirect"
+      owasp: "A01:2021 Broken Access Control"
+    mode: taint
+    pattern-sources:
+      - patterns:
+          - pattern: $SP.get(...)
+          - metavariable-regex:
+              metavariable: $SP
+              regex: (?i).*(search|param|query|url).*
+    pattern-sinks:
+      - patterns:
+          - pattern-either:
+              - pattern: window.location.href = $SINK
+              - pattern: window.location.assign($SINK)
+              - pattern: window.location.replace($SINK)
+              - pattern: location.href = $SINK
+              - pattern: $C.redirect($SINK)
+          - focus-metavariable: $SINK
+    pattern-sanitizers:
+      - pattern: safeRedirectPath(...)
+      - pattern: isSafeRedirect(...)
+
+  - id: fintranzact-tls-verification-disabled
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: TLS certificate verification is switched off. Remove it.
+    metadata:
+      cwe: "CWE-295: Improper Certificate Validation"
+      owasp: "A02:2021 Cryptographic Failures"
+    pattern-either:
+      - pattern: |
+          {..., rejectUnauthorized: false, ...}
+      - pattern: process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"
+
+  - id: fintranzact-weak-crypto
+    languages: [typescript, javascript]
+    severity: WARNING
+    message: >-
+      MD5 or SHA-1 is not collision resistant. Fine for non-security checksums and for vendor APIs that
+      require them (state which); use SHA-256 or better, and argon2 for passwords.
+    metadata:
+      cwe: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+      owasp: "A02:2021 Cryptographic Failures"
+    pattern-either:
+      - pattern: createHash("md5")
+      - pattern: createHash("sha1")
+      - pattern: crypto.createHash("md5")
+      - pattern: crypto.createHash("sha1")
+
+  - id: fintranzact-ecb-mode
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: ECB mode leaks patterns in the plaintext. Use AES-256-GCM, as lib/crypto.ts does.
+    metadata:
+      cwe: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+    pattern-either:
+      - pattern: createCipheriv("aes-128-ecb", ...)
+      - pattern: createCipheriv("aes-192-ecb", ...)
+      - pattern: createCipheriv("aes-256-ecb", ...)

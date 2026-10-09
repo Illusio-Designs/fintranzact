@@ -102,6 +102,7 @@ export interface RotateResult {
   failures: RotationFailure[];
 }
 
+// nosemgrep: fintranzact-sql-raw-interpolation -- names come only from the constant ENCRYPTED_TARGETS list above, never from input
 const ident = (name: string): SQL => sql.raw(`"${name.replace(/"/g, '""')}"`);
 
 function rowsOf(result: unknown): Record<string, unknown>[] {

@@ -219,6 +219,7 @@ const globalRateLimiter = new RateLimiter(100);
 
 function aesEncrypt(data: string, keyBytes: Buffer): string {
   // NIC uses AES-256-ECB with PKCS7 padding
+  // nosemgrep: fintranzact-ecb-mode -- mandated by the NIC e-invoice API contract; no data of ours is stored this way
   const cipher = createCipheriv("aes-256-ecb", keyBytes, null);
   cipher.setAutoPadding(true);
   const encrypted = Buffer.concat([cipher.update(data, "utf8"), cipher.final()]);

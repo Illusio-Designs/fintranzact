@@ -1,0 +1,8 @@
+# Reviewed exceptions for the "Image scan" job (docs/security/vulnerability-management.md).
+# Format: <vulnerability id> exp:<YYYY-MM-DD>   -- Trivy stops honouring the line after that date,
+# so an expired exception makes the job fail again. Put the reason and owner in the comment above it.
+# Maximum 90 days. Prefer rebuilding on a patched base image over adding a line here.
+#
+# Example (do not uncomment without a real finding):
+# # CVE-2099-0001 in busybox, no fix in node:22-alpine yet. Owner [security owner]. Added 2026-10-09.
+# CVE-2099-0001 exp:2027-01-07
