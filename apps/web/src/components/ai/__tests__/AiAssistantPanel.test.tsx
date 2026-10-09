@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 const h = vi.hoisted(() => ({
   billing: { current: undefined as unknown },
   aiStatus: { current: undefined as unknown },
+  prefs: { current: { language: "auto", tipsEnabled: true } as unknown },
   conversations: { current: [] as Array<{ id: string; title: string; updatedAt: string; createdAt: string }> },
   onSale: { current: false },
   stream: vi.fn(),
@@ -16,10 +17,12 @@ const h = vi.hoisted(() => ({
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    useUtils: () => ({ ai: { conversations: { invalidate: h.invalidate }, status: { invalidate: h.invalidate }, conversation: { fetch: h.fetchConversation } } }),
+    useUtils: () => ({ ai: { conversations: { invalidate: h.invalidate }, status: { invalidate: h.invalidate }, preferences: { invalidate: h.invalidate }, tips: { invalidate: h.invalidate }, conversation: { fetch: h.fetchConversation } } }),
     billing: { status: { useQuery: () => ({ data: h.billing.current, isLoading: h.billing.current === undefined }) } },
     ai: {
       status: { useQuery: () => ({ data: h.aiStatus.current, isLoading: h.aiStatus.current === undefined }) },
+      preferences: { useQuery: () => ({ data: h.prefs.current, isLoading: false, isError: false }) },
+      updatePreferences: { useMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }) },
       conversations: { useQuery: () => ({ data: h.conversations.current, isLoading: false }) },
       confirmAction: { useMutation: () => ({ mutateAsync: h.confirm }) },
       cancelAction: { useMutation: () => ({ mutateAsync: vi.fn() }) },
@@ -85,6 +88,7 @@ beforeEach(() => {
   h.billing.current = billing();
   h.aiStatus.current = okStatus();
   h.conversations.current = [];
+  h.prefs.current = { language: "auto", tipsEnabled: true };
   h.onSale.current = false;
 });
 

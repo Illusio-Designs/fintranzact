@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { AI_MAX_QUESTION_CHARS, type AiAnyCard } from "@fintranzact/shared";
+import { AI_LANGUAGE_HTML_LANG, AI_MAX_QUESTION_CHARS, AI_SPEECH_LANGUAGE, AI_DEFAULT_USER_PREFS, type AiAnyCard } from "@fintranzact/shared";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { AiRequestError, streamAiAnswer, type AiStreamEvent } from "@/lib/ai-stream";
 import { clearAiDraft, closeAiPanel, useAiPanel } from "@/lib/ai-panel";
 import { getAiPageContext } from "@/lib/ai-page-context";
+import { SPEECH_UNSUPPORTED_HINT, useSpeechInput } from "@/lib/speech-input";
 import { Icon } from "@/components/ui/Icon";
 import { Spinner } from "@/components/ui/Spinner";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Add01Icon, Cancel01Icon, Clock01Icon, Delete02Icon, SentIcon, SparklesIcon, StopIcon } from "@hugeicons/core-free-icons";
+import { Add01Icon, Cancel01Icon, Clock01Icon, Delete02Icon, Mic01Icon, Settings02Icon, SentIcon, SparklesIcon, StopIcon } from "@hugeicons/core-free-icons";
 import { AiCards } from "./AiCards";
 import { AiAddonNotice, useAiAccess } from "./AiGate";
 import { AiBuyMore } from "./AiBuyMore";
-import { AI_STARTERS, actionStartersFor } from "./starters";
+import { AiPreferences } from "./AiPreferences";
+import { actionStartersFor, startersFor } from "./starters";
 
 interface ChatMessage {
   id: string;
@@ -32,7 +34,7 @@ const TOOL_LABELS: Record<string, string> = {
   sales_summary: "sales", profit_and_loss: "profit and loss", outstanding_balances: "outstanding balances", overdue_invoices: "overdue invoices",
   top_customers: "top customers", top_selling_items: "top items", stock_levels: "stock levels", low_stock_reorder: "low stock", batch_expiry: "batch expiry",
   gst_payable: "GST", tax_summary: "tax summary", cash_and_bank: "cash and bank", monthly_comparison: "this month and last", sales_trend: "sales trend",
-  expenses_by_category: "expenses", find_invoices: "invoices", get_invoice: "the invoice", find_parties: "parties", find_items: "items", recent_transactions: "recent transactions",
+  expenses_by_category: "expenses", find_invoices: "invoices", get_invoice: "the invoice", find_parties: "parties", find_items: "items", recent_transactions: "recent transactions", search_help: "the help centre",
 };
 
 /** What the assistant is doing while a propose tool runs: it only prepares, nothing is saved. */
@@ -61,18 +63,32 @@ export function AiAssistantPanel() {
   const utils = trpc.useUtils();
   const access = useAiAccess();
   const status = trpc.ai.status.useQuery(undefined, { enabled: open && access.active, staleTime: 15_000, retry: 0 });
+  const prefsQuery = trpc.ai.preferences.useQuery(undefined, { enabled: open && access.active, staleTime: 60_000, retry: 0 });
+  const prefs = prefsQuery.data ?? AI_DEFAULT_USER_PREFS;
+  const language = prefs.language;
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [view, setView] = useState<"chat" | "history">("chat");
+  const [view, setView] = useState<"chat" | "history" | "prefs">("chat");
   const [deleting, setDeleting] = useState<{ id: string; title: string } | null>(null);
   // What screen readers hear: "writing..." while streaming and the finished answer once, never every token.
   const [announcement, setAnnouncement] = useState("");
 
   const chatAllowed = access.active && status.data?.access === "ok" && status.data.configured;
+  // Voice input: the browser's own recognition fills the box; nothing is sent until the person presses Send.
+  const speech = useSpeechInput({
+    lang: AI_SPEECH_LANGUAGE[language],
+    getBase: () => inputRef.current?.value ?? "",
+    onText: setInput,
+    maxChars: AI_MAX_QUESTION_CHARS,
+  });
+  const stopSpeech = speech.stop;
+  useEffect(() => {
+    if (!open) stopSpeech();
+  }, [open, stopSpeech]);
   const history = trpc.ai.conversations.useQuery(undefined, { enabled: open && view === "history" && access.active, retry: 0 });
   const deleteConversation = trpc.ai.deleteConversation.useMutation({
     onSuccess: async (_r, vars) => {
@@ -127,6 +143,7 @@ export function AiAssistantPanel() {
     async (raw: string) => {
       const text = raw.trim();
       if (!text || streaming) return;
+      stopSpeech();
       if (text.length > AI_MAX_QUESTION_CHARS) {
         setNotice({ kind: "error", message: `Please keep the question under ${AI_MAX_QUESTION_CHARS} characters.` });
         return;
@@ -185,7 +202,7 @@ export function AiAssistantPanel() {
         void utils.ai.status.invalidate();
       }
     },
-    [streaming, conversationId, utils],
+    [streaming, conversationId, utils, stopSpeech],
   );
 
   const stop = () => abortRef.current?.abort();
@@ -204,7 +221,8 @@ export function AiAssistantPanel() {
 
   if (!open) return null;
 
-  const actionStarters = actionStartersFor(chatAllowed ? status.data?.actionKinds : undefined);
+  const actionStarters = actionStartersFor(chatAllowed ? status.data?.actionKinds : undefined, language);
+  const starters = startersFor(language);
   const allowance = status.data?.allowance;
   const remainingLabel = allowance
     ? allowance.exhausted
@@ -221,7 +239,9 @@ export function AiAssistantPanel() {
       onKeyDown={(e) => {
         if (e.key === "Escape" && !deleting) {
           e.stopPropagation();
-          closeAiPanel();
+          // Esc first stops the microphone; a second Esc closes the panel.
+          if (speech.listening) speech.stop();
+          else closeAiPanel();
         }
       }}
       className="fixed inset-0 z-50 flex flex-col bg-surface-0 md:static md:inset-auto md:z-auto md:h-full md:w-[400px] md:shrink-0 md:border-l md:border-border-light lg:w-[440px]"
@@ -238,6 +258,17 @@ export function AiAssistantPanel() {
           <>
             <button type="button" onClick={startNewChat} className="flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary hover:bg-surface-1" aria-label="New chat" title="New chat">
               <Icon icon={Add01Icon} size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setView((v) => (v === "prefs" ? "chat" : "prefs"))}
+              aria-pressed={view === "prefs"}
+              className={cn("flex h-8 w-8 items-center justify-center rounded-lg text-text-secondary hover:bg-surface-1", view === "prefs" && "bg-surface-2")}
+              aria-label="Assistant preferences"
+              title="Preferences: reply language and tips"
+              data-testid="ai-prefs-toggle"
+            >
+              <Icon icon={Settings02Icon} size={16} />
             </button>
             <button
               type="button"
@@ -271,6 +302,11 @@ export function AiAssistantPanel() {
             <p className="mt-1">This server has no AI provider key. Please ask your administrator to set it up.</p>
           </div>
         </div>
+      ) : view === "prefs" ? (
+        <div className="flex-1 overflow-y-auto p-4">
+          <h3 className="mb-3 text-sm font-semibold text-text-primary">Preferences</h3>
+          <AiPreferences prefs={prefs} canEdit={!prefsQuery.isError} />
+        </div>
       ) : view === "history" ? (
         <div className="flex-1 overflow-y-auto p-3" data-testid="ai-history">
           {history.isLoading ? (
@@ -298,14 +334,14 @@ export function AiAssistantPanel() {
           {messages.length === 0 ? (
             <div>
               <p className="text-sm text-text-secondary">
-                Ask about your sales, dues, stock, expiring batches, GST or cash. English, Hindi or Hinglish.{" "}
+                Ask about your sales, dues, stock, expiring batches, GST or cash, or how to do something in Fintranzact. English, Hindi, Gujarati or Hinglish. You can also speak your question.{" "}
                 {actionStarters.length > 0
                   ? "I can also prepare invoices, payments and more for you to review: nothing is saved until you tap Confirm."
                   : "I only read your books; I never change them."}
               </p>
               <p className="mt-4 text-xs font-medium text-text-tertiary">Try asking</p>
               <ul className="mt-2 flex flex-wrap gap-2" aria-label="Suggested questions">
-                {AI_STARTERS.map((s) => (
+                {starters.map((s) => (
                   <li key={s.text}>
                     <button type="button" lang={s.lang} onClick={() => void send(s.text)} className="rounded-full border border-border-light bg-surface-0 px-3 py-1.5 text-left text-xs text-text-primary hover:bg-surface-1">
                       {s.text}
@@ -404,9 +440,27 @@ export function AiAssistantPanel() {
               rows={2}
               maxLength={AI_MAX_QUESTION_CHARS}
               disabled={!chatAllowed && !status.isLoading && status.data !== undefined}
-              placeholder="Ask about your business…"
+              placeholder={speech.listening ? "Listening…" : "Ask about your business…"}
+              lang={AI_LANGUAGE_HTML_LANG[language]}
               className="input min-h-[2.75rem] flex-1 resize-none text-sm"
             />
+            {speech.supported && !streaming && (
+              <button
+                type="button"
+                onClick={speech.toggle}
+                disabled={!chatAllowed}
+                aria-pressed={speech.listening}
+                aria-label={speech.listening ? "Stop listening" : "Speak your question"}
+                title={speech.listening ? "Stop listening (Esc)" : "Speak your question. Your browser's speech service turns your voice into text; Fintranzact does not receive the audio."}
+                data-testid="ai-mic"
+                className={cn(
+                  "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border text-text-secondary transition-colors",
+                  speech.listening ? "animate-pulse border-red-500 bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-200" : "border-border-light hover:bg-surface-1",
+                )}
+              >
+                <Icon icon={Mic01Icon} size={18} />
+              </button>
+            )}
             {streaming ? (
               <button type="button" onClick={stop} className="btn-secondary flex h-11 items-center gap-1.5 px-3" aria-label="Stop writing">
                 <Icon icon={StopIcon} size={16} />
@@ -419,6 +473,16 @@ export function AiAssistantPanel() {
               </button>
             )}
           </div>
+          {(speech.listening || speech.status) && (
+            <p
+              role={speech.isError ? "alert" : "status"}
+              data-testid="ai-voice-status"
+              className={cn("mt-1.5 text-xs", speech.isError ? "text-red-700 dark:text-red-300" : "text-text-secondary")}
+            >
+              {speech.status}
+            </p>
+          )}
+          {!speech.supported && <p className="mt-1.5 text-2xs text-text-tertiary" data-testid="ai-voice-unsupported">{SPEECH_UNSUPPORTED_HINT}</p>}
           <p className="mt-1.5 text-2xs text-text-tertiary">Answers come from your books and may be wrong. Check important figures, and ask your CA before tax decisions.</p>
         </form>
       )}
