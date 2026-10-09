@@ -115,6 +115,14 @@ describe("TrialSection", () => {
 });
 
 describe("TrialSettingsCard", () => {
+  it("raises no error toast when the saved settings arrive (fields are filled in a later render)", async () => {
+    const { toast } = await import("@/hooks/useToast");
+    (toast as unknown as ReturnType<typeof vi.fn>).mockClear();
+    render(<TrialSettingsCard />);
+    await new Promise((r) => setTimeout(r, 120));
+    expect(toast).not.toHaveBeenCalled();
+  });
+
   it("shows no field errors while the saved settings are still loading", () => {
     const loaded = h.settings.current;
     (h.settings as { current: unknown }).current = undefined;
