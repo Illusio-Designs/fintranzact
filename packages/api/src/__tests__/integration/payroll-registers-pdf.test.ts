@@ -124,7 +124,7 @@ describe("every register as a PDF", () => {
       expect(r.contentType, register).toBe("application/pdf");
       expect(r.filename, register).toBe(csv.filename.replace(/\.csv$/, ".pdf"));
       expect(r.count, register).toBe(csv.count);
-      expect(r.note, register).toBeTruthy();
+      expect((r as { note?: string }).note, register).toBeTruthy();
       const buf = Buffer.from((r as unknown as { base64: string }).base64, "base64");
       expect(buf.subarray(0, 4).toString(), register).toBe("%PDF");
       const pdf = await readPdf(buf);

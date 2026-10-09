@@ -8,9 +8,10 @@
  * auth.*: signing in, sessions, switching organisation). Every procedure is classified here by name, so a new
  * procedure is refused for employees by default and a new allowlist entry must be a real procedure.
  *
- * Phase 4 (bonus, gratuity, full and final, loans, letters) adds no employee procedure on purpose: every payrollBonus, payrollGratuity,
- * payrollFnf, payrollLoan and payrollLetter procedure is refused for the employee (they are not in EMPLOYEE_ALLOWED_PROCEDURES; the
- * test below fails if one is ever allowed without being classified) and the employee-side loan view was not built.
+ * Phase 4 (bonus, gratuity, full and final, loans, letters) adds only the read-only own-loan view for the employee
+ * (payrollSelf.loans and payrollSelf.loanStatement, which take no employee id): every payrollBonus, payrollGratuity, payrollFnf, payrollLoan
+ * and payrollLetter procedure is still refused for the employee (they are not in EMPLOYEE_ALLOWED_PROCEDURES; the test below fails if one
+ * is ever allowed without being classified).
  *
  * HR: allowed exactly what its CASL permissions say. For every authorized procedure the Payroll checks
  * (recorded while the owner calls it) must be granted to HR, else HR is FORBIDDEN; the books, billing,

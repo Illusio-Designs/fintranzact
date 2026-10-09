@@ -8,6 +8,9 @@ const h = vi.hoisted(() => ({
   attendance: { data: undefined as unknown, isLoading: false },
   payslips: { data: [] as unknown[], isLoading: false },
   years: { data: [] as unknown[], isLoading: false },
+  loans: { data: [] as unknown[], isLoading: false, error: null as unknown },
+  statement: { data: undefined as unknown, isLoading: false, error: null as unknown },
+  statementAsked: vi.fn(),
   leave: { data: undefined as unknown, isLoading: false },
   apply: vi.fn(),
   cancel: vi.fn(),
@@ -32,6 +35,8 @@ vi.mock("@/lib/trpc", () => ({
       attendance: { useQuery: () => h.attendance },
       payslips: { useQuery: () => h.payslips },
       form16Years: { useQuery: () => h.years },
+      loans: { useQuery: () => h.loans },
+      loanStatement: { useQuery: (i: unknown) => { h.statementAsked(i); return h.statement; } },
       leaveOverview: { useQuery: () => h.leave },
       leaveApply: { useMutation: (o: { onSuccess?: () => void }) => ({ mutate: (v: unknown) => { h.apply(v); o.onSuccess?.(); }, isPending: false }) },
       leaveCancel: { useMutation: (o: { onSuccess?: () => void }) => ({ mutate: (v: unknown) => { h.cancel(v); o.onSuccess?.(); }, isPending: false }) },
@@ -47,6 +52,7 @@ vi.mock("@/components/payroll/payroll-ui", async (importOriginal) => {
 import { MyAttendance } from "../MyAttendance";
 import { MyPayslips } from "../MyPayslips";
 import { MyLeave } from "../MyLeave";
+import { MyLoans } from "../MyLoans";
 
 describe("MyAttendance", () => {
   beforeEach(() => {
@@ -114,6 +120,99 @@ describe("MyPayslips", () => {
     render(<MyPayslips />);
     fireEvent.click(screen.getByRole("button", { name: "Download payslip for September 2026" }));
     await waitFor(() => expect(h.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Could not download the payslip", variant: "error" })));
+  });
+});
+
+const LOAN = "11111111-1111-4111-8111-111111111111";
+const ownLoan = (over: Record<string, unknown> = {}) => ({
+  id: LOAN, number: "LN-0001", kind: "loan", status: "active", principal: "100000.00", interestRate: "12.00", emi: "8884.88", installmentCount: 12, issueDate: "2026-03-25", disbursedOn: "2026-03-26", purpose: "Medical",
+  outstanding: "82230.24", recoveredPrincipal: "17769.76", recoveredInterest: "2000.00", nextInstalmentMonth: "2026-06", nextInstalmentAmount: "8884.88", remainingInstalments: 10, ...over,
+});
+
+describe("MyLoans (read only, my own)", () => {
+  beforeEach(() => {
+    h.statementAsked.mockReset();
+    h.toast.mockReset();
+    h.loans = { data: [ownLoan()], isLoading: false, error: null };
+    h.statement = {
+      data: {
+        loan: ownLoan(),
+        schedule: [
+          { seq: 1, dueMonth: "2026-04", principal: "7884.88", interest: "1000.00", recovered: "8884.88", status: "paid" },
+          { seq: 3, dueMonth: "2026-06", principal: "7963.73", interest: "921.15", recovered: "0.00", status: "open" },
+        ],
+        events: [
+          { id: "e1", date: "2026-03-26", kind: "disbursed", description: "Paid to you", principal: "0.00", interest: "0.00", balanceAfter: "100000.00" },
+          { id: "e2", date: "2026-04-01", kind: "emi_recovered", description: "Instalment recovered from your salary", principal: "7884.88", interest: "1000.00", balanceAfter: "92115.12" },
+        ],
+      },
+      isLoading: false,
+      error: null,
+    };
+  });
+
+  it("shows my loan with the status, amount, balance, EMI, the next instalment and the instalments left, and no action but the statement", () => {
+    render(<MyLoans />);
+    expect(screen.getByRole("heading", { name: "Loans and advances" })).toBeInTheDocument();
+    expect(screen.getByText("Loan LN-0001")).toBeInTheDocument();
+    expect(screen.getByText(/Being repaid, Medical/)).toBeInTheDocument();
+    expect(screen.getByText("₹1,00,000.00")).toBeInTheDocument();
+    expect(screen.getByText("₹82,230.24")).toBeInTheDocument();
+    expect(screen.getAllByText("₹8,884.88").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("next-LN-0001")).toHaveTextContent("Next instalment: ₹8,884.88 from your June 2026 salary.");
+    expect(screen.getByText("Instalments left").nextSibling).toHaveTextContent("10");
+    // Read only: the only control is the statement toggle.
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(h.statementAsked).not.toHaveBeenCalled(); // the statement is fetched only when opened
+  });
+
+  it("opens the statement: the schedule in force and what was paid out and recovered", () => {
+    render(<MyLoans />);
+    fireEvent.click(screen.getByRole("button", { name: "Show statement for LN-0001" }));
+    expect(h.statementAsked).toHaveBeenCalledWith({ id: LOAN });
+    const schedule = screen.getByRole("table", { name: "Repayment schedule" });
+    expect(within(schedule).getByText("April 2026")).toBeInTheDocument();
+    expect(within(schedule).getByText("To come")).toBeInTheDocument();
+    const statement = screen.getByRole("table", { name: "Loan statement" });
+    expect(within(statement).getByText("Paid to you")).toBeInTheDocument();
+    expect(within(statement).getByText("Instalment recovered from your salary")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Hide statement for LN-0001" }));
+    expect(screen.queryByTestId("loan-statement")).not.toBeInTheDocument();
+  });
+
+  it("an approved loan that is not paid out yet says so and shows no instalments", () => {
+    h.loans = { data: [ownLoan({ status: "approved", outstanding: "0.00", nextInstalmentMonth: null, nextInstalmentAmount: null, remainingInstalments: 0 })], isLoading: false, error: null };
+    render(<MyLoans />);
+    expect(screen.getByText(/Approved, not paid out yet/)).toBeInTheDocument();
+    expect(screen.getByText(/will start once it has been paid out to you/)).toBeInTheDocument();
+    expect(screen.queryByTestId("next-LN-0001")).not.toBeInTheDocument();
+  });
+
+  it("shows nothing at all for an employee without loans, while loading, and never an error toast before the data is there", () => {
+    h.loans = { data: [], isLoading: false, error: null };
+    const { container, rerender } = render(<MyLoans />);
+    expect(container).toBeEmptyDOMElement();
+    h.loans = { data: undefined as never, isLoading: true, error: null };
+    rerender(<MyLoans />);
+    expect(container).toBeEmptyDOMElement();
+    expect(h.toast).not.toHaveBeenCalled();
+  });
+
+  it("says plainly when the loans or a statement cannot be loaded", () => {
+    h.loans = { data: undefined as never, isLoading: false, error: new Error("boom") };
+    const { rerender } = render(<MyLoans />);
+    expect(screen.getByText(/Could not load your loans/)).toBeInTheDocument();
+    h.loans = { data: [ownLoan()], isLoading: false, error: null };
+    h.statement = { data: undefined, isLoading: false, error: new Error("not found") };
+    rerender(<MyLoans />);
+    fireEvent.click(screen.getByRole("button", { name: "Show statement for LN-0001" }));
+    expect(screen.getByText(/Could not load this statement/)).toBeInTheDocument();
+    expect(h.toast).not.toHaveBeenCalled();
+  });
+
+  it("appears under the payslips", () => {
+    render(<MyPayslips />);
+    expect(screen.getByRole("region", { name: "My loans and advances" })).toBeInTheDocument();
   });
 });
 

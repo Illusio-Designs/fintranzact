@@ -2,12 +2,13 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
 import { formatCurrency } from "@/lib/utils";
 import { downloadBase64 } from "@/components/payroll/payroll-ui";
+import { MyLoans } from "./MyLoans";
 
 function messageOf(e: unknown): string {
   return (e as { message?: string } | null)?.message || "Something went wrong. Please try again.";
 }
 
-/** My payslips (approved runs only) and, when HR has released it, my Form 16 working copy. */
+/** My payslips (approved runs only), when HR has released it my Form 16 working copy, and (read only) my loans and advances if I have any. */
 export function MyPayslips() {
   const utils = trpc.useUtils();
   const slips = trpc.payrollSelf.payslips.useQuery();
@@ -68,6 +69,7 @@ export function MyPayslips() {
           </>
         )}
       </section>
+      <MyLoans />
     </div>
   );
 }

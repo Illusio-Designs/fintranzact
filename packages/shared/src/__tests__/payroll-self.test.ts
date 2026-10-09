@@ -246,6 +246,10 @@ describe("the employee allowlist", () => {
   it("lists only self-service procedures and the organisation banner", () => {
     for (const path of EMPLOYEE_ALLOWED_PROCEDURES) expect(path.startsWith("payrollSelf.") || path === "tenant.current").toBe(true);
     expect(employeeMayCall("payrollSelf.punch")).toBe(true);
+    // The own-loan view (read only) is allowed; every procedure that manages loans is not.
+    expect(employeeMayCall("payrollSelf.loans")).toBe(true);
+    expect(employeeMayCall("payrollSelf.loanStatement")).toBe(true);
+    for (const p of ["payrollLoan.list", "payrollLoan.get", "payrollLoan.create", "payrollLoan.approve", "payrollLoan.statementCsv", "payrollFnf.get", "payrollFnf.list"]) expect(employeeMayCall(p), p).toBe(false);
     expect(employeeMayCall("payrollEmployee.list")).toBe(false);
     expect(employeeMayCall("business.list")).toBe(false);
     expect(employeeMayCall("ai.begin")).toBe(false);

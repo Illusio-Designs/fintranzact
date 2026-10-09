@@ -7,6 +7,7 @@ import { trpc } from "../../lib/trpc";
 import { makeStyles } from "../../lib/makeStyles";
 import { formatCurrency } from "../../lib/utils";
 import { Card, QueryError, ScreenHeader } from "../ui";
+import { EmployeeLoans } from "./EmployeeLoans";
 
 /** Save a base64 PDF to the cache and open the share sheet (so it can be saved, printed or sent). */
 export async function shareBase64Pdf(filename: string, base64: string, title: string): Promise<void> {
@@ -15,7 +16,7 @@ export async function shareBase64Pdf(filename: string, base64: string, title: st
   await Sharing.shareAsync(uri, { mimeType: "application/pdf", dialogTitle: title });
 }
 
-/** My payslips (approved runs only) and my Form 16 working copy when HR has released it. */
+/** My payslips (approved runs only), my Form 16 working copy when HR has released it, and (read only) my loans and advances if I have any. */
 export function EmployeePayslips() {
   const styles = useStyles();
   const utils = trpc.useUtils();
@@ -76,6 +77,7 @@ export function EmployeePayslips() {
             </>
           )}
         </Card>
+        <EmployeeLoans />
       </ScrollView>
     </SafeAreaView>
   );

@@ -474,6 +474,8 @@
 | payrollSelf.leaveApply | mutation | authorized | create:PayrollSelf (+ employee logins only (resolved from the membership)) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | payrollSelf.leaveCancel | mutation | authorized | update:PayrollSelf (+ employee logins only (resolved from the membership)) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | payrollSelf.leaveOverview | query | authorized | read:PayrollSelf (+ employee logins only (resolved from the membership)) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| payrollSelf.loans | query | authorized | read:PayrollSelf (+ employee logins only (resolved from the membership)) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| payrollSelf.loanStatement | query | authorized | read:PayrollSelf (+ employee logins only (resolved from the membership)) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | payrollSelf.me | query | authorized | read:PayrollSelf (+ employee logins only (resolved from the membership)) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | payrollSelf.payslipPdf | query | authorized | read:PayrollSelf (+ employee logins only (resolved from the membership)) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | payrollSelf.payslips | query | authorized | read:PayrollSelf (+ employee logins only (resolved from the membership)) | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |

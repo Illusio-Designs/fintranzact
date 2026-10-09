@@ -48,9 +48,22 @@ export const EMPLOYEE_ALLOWED_PROCEDURES: readonly string[] = [
   "payrollSelf.leaveCancel",
   "payrollSelf.form16Years",
   "payrollSelf.form16Pdf",
+  // Read-only view of the employee's OWN loans and advances (approved, paid out or closed): the list and one statement.
+  "payrollSelf.loans",
+  "payrollSelf.loanStatement",
   // The organisation banner the app shows (read-only status, no organisation data beyond two-factor state).
   "tenant.current",
 ];
+
+/** The loan statuses an employee may see on their own record: approved, paid out (active) and closed. Never a request waiting for approval, a rejected or a cancelled one. */
+export const SELF_LOAN_VISIBLE_STATUSES = ["approved", "active", "closed"] as const;
+/** The loan log events that carry money or change the repayment plan: the only ones on the employee's statement. */
+export const SELF_LOAN_EVENT_KINDS = ["disbursed", "emi_recovered", "prepaid", "foreclosed", "fnf_recovered", "fnf_reversed", "skipped", "rescheduled", "closed"] as const;
+export const SELF_LOAN_STATUS_LABELS: Record<(typeof SELF_LOAN_VISIBLE_STATUSES)[number], string> = {
+  approved: "Approved, not paid out yet",
+  active: "Being repaid",
+  closed: "Closed",
+};
 
 /**
  * Account-level procedures (about the signed-in PERSON, not an organisation's books) that an employee

@@ -54,7 +54,7 @@ describe("the allowlist", () => {
   it("refuses names outside the allowlist without touching the caller", async () => {
     const calls: Calls = [];
     const caller = stubCaller({}, calls);
-    for (const name of ["payrollRun.list", "payrollBonus.list", "payrollLoan.list", "payrollFnf.get", "payrollGratuity.estimate", "invoice.create", "delete_invoice", "__proto__", "constructor", "toString", "hasOwnProperty", "", "SALES_SUMMARY", "tenant.removeMember"]) {
+    for (const name of ["payrollRun.list", "payrollBonus.list", "payrollLoan.list", "payrollSelf.loans", "payrollSelf.loanStatement", "payrollFnf.reverse", "payrollFnf.get", "payrollGratuity.estimate", "invoice.create", "delete_invoice", "__proto__", "constructor", "toString", "hasOwnProperty", "", "SALES_SUMMARY", "tenant.removeMember"]) {
       const r = await runAiTool(caller, name, {});
       expect(r.status, name).toBe("unknown_tool");
     }
@@ -218,7 +218,7 @@ describe("prompt injection in the data", () => {
   it("the tool layer is deterministic: asking for a tool the text names is refused by the allowlist", async () => {
     const calls: Calls = [];
     const caller = stubCaller({}, calls);
-    for (const name of ["payrollRun.list", "payrollEmployee.list", "payrollLoan.list", "payrollFnf.list", "payrollBonus.list", "tenant.removeMember", "platform.aiUsage"]) {
+    for (const name of ["payrollRun.list", "payrollEmployee.list", "payrollLoan.list", "payrollSelf.loans", "payrollFnf.reverse", "payrollFnf.list", "payrollBonus.list", "tenant.removeMember", "platform.aiUsage"]) {
       expect((await runAiTool(caller, name, { tenantId: "x" })).status).toBe("unknown_tool");
     }
     expect(calls).toEqual([]);

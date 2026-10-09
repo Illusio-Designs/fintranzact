@@ -13,7 +13,7 @@ Phase 4 of the Payroll add-on (see [`payroll.md`](payroll.md) and [`payroll-self
 | Engine | `packages/api/src/lib/payroll/` `bonus.ts`, `gratuity.ts`, `fnf.ts`, `loans.ts`, `letters.ts`, `registers4.ts`, `phase4-pdf.ts`; `run.ts` (loan recovery in a run); `books.ts` (new accounts, `moveBank`) |
 | Routers | `payrollBonus`, `payrollGratuity`, `payrollFnf`, `payrollLoan`, `payrollLetter` (`packages/api/src/routers/`), plus four new register values on `payrollStatutory.register` |
 | Web | `apps/web/src/components/payroll/` `BonusTab`, `GratuityTab`, `LoansTab`, `FnfTab`, `LetterPanel`, `phase4-ui`; Bonus and gratuity fields in `StatutoryTab`; the new registers in `FilingsTab` |
-| Mobile, CLI, MCP | None (parity exceptions with reasons). **No `payrollSelf` procedure was added** |
+| Mobile, CLI, MCP | Mobile: the employee's own-loan view only (see section 5). CLI and MCP: none (parity exceptions with reasons). The two read-only `payrollSelf` loan queries are the only employee procedures Phase 4 added |
 
 ## Roles and workflow (all of it)
 
@@ -109,7 +109,7 @@ Tables `employee_loans`, `employee_loan_installments` (the schedule; replaced, n
 - **Approval of the run records the recovery.** `applyRunLoanRecoveries` locks the loans, re-plans from today's balances and **refuses if the result differs from the frozen line** (a prepayment, a skip, a settlement or the cap changed in between: "calculate again"), then updates the instalments and writes the events. **Posting** credits 1260 with the principal and 4110 with the interest instead of 2410 (`buildPostingTotals`: `loanPrincipalPaise`, `loanInterestPaise`), so the entry still balances.
 - **Part-payment** (`prepay`): Dr bank / Cr 1260 (and 4110 for interest paid), the rest is re-planned at the same EMI (a shorter loan). **Foreclosure**: the whole balance, the loan closes. **Skip** (reason required, audited): the next open instalment is `skipped`, the rest move one month later, no interest for the skipped month. **Reschedule** (reason required): a new count or EMI from a month. Interest unpaid on a replaced instalment is not carried (documented simplification).
 - **Statement**: events with principal, interest and balance after, as CSV.
-- **Employee-side view (`payrollSelf.loans`) was cut**, as the brief allowed: it would have widened the employee allowlist for a minor benefit. Employees see loan recoveries as lines on their payslips (already allowed).
+- **Employee-side view (added after Phase 4):** `payrollSelf.loans` (the signed-in employee's own loans: status, principal, outstanding balance, EMI, the month and amount of the next instalment, instalments left) and `payrollSelf.loanStatement` (one own loan: the schedule in force and the money events). Read only; both are in `EMPLOYEE_ALLOWED_PROCEDURES` (a deliberate, reviewed widening: two reads, no writes, no client-supplied employee id). `lib/payroll/loans-self.ts` takes the employee from `resolveSelf` (the login's membership), filters every query on the business AND that employee, and shows only `approved`, `active` (paid out) and `closed` loans (`SELF_LOAN_VISIBLE_STATUSES`); a request waiting for approval, a rejected or a cancelled one, another employee's loan, another business's and another organisation's all give the same `NOT_FOUND` "Loan not found" as an id that does not exist. The statement lists only the money events (`SELF_LOAN_EVENT_KINDS`: paid out, instalment recovered, part-payment, repaid in full, recovered in a settlement, put back, skipped, rescheduled, closed) with a fixed description each: the free-text notes (a skip reason, a reschedule note), approver names, user ids, bank account and journal entry ids are never returned, and replaced (`superseded`) instalments are not shown. Same two checks as the other `payrollSelf` queries (`assertSelfService`: the `PayrollSelf` permission, then the add-on; a read-only organisation still reads). Web: a "Loans and advances" section under Payslips and Form 16 in the employee shell (`MyLoans`, shown only when the employee has a loan); mobile: the same section at the bottom of the Payslips tab (`EmployeeLoans`; the four-tab set is unchanged). Parity: CLI and MCP exceptions (an employee-login surface), web and mobile have it. Employees still see loan recoveries as lines on their payslips.
 
 ## 6. Registers
 
@@ -118,7 +118,7 @@ Reused, not rebuilt: the Phase 2 wages, attendance, leave, bonus and gratuity re
 ## 7. Security model
 
 - Same two checks as the rest of Payroll (`assertPayroll`: permission, then add-on; reads pass a read-only organisation). The role matrix, mutation gate and parity files list every new procedure.
-- **Employees**: no new `payrollSelf` procedure, so the Phase 3 backstop refuses an employee every Phase 4 procedure; `employee-hr-sweep.test.ts` classifies each new procedure (HR may call all but approve / post / pay / disburse / prepay / foreclose / settings / provision).
+- **Employees**: the only Phase 4 procedures an employee may call are the two read-only own-loan queries above (`payrollSelf.loans`, `loanStatement`); the Phase 3 backstop refuses an employee every other Phase 4 procedure; `employee-hr-sweep.test.ts` classifies each new procedure (HR may call all but approve / post / pay / disburse / prepay / foreclose / settings / provision).
 - **Isolation**: every query is keyed on the business; `payroll-phase-4.test.ts` and the isolation sweep prove another business cannot read or change any of it.
 - **AI**: no assistant tool reads any of it (note in `lib/ai/tools.ts`; tests refuse the new procedure names).
 - Self-export / import: nine new tables in `TABLE_REGISTRY` and `ROW_SCHEMAS` (all exportable; new settings column optional). Data-audit rules for all nine (`rules/payroll.ts`).
@@ -127,7 +127,7 @@ Reused, not rebuilt: the Phase 2 wages, attendance, leave, bonus and gratuity re
 
 - Set-on / set-off, minimum-bonus-versus-surplus logic, tax on gratuity, TDS on a settlement (manual amount only), perquisite tax on cheap loans, an actuarial gratuity valuation.
 - Reversing an approved (not yet posted) settlement, or an approved bonus run (a posted or paid settlement can be reversed, see above); writing off a loan balance.
-- The employee-side loan or settlement view; mobile, CLI and MCP surfaces.
+- An employee-side settlement view (the own-loan view exists); CLI and MCP surfaces (mobile has the own-loan view).
 - The statutory form of any state (the registers, CSV or PDF, are working copies).
 - Accrued interest in a settlement (principal only); day-count interest.
 - Not run in a browser; no CA has confirmed any figure.

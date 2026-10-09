@@ -1,6 +1,6 @@
 /**
  * Payroll self-service for employees (Payroll Phase 3): check in and out with a selfie and location,
- * own attendance, own payslips and Form 16, own leave.
+ * own attendance, own payslips and Form 16, own leave, own loans and advances (read only).
  *
  * Every procedure here:
  *   - needs the CASL permission "PayrollSelf" (only the employee role has it; owners and admins are refused
@@ -65,6 +65,7 @@ import { holidayDatesFor, loadHolidays, loadPayrollSettings } from "../lib/payro
 import { allowedLocations, loadAttendanceSettings, punchClock, rollupEmployeeDays } from "../lib/payroll/punches.js";
 import { createLeaveApplication, employeeCalendar, notifyLeaveRequested } from "../lib/payroll/leave-requests.js";
 import { generatePayslipPDF } from "../lib/payroll/payslip-pdf.js";
+import { listOwnLoans, ownLoanStatement } from "../lib/payroll/loans-self.js";
 import { generateForm16WorkingCopyPDF } from "../lib/payroll/form16-pdf.js";
 import { buildForm16 } from "../lib/payroll/filings.js";
 import type { PayslipSnapshot } from "../lib/payroll/run.js";
@@ -363,6 +364,27 @@ export const payrollSelfRouter = router({
     const [biz] = await ctx.db.select({ logo: businesses.logoData }).from(businesses).where(eq(businesses.id, ctx.businessId)).limit(1);
     const pdf = await generatePayslipPDF(snapshot, { logo: biz?.logo ?? null });
     return { filename: `${snapshot.number}.pdf`, contentType: "application/pdf" as const, base64: pdf.toString("base64") };
+  }),
+
+  // ── Loans and advances (read only, my own) ───────────────────────────────────
+
+  /**
+   * My loans and advances that are approved, paid out or closed, with the status, principal, balance outstanding, EMI, the month
+   * of the next instalment and the instalments still to come. No input: the employee is the signed-in login's, never a client id.
+   */
+  loans: viewerProcedure.query(async ({ ctx }) => {
+    const emp = await me(ctx, "read");
+    return listOwnLoans(ctx.db, ctx.businessId, emp.id);
+  }),
+
+  /**
+   * One of my loans: the repayment schedule in force and the money events (paid out, instalments recovered, part-payments,
+   * closure). A loan id that is not mine, is another business's or is not visible to employees (a draft, rejected or cancelled
+   * request) is NOT_FOUND, exactly like an id that does not exist.
+   */
+  loanStatement: viewerProcedure.input(idInput).query(async ({ ctx, input }) => {
+    const emp = await me(ctx, "read");
+    return ownLoanStatement(ctx.db, ctx.businessId, emp.id, input.id);
   }),
 
   // ── Leave ─────────────────────────────────────────────────────────────────────
