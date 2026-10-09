@@ -503,3 +503,51 @@ false, so none of it is on sale. Design and every assumption:
    digitally signed.
 5. **Try it in a browser.** The screens were tested with component tests only, never
    in a real browser: run a bonus year, a loan, and a settlement end to end once.
+
+## 19. AI assistant Phase 3: voice, Hindi and Gujarati, dashboard tips (before you release the AI add-ons)
+
+Phase 3 is built and gated like the earlier phases (the add-on is still not on sale).
+Details are in `docs/architecture/ai-assistant.md`, section "Phase 3". These are the
+things only you can do or decide:
+
+1. **Voice and the privacy wording.** The assistant's voice input uses the browser's
+   own speech recognition. Our code never records, uploads or stores audio and we do
+   not run a speech service. The browser itself may send the audio to its maker's
+   speech service (Chrome: Google, Edge: Microsoft, Safari: Apple). The AI help page
+   says this. I did **not** change `apps/web/src/routes/privacy.tsx`, because it is
+   legal text. If you want it in the policy, this sentence is true of the code today:
+   "Voice input in the AI assistant uses your browser's or phone's own speech
+   recognition. Fintranzact does not receive or store your audio; your browser may
+   send it to its own speech service." Ask your CA or lawyer to confirm it, then add
+   it to the "AI assistant" paragraph.
+2. **Browser support.** Voice input needs the Web Speech API: it works in Chrome,
+   Edge and Safari, and is not available in Firefox (the microphone button is hidden
+   and a hint is shown). It was tested only with a mock recogniser, never with a real
+   microphone or a real speech engine. Try it once in each browser you support, on
+   English, Hindi and Gujarati, including blocking the microphone and going offline.
+3. **Mobile.** The native app still has no assistant screen, so there is no voice
+   input or tips card on mobile and the roadmap line "Voice input on web and mobile"
+   is deliberately NOT ticked. Building it needs a streaming client and card
+   components in the app and an on-device speech module (a new native dependency
+   and a new native build with microphone and speech-recognition permissions in
+   `app.json`). Decide whether you want that as a separate piece of work.
+4. **Check Hindi and Gujarati answers with real users.** Reply quality in Hindi and
+   Gujarati has NOT been checked against the live model (no test calls the real API).
+   Once the Anthropic key is set, have two or three real users ask the starter
+   questions in each language and check: the language and script are right, amounts
+   keep the ₹ sign, lakh and crore grouping and 0-9 digits, party and item names are
+   not translated, GST terms are not "translated", and the numbers match the reports.
+   If the model misbehaves, the wording is in `lib/ai/prompt.ts` (`LANGUAGE_FIDELITY`).
+5. **Review the tip wording and the GST due-date assumption.** Tips use the statutory
+   monthly dates (GSTR-1 on the 11th, GSTR-3B on the 20th of the next month) and show
+   from 7 days before to the due day, only for regular GST registrations with sales in
+   that month. Fintranzact does not record whether a business files monthly or
+   quarterly (QRMP), so a quarterly filer would see a monthly reminder. Due dates are
+   also extended by notification. Ask your CA whether the wording in
+   `packages/shared/src/ai-tips.ts` is acceptable, and whether you want a filing
+   frequency setting before release.
+6. **Help articles.** The assistant answers "how do I" questions from the help
+   centre. After you edit any help article run
+   `pnpm --filter @fintranzact/web gen:help-index` and commit
+   `packages/shared/src/help-index.generated.ts` (a web test fails if it is stale, and
+   the web build regenerates it).
