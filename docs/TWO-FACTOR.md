@@ -188,7 +188,7 @@ A user who has lost the phone **and** the backup codes cannot sign in. A platfor
 ## Key handling
 
 - TOTP secrets are encrypted with `ENCRYPTION_KEY`. It is **required for 2FA**: without it (outside `NODE_ENV=test`) setup and verification fail closed rather than storing a secret in plaintext.
-- Rotating the key with `packages/api/src/bin/rotate-key.ts` re-encrypts `user_two_factor.secret_enc` along with the other encrypted columns.
+- Rotating the key with `packages/api/src/bin/rotate-encryption-key.ts` re-encrypts `user_two_factor.secret_enc` along with the other encrypted columns.
 - Backup-code hashes are `sha256("fintranzact:2fa-backup:v1:<userId>:<NORMALISED CODE>")`. They do **not** depend on `ENCRYPTION_KEY`, so rotating (or losing) the key never invalidates backup codes. The codes carry about 59 bits and are single use, so a salted fast hash is adequate; the user id keeps the table from being reusable across accounts.
 
 ## Tests

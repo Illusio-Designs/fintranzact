@@ -14,6 +14,8 @@ Include:
 
 We will acknowledge receipt within 48 hours and aim to provide a fix or mitigation plan within 7 days for critical issues.
 
+Operational security documents (policies, incident response, key rotation, vulnerability management): [`docs/security/README.md`](docs/security/README.md).
+
 ## Supported Versions
 
 | Version | Supported |

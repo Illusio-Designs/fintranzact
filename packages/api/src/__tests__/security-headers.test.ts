@@ -30,6 +30,13 @@ describe("apiSecureHeaders", () => {
     expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
     expect(res.headers.get("Cross-Origin-Opener-Policy")).toBe("same-origin");
     expect(res.headers.get("X-Frame-Options")).toBe("SAMEORIGIN");
+    expect(res.headers.get("Strict-Transport-Security")).toMatch(/max-age=\d{7,}/);
+    expect(res.headers.get("Referrer-Policy")).toBe("no-referrer");
+  });
+
+  it("limits camera, microphone and geolocation to our own origin", async () => {
+    const res = await app().request("/plain");
+    expect(res.headers.get("Permissions-Policy")).toBe("camera=(self), microphone=(self), geolocation=(self)");
   });
 
   it("keeps the policy a route set on its own Response", async () => {

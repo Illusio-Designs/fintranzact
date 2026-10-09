@@ -108,16 +108,16 @@ describe("Field-level encryption (crypto.ts)", () => {
   // ── Key versioning ─────────────────────────────────────────────────────
 
   describe("key versioning", () => {
-    it("encrypted values start with v2: prefix", () => {
+    it("encrypted values start with v3:<keyId>: prefix", () => {
       setKeys(TEST_KEY_A);
       const encrypted = encryptField("test");
-      expect(encrypted).toMatch(/^v2:[0-9a-f]+:[0-9a-f]+:[0-9a-f]+$/);
+      expect(encrypted).toMatch(/^v3:[0-9a-f]{8}:[0-9a-f]+:[0-9a-f]+:[0-9a-f]+$/);
     });
 
-    it("getKeyVersion returns 2 for current format", () => {
+    it("getKeyVersion returns 3 for current format", () => {
       setKeys(TEST_KEY_A);
       const encrypted = encryptField("test");
-      expect(getKeyVersion(encrypted)).toBe(2);
+      expect(getKeyVersion(encrypted)).toBe(3);
     });
 
     it("getKeyVersion returns 0 for plaintext", () => {

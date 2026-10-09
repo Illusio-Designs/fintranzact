@@ -159,7 +159,7 @@ export function requireTwoFactorKeyHex(): string {
   throw new Error("ENCRYPTION_KEY is not configured; refusing to handle two-factor secrets without it");
 }
 
-const VERSIONED_CIPHERTEXT_RE = /^v\d+:[0-9a-f]+:[0-9a-f]+:[0-9a-f]*$/i;
+const VERSIONED_CIPHERTEXT_RE = /^v\d+:(?:[A-Za-z0-9_-]{1,32}:)?[0-9a-f]+:[0-9a-f]+:[0-9a-f]*$/i;
 
 /** Encrypt a TOTP secret. Throws when no encryption key is configured (never stores plaintext). */
 export function encryptTotpSecret(secret: string): string {
