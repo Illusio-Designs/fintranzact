@@ -5,7 +5,7 @@ ungated-exempt = public/protected base AND allowlisted (auth, billing, platform 
 inline-guarded = public/protected base, but the router calls assertWritable itself (INLINE_WRITE_GUARDED);
 ungated = public/protected base with no check at all: must be empty of business-data writes.
 
-mutations: 368 (gated 296, exempt 9, ungated-exempt 60, inline-guarded 3, ungated 0)
+mutations: 400 (gated 328, exempt 9, ungated-exempt 60, inline-guarded 3, ungated 0)
 
 | procedure | base | status |
 |---|---|---|
@@ -196,6 +196,16 @@ mutations: 368 (gated 296, exempt 9, ungated-exempt 60, inline-guarded 3, ungate
 | payrollAttendance.holidayDelete | authorized | gated |
 | payrollAttendance.mark | authorized | gated |
 | payrollAttendance.updateSettings | authorized | gated |
+| payrollBonus.approve | authorized | gated |
+| payrollBonus.calculate | authorized | gated |
+| payrollBonus.create | authorized | gated |
+| payrollBonus.delete | authorized | gated |
+| payrollBonus.markPaid | authorized | gated |
+| payrollBonus.post | authorized | gated |
+| payrollBonus.reopen | authorized | gated |
+| payrollBonus.setExclusion | authorized | gated |
+| payrollBonus.submit | authorized | gated |
+| payrollBonus.update | authorized | gated |
 | payrollEmployee.create | authorized | gated |
 | payrollEmployee.departmentCreate | authorized | gated |
 | payrollEmployee.departmentUpdate | authorized | gated |
@@ -206,6 +216,16 @@ mutations: 368 (gated 296, exempt 9, ungated-exempt 60, inline-guarded 3, ungate
 | payrollEmployee.shiftCreate | authorized | gated |
 | payrollEmployee.shiftUpdate | authorized | gated |
 | payrollEmployee.update | authorized | gated |
+| payrollFnf.approve | authorized | gated |
+| payrollFnf.calculate | authorized | gated |
+| payrollFnf.create | authorized | gated |
+| payrollFnf.delete | authorized | gated |
+| payrollFnf.markPaid | authorized | gated |
+| payrollFnf.post | authorized | gated |
+| payrollFnf.reopen | authorized | gated |
+| payrollFnf.submit | authorized | gated |
+| payrollFnf.update | authorized | gated |
+| payrollGratuity.postProvision | authorized | gated |
 | payrollImport.commit | authorized | gated |
 | payrollImport.preview | authorized | gated |
 | payrollImport.undo | authorized | gated |
@@ -218,6 +238,18 @@ mutations: 368 (gated 296, exempt 9, ungated-exempt 60, inline-guarded 3, ungate
 | payrollLeave.typeCreate | authorized | gated |
 | payrollLeave.typeSeedDefaults | authorized | gated |
 | payrollLeave.typeUpdate | authorized | gated |
+| payrollLetter.relievingPdf | authorized | gated |
+| payrollLetter.saveTemplate | authorized | gated |
+| payrollLoan.approve | authorized | gated |
+| payrollLoan.cancel | authorized | gated |
+| payrollLoan.create | authorized | gated |
+| payrollLoan.disburse | authorized | gated |
+| payrollLoan.foreclose | authorized | gated |
+| payrollLoan.prepay | authorized | gated |
+| payrollLoan.reject | authorized | gated |
+| payrollLoan.reschedule | authorized | gated |
+| payrollLoan.skip | authorized | gated |
+| payrollLoan.updateSettings | authorized | gated |
 | payrollPunch.deviceKeyCreate | authorized | gated |
 | payrollPunch.deviceKeyRevoke | authorized | gated |
 | payrollPunch.locationAssign | authorized | gated |

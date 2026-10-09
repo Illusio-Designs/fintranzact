@@ -1,0 +1,41 @@
+---
+title: Gratuity
+description: "See what gratuity would be payable to each employee today, how many years count, and optionally book a provision for the liability. Gratuity is paid in the full and final settlement. Tax on gratuity is not calculated."
+sidebar:
+  order: 14
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+
+<ForDesktop>
+
+Open **Payroll → Gratuity** for an estimate of what each employee would be paid **if they left on a date you choose** (today by default), and the total liability.
+
+**Have your CA confirm the formula, the minimum years, the limit and how a provision should be booked.** Fintranzact does not work out income tax on gratuity.
+
+## The formula
+
+Gratuity = last drawn **Basic + DA** x **15 / 26** x years of service.
+
+- **Last drawn wages** are the monthly Basic + DA of the salary structure in force on the date.
+- **Years**: complete years of service, plus one more year when the part year is **more than six months**. Exactly six months does not round up.
+- **Minimum service**: the number of **completed** years must reach the minimum before anything is payable. Ordinary staff need **5 years**. An employee whose employment type is **Contract** is treated as fixed-term and needs **1 year** (the Labour Codes line in the roadmap). There is **no minimum on death or disablement**: choose those exit reasons when recording the exit. Check with your CA that this treatment fits your contracts.
+- **Limit**: the amount is capped at the limit in [Statutory settings](/help/payroll/statutory-settings) (shipped as 20 lakh).
+
+The table shows the completed years, the years used, the rule that applied, the amount payable today, and what the amount would be once the employee becomes eligible.
+
+## Provision (optional)
+
+The page shows the **liability today** (the total payable to eligible employees), the **provision already in your books** and **how much more to provide**. Nothing is booked unless you press **Post provision**:
+
+- Dr Salary - Gratuity / Cr Gratuity Provision for the increase (the other way round if the liability fell).
+- Pressing it again with nothing to add posts nothing.
+- Only an owner, admin or accountant can post it.
+
+When gratuity is paid in a settlement, it is taken out of the Gratuity Provision first and only the rest is booked as expense.
+
+## Paying gratuity
+
+Gratuity is paid in the [full and final settlement](/help/payroll/full-and-final). The earlier Gratuity register on the Filings tab is a computed list and pays nothing.
+
+</ForDesktop>

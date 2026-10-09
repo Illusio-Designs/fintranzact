@@ -1,0 +1,55 @@
+---
+title: Bonus
+description: "Year-end bonus under the Payment of Bonus Act: set the ceilings, pick a percentage, calculate from approved payroll, exclude people by hand, approve with a second person, post and pay. Have your CA confirm every figure."
+sidebar:
+  order: 13
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+
+<ForDesktop>
+
+Open **Payroll → Bonus** to work out the yearly bonus. There is **one bonus run for each financial year**. It reads the Basic and DA that were actually paid in your **approved payroll runs** of that year, so the bonus always agrees with the payslips.
+
+**Have your CA confirm the figures and the method before you pay anything.** Bonus rules and ceilings change, and what applies to your business is your CA's call. Fintranzact does not compute set-on or set-off of allocable surplus.
+
+## Set the figures first
+
+The bonus figures are part of [Statutory settings](/help/payroll/statutory-settings) for the financial year. Fintranzact ships these **empty on purpose**, and a bonus run **cannot be calculated until you set them**:
+
+| Setting | Meaning |
+|---|---|
+| **Bonus eligibility ceiling** | An employee is eligible when their monthly Basic + DA is up to this amount |
+| **Bonus calculation ceiling** | A month's wage used for the bonus is capped at this amount |
+| **Minimum wage for bonus** | If it is higher than the calculation ceiling, the cap is the minimum wage instead (the higher of the two applies) |
+| **Lowest and highest percentage** | Shipped as 8.33 and 20, the range in the Act. The percentage you choose for a run must be inside it |
+| **Days worked to be eligible** | Shipped as 30 |
+
+Use **Last verified** on the settings screen to note who checked the figures and when.
+
+## Run the bonus
+
+1. **+ New bonus run**: choose the financial year and the percentage.
+2. **Calculate bonus**: each employee gets a line with the months paid, the Basic + DA earned, the wages used after the ceiling and the bonus.
+3. Check **Things to check**. A month with no approved payroll is not counted, and a warning names it.
+4. Use **Not eligible** on a line to leave someone out (for example dismissal for misconduct). The reason is kept on the statement. **Calculate** again afterwards; an old figure cannot be approved.
+5. **Submit for approval**. The person who last calculated the run cannot approve it, unless your business has a single user. An **owner or admin** approves.
+6. **Post to books** and **Mark as paid**. An accountant, owner or admin can do these; HR cannot.
+
+## How a bonus is worked out
+
+- Each month's bonus wage is the **lower** of the Basic + DA earned that month and the calculation cap (the cap is reduced for a part month, by days worked).
+- **Eligible** means the Basic + DA of the last month the person was paid is within the eligibility ceiling, they were paid for at least the minimum days in the year, and you have not marked them not eligible.
+- Bonus = the total of the monthly bonus wages x the percentage, rounded to the paisa once for each employee.
+
+If you settle an employee's bonus in their [full and final settlement](/help/payroll/full-and-final), a bonus run for the same year leaves them out so it is never paid twice.
+
+## Books
+
+**Post to books** records Dr Salary - Bonus & Incentives / Cr Bonus Payable, dated the last day of the financial year (or today, if the year has not ended). **Mark as paid** records Dr Bonus Payable / Cr the bank or cash account and the account balance goes down. Both are done once; pressing again changes nothing.
+
+## Statement and bank file
+
+Download the **statement as a CSV or PDF**, and, once approved, a generic **bank payment file** (not any bank's own format). The bank file contains full account numbers.
+
+</ForDesktop>

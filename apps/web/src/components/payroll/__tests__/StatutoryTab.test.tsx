@@ -120,6 +120,22 @@ describe("StatutoryTab", () => {
     expect(screen.getByLabelText("PF wage ceiling (₹ a month)")).toBeDisabled();
   });
 
+  it("the bonus figures ship empty (0 = not set) and are saved with the year's rates, the statutory 8.33 to 20% range seeded", () => {
+    render(<StatutoryTab />);
+    expect(screen.getByLabelText(/Bonus eligibility ceiling/)).toHaveValue("0");
+    expect(screen.getByLabelText(/Bonus calculation ceiling/)).toHaveValue("0");
+    expect(screen.getByLabelText(/Minimum wage for bonus/)).toHaveValue("0");
+    expect(screen.getByLabelText(/Lowest bonus percentage/)).toHaveValue("8.33");
+    expect(screen.getByLabelText(/Highest bonus percentage/)).toHaveValue("20");
+    expect(screen.getByLabelText(/Days worked to be eligible for bonus/)).toHaveValue("30");
+    expect(screen.getByLabelText(/Gratuity minimum years, fixed-term/)).toHaveValue("1");
+    expect(screen.getByText(/ship empty: a bonus run cannot be calculated/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Bonus eligibility ceiling/), { target: { value: "21000" } });
+    fireEvent.change(screen.getByLabelText(/Bonus calculation ceiling/), { target: { value: "7000" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Save for/ }));
+    expect(h.saveRates.mock.calls[0]![0].rates.bonus).toMatchObject({ eligibilityCeilingRupees: 21000, wageCeilingRupees: 7000, minPercent: 8.33, maxPercent: 20, minWorkingDays: 30 });
+  }, 30_000);
+
   it("says where saved figures come from", () => {
     h.settings.data = settings({ ratesSource: "saved", ratesSavedForFinancialYear: 2025, verifiedNote: "Checked", verifiedOn: "2025-04-02" });
     render(<StatutoryTab />);

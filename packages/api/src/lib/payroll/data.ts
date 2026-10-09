@@ -27,6 +27,8 @@ export interface PayrollSettingsValues {
   standardHoursPerDay: number;
   overtimeMultiplier: number;
   leaveYearStartMonth: number;
+  /** Phase 4: the most of net pay a run recovers for loan instalments, %. */
+  loanMaxDeductionPercent: number;
 }
 
 export const DEFAULT_PAYROLL_SETTINGS: PayrollSettingsValues = {
@@ -34,6 +36,7 @@ export const DEFAULT_PAYROLL_SETTINGS: PayrollSettingsValues = {
   standardHoursPerDay: 8,
   overtimeMultiplier: 2,
   leaveYearStartMonth: 4,
+  loanMaxDeductionPercent: 50,
 };
 
 type Reader = Pick<TenantDatabase, "select">;
@@ -46,6 +49,7 @@ export async function loadPayrollSettings(db: Reader, businessId: string): Promi
     standardHoursPerDay: Number(row.standardHoursPerDay),
     overtimeMultiplier: Number(row.overtimeMultiplier),
     leaveYearStartMonth: row.leaveYearStartMonth,
+    loanMaxDeductionPercent: Number(row.loanMaxDeductionPercent),
     saved: true,
   };
 }

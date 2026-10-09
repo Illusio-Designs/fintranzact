@@ -10,6 +10,9 @@ import type { TableCoverage } from "../types.js";
 import { MONEY_TOLERANCE, rule } from "../sql-fragments.js";
 
 const RUN_WRITERS = ["payrollRun.calculate / approve / post / markPaid (Payroll runs)"];
+const BONUS_WRITERS = ["payrollBonus.calculate / approve / post / markPaid"];
+const FNF_WRITERS = ["payrollFnf.calculate / approve / post / markPaid"];
+const LOAN_WRITERS = ["payrollLoan.create / approve / disburse / receive / skip / reschedule", "payrollRun.approve (instalment recovery)", "payrollFnf.approve (balance recovery)"];
 
 export const payrollTables: TableCoverage[] = [
   {
@@ -341,5 +344,168 @@ export const payrollTables: TableCoverage[] = [
     table: "form16_releases",
     rules: [],
     noExtraRequirements: "One row per business and financial year (unique index) meaning HR released that year's Form 16 working copy to employees; the copy itself is computed from approved runs on demand.",
+  },
+
+  // ── Phase 4: bonus, gratuity provision, full and final, loans, letters ────
+  {
+    table: "bonus_runs",
+    rules: [
+      rule("bonus_runs", "total-matches-lines", "error",
+        "A calculated bonus run's total is the sum of its lines' bonus, and its employee count the number of lines.",
+        BONUS_WRITERS,
+        `SELECT r.business_id, r.id::text, r.number || ': total ' || r.total_bonus || ' vs lines ' || COALESCE(l.t, 0)
+         FROM bonus_runs r LEFT JOIN (SELECT run_id, SUM(bonus) t, COUNT(*) n FROM bonus_run_lines GROUP BY run_id) l ON l.run_id = r.id
+         WHERE r.status <> 'draft' AND (ABS(r.total_bonus - COALESCE(l.t, 0)) > ${MONEY_TOLERANCE} OR r.employee_count <> COALESCE(l.n, 0))`),
+      rule("bonus_runs", "posted-run-has-balanced-entry", "error",
+        "A posted bonus run has a balanced journal entry for exactly its total (when the total is above zero).",
+        BONUS_WRITERS,
+        `SELECT r.business_id, r.id::text, r.number || ': posted, entry ' || COALESCE(r.accrual_journal_entry_id::text, 'NULL')
+         FROM bonus_runs r
+         LEFT JOIN (SELECT journal_entry_id, SUM(debit) d, SUM(credit) c FROM journal_entry_lines GROUP BY journal_entry_id) j ON j.journal_entry_id = r.accrual_journal_entry_id
+         WHERE r.status IN ('posted', 'paid') AND r.total_bonus > 0
+           AND (r.accrual_journal_entry_id IS NULL OR j.d IS NULL OR ABS(j.d - j.c) > ${MONEY_TOLERANCE} OR ABS(j.d - r.total_bonus) > ${MONEY_TOLERANCE})`),
+      rule("bonus_runs", "paid-run-has-payment", "error",
+        "A paid bonus run records its date and account, and (when the total is above zero) the journal entry that paid it for exactly the total.",
+        BONUS_WRITERS,
+        `SELECT r.business_id, r.id::text, r.number || ': paid on ' || COALESCE(r.paid_on::text, 'NULL')
+         FROM bonus_runs r
+         LEFT JOIN (SELECT journal_entry_id, SUM(debit) d FROM journal_entry_lines GROUP BY journal_entry_id) j ON j.journal_entry_id = r.payment_journal_entry_id
+         WHERE r.status = 'paid'
+           AND (r.paid_on IS NULL OR r.paid_from_bank_account_id IS NULL
+                OR (r.total_bonus > 0 AND (r.payment_journal_entry_id IS NULL OR j.d IS NULL OR ABS(j.d - r.total_bonus) > ${MONEY_TOLERANCE})))`),
+      rule("bonus_runs", "status-matches-links", "error",
+        "A bonus run that is not posted has no accrual entry, and one that is not paid has no payment entry.",
+        BONUS_WRITERS,
+        `SELECT r.business_id, r.id::text, r.number || ': status ' || r.status
+         FROM bonus_runs r
+         WHERE (r.status NOT IN ('posted', 'paid') AND r.accrual_journal_entry_id IS NOT NULL) OR (r.status <> 'paid' AND r.payment_journal_entry_id IS NOT NULL)`),
+    ],
+  },
+  {
+    table: "bonus_run_lines",
+    rules: [
+      rule("bonus_run_lines", "ineligible-pays-nothing", "error",
+        "An employee who is not eligible has a bonus of zero, and no bonus is negative.",
+        BONUS_WRITERS,
+        `SELECT l.business_id, l.id::text, l.employee_code || ': eligible ' || l.eligible || ', bonus ' || l.bonus
+         FROM bonus_run_lines l WHERE l.bonus < 0 OR (NOT l.eligible AND l.bonus <> 0)`),
+    ],
+  },
+  {
+    table: "gratuity_provisions",
+    rules: [
+      rule("gratuity_provisions", "has-entry", "error",
+        "Every gratuity provision records the journal entry it posted.",
+        ["payrollGratuity.postProvision"],
+        `SELECT p.business_id, p.id::text, 'as of ' || p.as_of || ', amount ' || p.amount
+         FROM gratuity_provisions p WHERE p.journal_entry_id IS NULL`),
+    ],
+  },
+  {
+    table: "fnf_settlements",
+    rules: [
+      rule("fnf_settlements", "net-adds-up", "error",
+        "Net payable = amounts due - recoveries - loan recovery; the lines add up to the totals.",
+        FNF_WRITERS,
+        `SELECT s.business_id, s.id::text, s.number || ': gross ' || s.gross_total || ', deductions ' || s.deductions_total || ', net ' || s.net_payable
+         FROM fnf_settlements s
+         LEFT JOIN (SELECT settlement_id,
+                           SUM(CASE WHEN side = 'earning' THEN amount ELSE 0 END) e,
+                           SUM(CASE WHEN side = 'deduction' THEN amount ELSE 0 END) d
+                    FROM fnf_settlement_lines GROUP BY settlement_id) l ON l.settlement_id = s.id
+         WHERE s.calculated_at IS NOT NULL
+           AND (ABS(s.net_payable - (s.gross_total - s.deductions_total)) > ${MONEY_TOLERANCE}
+                OR ABS(s.gross_total - COALESCE(l.e, 0)) > ${MONEY_TOLERANCE}
+                OR ABS(s.deductions_total - COALESCE(l.d, 0)) > ${MONEY_TOLERANCE})`),
+      rule("fnf_settlements", "posted-has-balanced-entry", "error",
+        "A posted settlement has a balanced journal entry whose debits equal the amounts due (when above zero).",
+        FNF_WRITERS,
+        `SELECT s.business_id, s.id::text, s.number || ': posted, entry ' || COALESCE(s.accrual_journal_entry_id::text, 'NULL')
+         FROM fnf_settlements s
+         LEFT JOIN (SELECT journal_entry_id, SUM(debit) d, SUM(credit) c FROM journal_entry_lines GROUP BY journal_entry_id) j ON j.journal_entry_id = s.accrual_journal_entry_id
+         WHERE s.status IN ('posted', 'paid') AND s.gross_total > 0
+           AND (s.accrual_journal_entry_id IS NULL OR j.d IS NULL OR ABS(j.d - j.c) > ${MONEY_TOLERANCE} OR ABS(j.d - s.gross_total) > ${MONEY_TOLERANCE})`),
+      rule("fnf_settlements", "paid-has-payment", "error",
+        "A paid settlement records its date and, when the net payable is above zero, the account and the journal entry that paid exactly the net payable.",
+        FNF_WRITERS,
+        `SELECT s.business_id, s.id::text, s.number || ': paid on ' || COALESCE(s.paid_on::text, 'NULL')
+         FROM fnf_settlements s
+         LEFT JOIN (SELECT journal_entry_id, SUM(debit) d FROM journal_entry_lines GROUP BY journal_entry_id) j ON j.journal_entry_id = s.payment_journal_entry_id
+         WHERE s.status = 'paid'
+           AND (s.paid_on IS NULL OR (s.net_payable > 0 AND (s.paid_from_bank_account_id IS NULL OR s.payment_journal_entry_id IS NULL OR j.d IS NULL OR ABS(j.d - s.net_payable) > ${MONEY_TOLERANCE})))`),
+      rule("fnf_settlements", "status-matches-links", "error",
+        "A settlement that is not posted has no accrual entry, and one that is not paid has no payment entry.",
+        FNF_WRITERS,
+        `SELECT s.business_id, s.id::text, s.number || ': status ' || s.status
+         FROM fnf_settlements s
+         WHERE (s.status NOT IN ('posted', 'paid') AND s.accrual_journal_entry_id IS NOT NULL) OR (s.status <> 'paid' AND s.payment_journal_entry_id IS NOT NULL)`),
+    ],
+  },
+  {
+    table: "fnf_settlement_lines",
+    rules: [
+      rule("fnf_settlement_lines", "side-matches-kind", "error",
+        "Leave encashment, gratuity, bonus, arrears and other earnings are earnings; recoveries, TDS and loan recovery are deductions; amounts are above zero.",
+        FNF_WRITERS,
+        `SELECT l.business_id, l.id::text, l.kind || ' on side ' || l.side || ', amount ' || l.amount
+         FROM fnf_settlement_lines l
+         WHERE l.amount <= 0
+            OR (l.kind IN ('leave_encashment', 'gratuity', 'bonus', 'arrears', 'other_earning') AND l.side <> 'earning')
+            OR (l.kind IN ('notice_recovery', 'tds', 'other_deduction', 'loan_recovery') AND l.side <> 'deduction')`),
+    ],
+  },
+  {
+    table: "employee_loans",
+    rules: [
+      rule("employee_loans", "balance-within-principal", "error",
+        "The principal recovered or received never exceeds the principal lent.",
+        LOAN_WRITERS,
+        `SELECT l.business_id, l.id::text, l.number || ': principal ' || l.principal || ', recovered ' || e.p
+         FROM employee_loans l
+         JOIN (SELECT loan_id, SUM(principal) p FROM employee_loan_events WHERE kind IN ('emi_recovered', 'prepaid', 'foreclosed', 'fnf_recovered') GROUP BY loan_id) e ON e.loan_id = l.id
+         WHERE e.p > l.principal + ${MONEY_TOLERANCE}`),
+      rule("employee_loans", "disbursed-has-entry", "error",
+        "An active or closed loan was disbursed with a journal entry for exactly the principal; one that was never disbursed has none.",
+        LOAN_WRITERS,
+        `SELECT l.business_id, l.id::text, l.number || ': status ' || l.status
+         FROM employee_loans l
+         LEFT JOIN (SELECT journal_entry_id, SUM(debit) d, SUM(credit) c FROM journal_entry_lines GROUP BY journal_entry_id) j ON j.journal_entry_id = l.disbursement_journal_entry_id
+         WHERE (l.status IN ('active', 'closed') AND (l.disbursement_journal_entry_id IS NULL OR j.d IS NULL OR ABS(j.d - j.c) > ${MONEY_TOLERANCE} OR ABS(j.d - l.principal) > ${MONEY_TOLERANCE}))
+            OR (l.status IN ('pending_approval', 'approved', 'rejected', 'cancelled') AND (l.disbursement_journal_entry_id IS NOT NULL OR l.disbursed_at IS NOT NULL))`),
+      rule("employee_loans", "closed-has-no-balance", "error",
+        "A closed loan has nothing left outstanding.",
+        LOAN_WRITERS,
+        `SELECT l.business_id, l.id::text, l.number || ': closed with balance ' || (l.principal - COALESCE(e.p, 0))
+         FROM employee_loans l
+         LEFT JOIN (SELECT loan_id, SUM(principal) p FROM employee_loan_events WHERE kind IN ('emi_recovered', 'prepaid', 'foreclosed', 'fnf_recovered') GROUP BY loan_id) e ON e.loan_id = l.id
+         WHERE l.status = 'closed' AND ABS(l.principal - COALESCE(e.p, 0)) > ${MONEY_TOLERANCE}`),
+    ],
+  },
+  {
+    table: "employee_loan_installments",
+    rules: [
+      rule("employee_loan_installments", "paid-within-due", "error",
+        "An instalment is never recovered for more than it was due, and a paid instalment is fully recovered.",
+        LOAN_WRITERS,
+        `SELECT i.business_id, i.id::text, 'seq ' || i.seq || ': due ' || i.principal || '+' || i.interest || ', paid ' || i.paid_principal || '+' || i.paid_interest
+         FROM employee_loan_installments i
+         WHERE i.paid_principal > i.principal + ${MONEY_TOLERANCE} OR i.paid_interest > i.interest + ${MONEY_TOLERANCE}
+            OR (i.status = 'paid' AND (ABS(i.paid_principal - i.principal) > ${MONEY_TOLERANCE} OR ABS(i.paid_interest - i.interest) > ${MONEY_TOLERANCE}))`),
+    ],
+  },
+  {
+    table: "employee_loan_events",
+    rules: [
+      rule("employee_loan_events", "amounts-not-negative", "error",
+        "The balance after an event and its amounts are never negative.",
+        LOAN_WRITERS,
+        `SELECT e.business_id, e.id::text, e.kind || ': balance after ' || e.balance_after
+         FROM employee_loan_events e WHERE e.balance_after < 0 OR e.principal < 0 OR e.interest < 0`),
+    ],
+  },
+  {
+    table: "payroll_letter_templates",
+    rules: [],
+    noExtraRequirements: "One wording per business and letter kind (unique index) holding validated text with placeholders; the PDF is drawn from it and the employee on demand and nothing is stored from a letter.",
   },
 ];

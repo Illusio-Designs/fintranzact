@@ -66,6 +66,11 @@ import { payrollSelfRouter } from "./routers/payrollSelf.js";
 import { payrollAccessRouter } from "./routers/payrollAccess.js";
 import { payrollPunchRouter } from "./routers/payrollPunch.js";
 import { payrollImportRouter } from "./routers/payrollImport.js";
+import { payrollBonusRouter } from "./routers/payrollBonus.js";
+import { payrollGratuityRouter } from "./routers/payrollGratuity.js";
+import { payrollFnfRouter } from "./routers/payrollFnf.js";
+import { payrollLoanRouter } from "./routers/payrollLoan.js";
+import { payrollLetterRouter } from "./routers/payrollLetter.js";
 import { stockRouter } from "./routers/stock.js";
 import { batchRouter } from "./routers/batch.js";
 import { inventoryReportsRouter } from "./routers/inventory-reports.js";
@@ -150,6 +155,11 @@ export const appRouter = router({
   payrollAccess: payrollAccessRouter,
   payrollPunch: payrollPunchRouter,
   payrollImport: payrollImportRouter,
+  payrollBonus: payrollBonusRouter,
+  payrollGratuity: payrollGratuityRouter,
+  payrollFnf: payrollFnfRouter,
+  payrollLoan: payrollLoanRouter,
+  payrollLetter: payrollLetterRouter,
   contact: contactRouter,
 });
 

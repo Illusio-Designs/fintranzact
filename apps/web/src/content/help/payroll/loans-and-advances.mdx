@@ -1,0 +1,45 @@
+---
+title: Loans and advances
+description: "Issue a loan or salary advance to an employee, with an EMI schedule, approval by a second person, disbursement to your books, automatic recovery in payroll, part-payment, foreclosure, skipping and rescheduling."
+sidebar:
+  order: 16
+---
+
+import { ForDesktop } from "@/components/help/mdx";
+
+<ForDesktop>
+
+Open **Payroll → Loans and advances**. A loan is an amount an employee repays in instalments through payroll. An advance works the same way.
+
+## Issue a loan
+
+Choose **+ Issue loan or advance**: the employee, the amount, the yearly interest (0 for none), **either the number of instalments or the EMI**, the month of the first instalment, the issue date and the purpose. The schedule is shown before you save.
+
+- Interest is on the **reducing balance**, each month: balance x yearly rate / 12, rounded to the paisa.
+- The EMI is the standard formula rounded to the paisa; with 0 percent it is the amount divided by the instalments.
+- The **last instalment clears whatever is left**, so the loan always ends at exactly zero (the last instalment can differ from the others by a few paise).
+
+A loan starts as **Pending approval**. An **owner or admin**, who did not request it (unless your business has a single user), approves it, then an owner, admin or accountant **disburses** it from a bank or cash account. That posts Dr Loans and Advances to Employees / Cr the bank or cash account, and the account balance goes down.
+
+## Recovery in payroll
+
+Each payroll run deducts the instalments due in its month. They appear on the payslip as **Loan recovery** and **Loan interest** lines.
+
+- At most the **share of net pay** you set on this page (50 percent when you start) is recovered in a month. Check any legal limit on deductions from wages with your CA.
+- Whatever cannot be recovered stays due and is **carried forward as arrears** to the next run. The run shows a warning.
+- Approving a run records the recovery on each loan. If a loan was changed after the run was calculated, approval asks you to calculate again.
+- In the books, principal reduces Loans and Advances to Employees and interest is credited to Interest on Staff Loans, instead of Payroll Deductions Payable.
+- An employee with a [full and final settlement](/help/payroll/full-and-final) is not deducted in runs; the balance is recovered there.
+
+## Part-payment, foreclosure, skip, reschedule
+
+- **Record part-payment**: the employee repays part of the principal (and optionally interest). The rest of the loan is re-planned at the same EMI, so it ends sooner.
+- **Foreclose**: the employee repays the whole balance; the loan closes.
+- **Skip an instalment** (with a reason): the next instalment is not recovered and the rest move one month later. No interest is charged for the skipped month.
+- **Reschedule** (with a reason): a new number of instalments or a new EMI, from a month you choose.
+
+Every change is logged, and the **statement** (also as a CSV) lists each event with the balance after it. The employee app does not show loans in this release.
+
+Confirm with your CA how interest on loans to employees is treated for tax.
+
+</ForDesktop>

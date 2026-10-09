@@ -74,6 +74,15 @@ import {
   payrollStatutorySettings,
   employeeTaxDeclarations,
   payrollStatutoryPayments,
+  bonusRuns,
+  bonusRunLines,
+  gratuityProvisions,
+  fnfSettlements,
+  fnfSettlementLines,
+  employeeLoans,
+  employeeLoanInstallments,
+  employeeLoanEvents,
+  payrollLetterTemplates,
 } from "@fintranzact/db";
 
 /**
@@ -724,4 +733,14 @@ export const TABLE_REGISTRY: TableRegistryEntry[] = [
   { tableName: "employee_punches", drizzleTable: employeePunches, redactedFields: ["lat", "lng"], importable: true, selfFkFields: [], chunkSize: 5000, recomputeOnImport: [], scope: { type: "direct" } },
   { tableName: "attendance_consents", drizzleTable: attendanceConsents, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
   { tableName: "form16_releases", drizzleTable: form16Releases, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
+  // 56+. Payroll Phase 4 (docs/architecture/payroll-phase-4.md): bonus, gratuity provisions, full and final, loans, letter wording.
+  { tableName: "bonus_runs", drizzleTable: bonusRuns, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "bonus_run_lines", drizzleTable: bonusRunLines, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "gratuity_provisions", drizzleTable: gratuityProvisions, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "fnf_settlements", drizzleTable: fnfSettlements, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "fnf_settlement_lines", drizzleTable: fnfSettlementLines, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "employee_loans", drizzleTable: employeeLoans, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "employee_loan_installments", drizzleTable: employeeLoanInstallments, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "employee_loan_events", drizzleTable: employeeLoanEvents, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "payroll_letter_templates", drizzleTable: payrollLetterTemplates, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
 ];

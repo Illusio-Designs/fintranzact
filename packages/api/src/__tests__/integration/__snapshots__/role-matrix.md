@@ -340,6 +340,22 @@
 | payrollAttendance.month | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollAttendance.settings | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollAttendance.updateSettings | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollBonus.approve | mutation | authorized | manage:Payroll | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| payrollBonus.bankFile | query | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollBonus.calculate | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollBonus.create | mutation | authorized | create:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollBonus.delete | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollBonus.get | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollBonus.list | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollBonus.markPaid | mutation | authorized | create:PayrollPosting, update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollBonus.post | mutation | authorized | create:PayrollPosting, update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollBonus.reopen | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollBonus.rules | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollBonus.setExclusion | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollBonus.statementCsv | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollBonus.statementPdf | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollBonus.submit | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollBonus.update | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollEmployee.capacity | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollEmployee.create | mutation | authorized | create:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollEmployee.departmentCreate | mutation | authorized | create:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
@@ -356,6 +372,21 @@
 | payrollEmployee.shiftList | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollEmployee.shiftUpdate | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollEmployee.update | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollFnf.approve | mutation | authorized | manage:Payroll | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| payrollFnf.calculate | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollFnf.create | mutation | authorized | create:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollFnf.delete | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollFnf.get | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollFnf.list | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollFnf.markPaid | mutation | authorized | create:PayrollPosting, update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollFnf.post | mutation | authorized | create:PayrollPosting, update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollFnf.reopen | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollFnf.statementPdf | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollFnf.submit | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollFnf.update | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollGratuity.estimate | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollGratuity.postProvision | mutation | authorized | create:PayrollPosting, update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollGratuity.provisionHistory | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollImport.commit | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollImport.history | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollImport.preview | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
@@ -374,6 +405,24 @@
 | payrollLeave.typeList | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollLeave.typeSeedDefaults | mutation | authorized | create:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollLeave.typeUpdate | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollLetter.relievingPdf | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollLetter.saveTemplate | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollLetter.template | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollLoan.approve | mutation | authorized | manage:Payroll | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| payrollLoan.cancel | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollLoan.create | mutation | authorized | create:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollLoan.disburse | mutation | authorized | create:PayrollPosting, update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollLoan.foreclose | mutation | authorized | create:PayrollPosting, update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollLoan.get | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollLoan.list | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollLoan.prepay | mutation | authorized | create:PayrollPosting, update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollLoan.reject | mutation | authorized | manage:Payroll | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| payrollLoan.reschedule | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollLoan.schedulePreview | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollLoan.settings | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollLoan.skip | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollLoan.statementCsv | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| payrollLoan.updateSettings | mutation | authorized | manage:Payroll | ✓ | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | payrollPunch.deviceKeyCreate | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollPunch.deviceKeyList | query | authorized | read:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |
 | payrollPunch.deviceKeyRevoke | mutation | authorized | update:Payroll | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ |

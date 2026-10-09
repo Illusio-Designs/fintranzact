@@ -232,7 +232,9 @@ export interface PayrollWarning {
     // Statutory (Phase 2)
     | "pt_slabs_missing" | "pt_state_missing" | "pt_gender_missing" | "lwf_not_configured" | "tax_slabs_missing" | "tds_pan_missing"
     | "tds_history_gap" | "tds_capped" | "tds_surcharge" | "tds_senior_citizen" | "pf_uan_missing" | "esi_number_missing"
-    | "double_deduction" | "pf_excluded_review" | "statutory_rates_default";
+    | "double_deduction" | "pf_excluded_review" | "statutory_rates_default"
+    // Loans (Phase 4)
+    | "loan_arrears" | "loan_in_fnf";
   message: string;
 }
 
@@ -403,7 +405,10 @@ export interface PayrollLineComponent {
   fullPaise: number;
   /** What is paid / deducted / contributed this month, paise. */
   amountPaise: number;
-  source: "structure" | "overtime" | "adjustment" | "statutory";
+  source: "structure" | "overtime" | "adjustment" | "statutory" | "loan";
+  /** Phase 4: a loan or advance instalment recovered through the run (source "loan"). */
+  loanId?: string;
+  loanPart?: "principal" | "interest";
 }
 
 export interface PayrollLineResult {
@@ -597,6 +602,10 @@ export interface PostingTotals {
   deductionsPayablePaise: number;
   /** Credit: employer contributions payable. */
   employerPayablePaise: number;
+  /** Phase 4: credit loans receivable from employees (principal recovered from pay). Not in the deductions total above. */
+  loanPrincipalPaise: number;
+  /** Phase 4: credit interest income on staff loans (interest recovered from pay). Not in the deductions total above. */
+  loanInterestPaise: number;
   /**
    * Credit: statutory amounts (employee and employer shares) by the authority
    * they are paid to. They are NOT in the two totals above, so every credit is
@@ -612,7 +621,7 @@ export interface PostingTotals {
  */
 export function buildPostingTotals(
   lines: ReadonlyArray<{
-    components: ReadonlyArray<{ type: ComponentType; category: ComponentCategory; amountPaise: number; statutoryKind?: string | null }>;
+    components: ReadonlyArray<{ type: ComponentType; category: ComponentCategory; amountPaise: number; statutoryKind?: string | null; source?: string; loanPart?: string | null }>;
     netPaise: number;
   }>,
 ): PostingTotals {
@@ -621,6 +630,8 @@ export function buildPostingTotals(
   let netPayablePaise = 0;
   let deductionsPayablePaise = 0;
   let employerPayablePaise = 0;
+  let loanPrincipalPaise = 0;
+  let loanInterestPaise = 0;
   for (const l of lines) {
     netPayablePaise += l.netPaise;
     for (const c of l.components) {
@@ -628,11 +639,14 @@ export function buildPostingTotals(
       if (g) expense[g] += c.amountPaise;
       const payableGroup = c.type === "earning" ? null : statutoryPayableGroup(c.statutoryKind);
       if (payableGroup) statutoryPayable[payableGroup] += c.amountPaise;
-      else if (c.type === "deduction") deductionsPayablePaise += c.amountPaise;
+      else if (c.type === "deduction" && c.source === "loan") {
+        if (c.loanPart === "interest") loanInterestPaise += c.amountPaise;
+        else loanPrincipalPaise += c.amountPaise;
+      } else if (c.type === "deduction") deductionsPayablePaise += c.amountPaise;
       else if (c.type === "employer_contribution") employerPayablePaise += c.amountPaise;
     }
   }
-  return { expense, netPayablePaise, deductionsPayablePaise, employerPayablePaise, statutoryPayable };
+  return { expense, netPayablePaise, deductionsPayablePaise, employerPayablePaise, loanPrincipalPaise, loanInterestPaise, statutoryPayable };
 }
 
 // ── Status machine and maker-checker ─────────────────────────────────────────

@@ -68,6 +68,12 @@ const WEB_ONLY: Set<string> = new Set([
   "payroll/tds-on-salary.mdx",
   "payroll/form-16-and-24q.mdx",
   "payroll/statutory-files-and-registers.mdx",
+  "payroll/bonus.mdx",
+  "payroll/gratuity.mdx",
+  "payroll/loans-and-advances.mdx",
+  "payroll/full-and-final.mdx",
+  "payroll/relieving-letters.mdx",
+  "payroll/labour-law-registers.mdx",
   "payroll/employee-access-and-check-in.mdx",
 
   // Online store admin (desktop-only)

@@ -65,13 +65,15 @@ export type EmployeeStatus = (typeof EMPLOYEE_STATUSES)[number];
 export const HOLIDAY_SCOPES = ["national", "state", "branch"] as const;
 export type HolidayScope = (typeof HOLIDAY_SCOPES)[number];
 
-export const EXIT_REASONS = ["resignation", "termination", "retirement", "end_of_contract", "absconded", "other"] as const;
+export const EXIT_REASONS = ["resignation", "termination", "retirement", "end_of_contract", "absconded", "death", "disablement", "other"] as const;
 export const EXIT_REASON_LABELS: Record<(typeof EXIT_REASONS)[number], string> = {
   resignation: "Resignation",
   termination: "Termination",
   retirement: "Retirement",
   end_of_contract: "End of contract",
   absconded: "Absconded",
+  death: "Death",
+  disablement: "Disablement",
   other: "Other",
 };
 

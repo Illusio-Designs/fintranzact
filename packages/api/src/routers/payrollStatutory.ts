@@ -18,6 +18,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { businesses, employeeSalaryAssignments, employeeTaxDeclarations, employees, payrollSettings, payrollStatutorySettings } from "@fintranzact/db";
 import {
+  PHASE4_REGISTERS,
   FILING_REGISTERS,
   VERIFY_WITH_CA_LABEL,
   WAGE_CATEGORIES,
@@ -56,6 +57,7 @@ import {
   buildStateSheetFiles,
   buildWageRegisterFile,
 } from "../lib/payroll/filings.js";
+import { buildDeductionsRegisterFile, buildEmploymentRegisterFile, buildFnfRegisterFile, buildOvertimeRegisterFile } from "../lib/payroll/registers4.js";
 import { generateForm16WorkingCopyPDF } from "../lib/payroll/form16-pdf.js";
 import { loadStatutoryFlags, loadStatutoryRates, loadDeclarations } from "../lib/payroll/statutory.js";
 
@@ -349,7 +351,7 @@ export const payrollStatutoryRouter = router({
   register: viewerProcedure
     .input(
       z.object({
-        register: z.enum(FILING_REGISTERS),
+        register: z.enum([...FILING_REGISTERS, ...PHASE4_REGISTERS]),
         month: payrollMonthSchema.optional(),
         financialYear: z.number().int().min(2020).max(2100).optional(),
         leaveYear: z.number().int().min(2000).max(2200).optional(),
@@ -370,6 +372,15 @@ export const payrollStatutoryRouter = router({
           return buildBonusRegisterFile(ctx.db, ctx.businessId, fyOf(input));
         case "gratuity":
           return buildGratuityRegisterFile(ctx.db, ctx.businessId, input.asOf ?? new Date().toISOString().slice(0, 10), fyOf(input));
+        // Phase 4 working registers (reformatted from existing data).
+        case "employment":
+          return buildEmploymentRegisterFile(ctx.db, ctx.businessId);
+        case "deductions":
+          return buildDeductionsRegisterFile(ctx.db, ctx.businessId, fyOf(input));
+        case "overtime":
+          return buildOvertimeRegisterFile(ctx.db, ctx.businessId, fyOf(input));
+        case "fnf":
+          return buildFnfRegisterFile(ctx.db, ctx.businessId, fyOf(input));
       }
     }),
 });

@@ -472,3 +472,34 @@ What needs a person, not code:
    real device export (and, if the vendor supports it, a push to
    `POST /api/attendance/push` with a device key) and tell us if the column layout
    is not recognised.
+
+## 18. Payroll Phase 4: bonus, gratuity, full and final, loans (before you release Payroll)
+
+Payroll Phase 4 is built and gated; `ADDON_FEATURES.payroll.implemented` is still
+false, so none of it is on sale. Design and every assumption:
+`docs/architecture/payroll-phase-4.md`. What needs a person, not code:
+
+1. **Have your CA confirm bonus and gratuity** (the roadmap line "CA verification of
+   bonus and gratuity rules" is deliberately NOT ticked). Give the CA the Phase 4
+   section of `docs/PAYROLL-CA-VERIFICATION.md`: it lists every rule, rounding and
+   assumption (the bonus calculation wage and eligibility tests, the 8.33 to 20
+   percent range, the gratuity formula and the Contract-means-fixed-term assumption,
+   leave encashment, the order of a full and final settlement, loan interest and EMI
+   rounding, the 50 percent recovery cap, and that TDS on a settlement and tax on
+   gratuity are NOT calculated).
+2. **Enter the bonus figures for each financial year.** The eligibility ceiling, the
+   calculation ceiling and the minimum wage ship EMPTY on purpose (Payroll, Statutory
+   settings, Bonus and gratuity). A bonus run refuses to calculate until they are set.
+   Fill the "last verified" note once your CA has confirmed them.
+3. **Check the accounts.** Phase 4 creates these accounts in each business the first
+   time they are needed: 1260 Loans and Advances to Employees, 4110 Interest on Staff
+   Loans, 2440 Bonus Payable, 2441 Gratuity Provision, 2442 Full and Final Settlements
+   Payable, 5205 Salary - Gratuity. If a business already used one of those codes for
+   something else, a "P"-prefixed code (for example P1260) is made instead. Ask your CA
+   whether the account names and the gratuity provision policy suit your books.
+4. **Legal wording.** The relieving letter wording and the registers are working
+   copies. Have a lawyer or CA check the letter text, and arrange the registers in the
+   form your state requires (Shops and Establishments, Contract Labour...). Nothing is
+   digitally signed.
+5. **Try it in a browser.** The screens were tested with component tests only, never
+   in a real browser: run a bonus year, a loan, and a settlement end to end once.

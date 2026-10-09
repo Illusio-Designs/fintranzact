@@ -18,7 +18,11 @@
  *    Payroll is not exposed in Phase 1. Payroll Phase 3 data (attendance selfies,
  *    check-in locations, punches, device keys, employee logins) is never exposed
  *    to any tool or prompt either (docs/architecture/payroll-self-service.md), and an
- *    employee login cannot reach the assistant at all.
+ *    employee login cannot reach the assistant at all. The same holds for Payroll
+ *    Phase 4 (bonus, gratuity, loans and advances, full and final settlements, relieving
+ *    letters: docs/architecture/payroll-phase-4.md): no tool reads payrollBonus,
+ *    payrollGratuity, payrollLoan, payrollFnf or payrollLetter data, and no
+ *    propose_* action creates any of it.
  *  - Everything a tool returns is DATA from the books. Names, notes and
  *    descriptions are user-typed and untrusted; the system prompt says so and
  *    the tool results are only ever passed back as tool_result content.

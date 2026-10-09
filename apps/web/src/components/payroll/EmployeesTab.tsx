@@ -391,7 +391,7 @@ function ExitDialog({ employee, onClose, onDone }: { employee: { id: string; nam
     <Modal open onClose={onClose} title={`${employee.name} is leaving`}>
       <div className="space-y-3">
         <p className="text-sm text-text-secondary">
-          Payroll pays up to the last working day. The run for that month is linked to the employee as their full and final settlement.
+          Payroll pays up to the last working day through the run for that month. Afterwards prepare the leave encashment, gratuity, bonus and recoveries on the Full and final tab, and the relieving letter there.
         </p>
         <InputField label="Last working day" type="date" required value={lastWorkingDay} onChange={(e) => setLast(e.target.value)} />
         <SelectField label="Reason" value={reason} onChange={(e) => setReason(e.target.value as typeof reason)}>

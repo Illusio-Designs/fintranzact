@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { fyLabel } from "@fintranzact/shared";
+import { PHASE4_REGISTER_LABELS, fyLabel } from "@fintranzact/shared";
 import { trpc } from "@/lib/trpc";
 import { toast } from "@/hooks/useToast";
 import { SelectField } from "@/components/ui/FormField";
@@ -133,7 +133,12 @@ export function FilingsTab() {
             <button className="btn-secondary" onClick={() => void run_("bonus register", () => utils.payrollStatutory.register.fetch({ register: "bonus", financialYear: fy }, fetchOpts), (r) => { downloadText(r.filename, "text/csv", r.text); return { note: "Computed from payroll data at the percentage in Statutory settings. No bonus is paid from here." }; })}>Bonus register</button>
             <button className="btn-secondary" onClick={() => void run_("gratuity register", () => utils.payrollStatutory.register.fetch({ register: "gratuity", financialYear: fy }, fetchOpts), (r) => { downloadText(r.filename, "text/csv", r.text); return { note: "Computed from joining dates and last drawn Basic + DA. No gratuity is paid from here." }; })}>Gratuity register</button>
           </div>
-          <p className="text-xs text-text-tertiary">The bonus and gratuity registers are computed from your payroll data. Paying bonus or gratuity is not part of this release.</p>
+          <div className="flex flex-wrap gap-2" aria-label="Other registers">
+            {(["employment", "deductions", "overtime", "fnf"] as const).map((k) => (
+              <button key={k} className="btn-secondary" onClick={() => void run_(`${PHASE4_REGISTER_LABELS[k].toLowerCase()}`, () => utils.payrollStatutory.register.fetch({ register: k, financialYear: fy }, fetchOpts), (r) => { downloadText(r.filename, "text/csv", r.text); return { note: "note" in r ? String(r.note) : undefined }; })}>{PHASE4_REGISTER_LABELS[k]}</button>
+            ))}
+          </div>
+          <p className="text-xs text-text-tertiary">The bonus and gratuity registers are computed from your payroll data; bonus and gratuity are paid from the Bonus, Gratuity and Full and final tabs. The other registers are working copies made from the data above: formats differ by state and by Act (Shops and Establishments, Contract Labour...), so they are for your CA or lawyer to review and are not statutory forms.</p>
         </div>
       </Panel>
     </div>

@@ -8,6 +8,10 @@
  * auth.*: signing in, sessions, switching organisation). Every procedure is classified here by name, so a new
  * procedure is refused for employees by default and a new allowlist entry must be a real procedure.
  *
+ * Phase 4 (bonus, gratuity, full and final, loans, letters) adds no employee procedure on purpose: every payrollBonus, payrollGratuity,
+ * payrollFnf, payrollLoan and payrollLetter procedure is refused for the employee (they are not in EMPLOYEE_ALLOWED_PROCEDURES; the
+ * test below fails if one is ever allowed without being classified) and the employee-side loan view was not built.
+ *
  * HR: allowed exactly what its CASL permissions say. For every authorized procedure the Payroll checks
  * (recorded while the owner calls it) must be granted to HR, else HR is FORBIDDEN; the books, billing,
  * team, settings and AI are refused; approving and posting a run are refused.
@@ -172,10 +176,17 @@ describe("employee and HR sweep over every tRPC procedure", () => {
     expect(wrong).toEqual([]);
   });
 
-  it("HR runs payroll (employees, attendance, leave, runs, payslips, statutory, punches, imports) except approving and posting", () => {
-    const refused = new Set(["payrollSalary.templateDelete", "payrollRun.approve", "payrollRun.post", "payrollRun.markPaid", "payrollStatutory.recordPayment", "payrollStatutory.saveRates", "payrollStatutory.updateBusinessSettings"]);
-    const payrollRows = rows.filter((r) => /^payroll(Employee|Salary|Attendance|Leave|Run|Statutory|Access|Punch|Import)\./.test(r.proc.path));
-    expect(payrollRows.length).toBeGreaterThan(70);
+  it("HR runs payroll (employees, attendance, leave, runs, payslips, statutory, punches, imports, bonus, gratuity, full and final, loans, letters) except approving and posting", () => {
+    const refused = new Set([
+      "payrollSalary.templateDelete", "payrollRun.approve", "payrollRun.post", "payrollRun.markPaid", "payrollStatutory.recordPayment", "payrollStatutory.saveRates", "payrollStatutory.updateBusinessSettings",
+      // Phase 4: approving needs Payroll "manage", posting and paying need PayrollPosting; HR prepares only.
+      "payrollBonus.approve", "payrollBonus.post", "payrollBonus.markPaid",
+      "payrollFnf.approve", "payrollFnf.post", "payrollFnf.markPaid",
+      "payrollLoan.approve", "payrollLoan.reject", "payrollLoan.disburse", "payrollLoan.prepay", "payrollLoan.foreclose", "payrollLoan.updateSettings",
+      "payrollGratuity.postProvision",
+    ]);
+    const payrollRows = rows.filter((r) => /^payroll(Employee|Salary|Attendance|Leave|Run|Statutory|Access|Punch|Import|Bonus|Gratuity|Fnf|Loan|Letter)\./.test(r.proc.path));
+    expect(payrollRows.length).toBeGreaterThan(110);
     for (const { proc, hr } of payrollRows) {
       if (refused.has(proc.path)) expect(hr.code, proc.path).toBe("FORBIDDEN");
       else expect(hr.code, `${proc.path}: ${hr.message}`).not.toBe("FORBIDDEN");

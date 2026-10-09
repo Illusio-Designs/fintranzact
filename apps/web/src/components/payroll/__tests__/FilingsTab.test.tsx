@@ -120,7 +120,18 @@ describe("FilingsTab", () => {
     await waitFor(() => expect(h.register).toHaveBeenCalledWith({ register: "wages", month: "2026-10" }, { staleTime: 0 }));
     fireEvent.click(screen.getByRole("button", { name: "Gratuity register" }));
     await waitFor(() => expect(h.register).toHaveBeenCalledWith({ register: "gratuity", financialYear: 2026 }, { staleTime: 0 }));
-    expect(screen.getByText(/Paying bonus or gratuity is not part of this release/)).toBeInTheDocument();
+    expect(screen.getByText(/paid from the Bonus, Gratuity and Full and final tabs/)).toBeInTheDocument();
+    expect(screen.getByText(/not statutory forms/)).toBeInTheDocument();
+  });
+
+  it("downloads the Phase 4 working registers", async () => {
+    h.register.mockResolvedValue({ filename: "employment-register.csv", text: "csv", note: "Working copy for CA or legal review." });
+    render(<FilingsTab />);
+    for (const [name, register] of [["Register of employees (employment)", "employment"], ["Register of deductions, fines and advances", "deductions"], ["Register of overtime", "overtime"], ["Register of full and final settlements", "fnf"]] as const) {
+      fireEvent.click(screen.getByRole("button", { name }));
+      await waitFor(() => expect(h.register).toHaveBeenCalledWith({ register, financialYear: 2026 }, { staleTime: 0 }));
+    }
+    expect(h.downloadText).toHaveBeenCalledWith("employment-register.csv", "text/csv", "csv");
   });
 
   it("with no approved run says files need one", () => {

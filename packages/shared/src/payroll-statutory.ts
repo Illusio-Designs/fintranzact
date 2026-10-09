@@ -164,12 +164,27 @@ export const statutoryRatesSchema = z.object({
     workingDaysDivisor: z.number().min(1).max(31),
     minYears: z.number().min(0).max(20),
     capRupees: rupees,
+    /** Phase 4: years of service a fixed-term employee needs (1 under the Labour Codes, per the roadmap). */
+    fixedTermMinYears: z.number().min(0).max(20).default(1),
   }),
   bonus: z.object({
     /** Wage ceiling for bonus, ₹. 0 = not configured (the register then shows the wages without a bonus amount). */
     wageCeilingRupees: rupees,
     /** Bonus percentage of the capped wages. 0 = not configured. */
     percent: percent,
+    /**
+     * Phase 4 (Payment of Bonus Act). `wageCeilingRupees` above is the CALCULATION ceiling (the wage a month's bonus
+     * is capped at); these are the rest of the data. 0 = not configured: a bonus run then refuses to calculate.
+     */
+    /** An employee is eligible when the monthly wage is up to this. 0 = not configured. */
+    eligibilityCeilingRupees: rupees.default(0),
+    /** The minimum wage the calculation ceiling is compared with (the higher of the two caps a month's wage). 0 = not set. */
+    minimumWageRupees: rupees.default(0),
+    /** The lowest and the highest bonus percentage a run may use (8.33 and 20 in the Act). */
+    minPercent: percent.default(8.33),
+    maxPercent: percent.default(20),
+    /** Days of work in the year needed to be eligible (30 in the Act). */
+    minWorkingDays: z.number().int().min(0).max(366).default(30),
   }),
 });
 export type StatutoryRates = z.infer<typeof statutoryRatesSchema>;
@@ -226,8 +241,8 @@ export function defaultStatutoryRates(): StatutoryRates {
       tds24qQuarterEnd: { q1: "07-31", q2: "10-31", q3: "01-31", q4: "05-31" },
       form16: "06-15",
     },
-    gratuity: { daysPerYear: 15, workingDaysDivisor: 26, minYears: 5, capRupees: 2_000_000 },
-    bonus: { wageCeilingRupees: 0, percent: 0 },
+    gratuity: { daysPerYear: 15, workingDaysDivisor: 26, minYears: 5, capRupees: 2_000_000, fixedTermMinYears: 1 },
+    bonus: { wageCeilingRupees: 0, percent: 0, eligibilityCeilingRupees: 0, minimumWageRupees: 0, minPercent: 8.33, maxPercent: 20, minWorkingDays: 30 },
   };
 }
 
