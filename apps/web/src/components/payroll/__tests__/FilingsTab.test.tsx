@@ -134,6 +134,20 @@ describe("FilingsTab", () => {
     expect(h.downloadText).toHaveBeenCalledWith("employment-register.csv", "text/csv", "csv");
   });
 
+  it("a register can be downloaded as a PDF: only then is the format sent, and the file is saved from base64", async () => {
+    h.register.mockResolvedValue({ filename: "wages-register-2026-10.pdf", contentType: "application/pdf", text: "", base64: "JVBERi0=", note: "Working copy for CA / legal review. Formats vary by state." });
+    render(<FilingsTab />);
+    fireEvent.click(screen.getByRole("combobox", { name: /Download as/ }));
+    fireEvent.mouseDown(screen.getByRole("option", { name: /PDF/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Wages register" }));
+    await waitFor(() => expect(h.register).toHaveBeenCalledWith({ register: "wages", month: "2026-10", format: "pdf" }, { staleTime: 0 }));
+    await waitFor(() => expect(h.download).toHaveBeenCalledWith("wages-register-2026-10.pdf", "application/pdf", "JVBERi0="));
+    expect(h.downloadText).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Register of full and final settlements" }));
+    await waitFor(() => expect(h.register).toHaveBeenCalledWith({ register: "fnf", financialYear: 2026, format: "pdf" }, { staleTime: 0 }));
+    expect(screen.getByText(/landscape working copy for printing/)).toBeInTheDocument();
+  });
+
   it("with no approved run says files need one", () => {
     h.runs.data = [];
     render(<FilingsTab />);

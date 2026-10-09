@@ -171,7 +171,7 @@ Shipped **EMPTY on purpose** (a bonus run refuses to calculate until they are se
 ### Relieving letters and registers
 
 - [ ] The letter wording is the business's own text with placeholders; the shipped default is a plain certificate. **Not digitally signed.** Have a lawyer check the wording.
-- [ ] The employment, deductions and advances, overtime and settlement registers are **working copies**. State and Act formats differ; none is claimed to be a statutory form.
+- [ ] The employment, deductions and advances, overtime and settlement registers are **working copies**. State and Act formats differ; none is claimed to be a statutory form. Each register can also be downloaded as a landscape PDF carrying the same label ("Working copy for CA / legal review. Formats vary by state."); the PDF repeats the CSV's rows and claims nothing more.
 
 ### Sign-off for Phase 4
 

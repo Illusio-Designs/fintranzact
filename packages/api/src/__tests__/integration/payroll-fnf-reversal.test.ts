@@ -355,6 +355,19 @@ describe("a paid settlement", () => {
   }, 60_000);
 });
 
+describe("registers", () => {
+  it("the settlements register shows the reversed status and the deductions register shows each recovery and its put back", async () => {
+    const fnf = await ownerC.payrollStatutory.register({ register: "fnf", financialYear: 2026 });
+    expect(fnf.text).toContain("reversed");
+    const ded = await ownerC.payrollStatutory.register({ register: "deductions", financialYear: 2026 });
+    expect(ded.text).toContain("fnf recovered");
+    expect(ded.text).toContain("fnf reversed");
+    expect(ded.text).toMatch(/'-30000\.00/); // the put back is a negative recovery (with the spreadsheet guard)
+    const pdf = await ownerC.payrollStatutory.register({ register: "deductions", financialYear: 2026, format: "pdf" });
+    expect(pdf.contentType).toBe("application/pdf");
+  });
+});
+
 describe("the data audit", () => {
   it("finds nothing wrong after all of it", async () => {
     const tables = new Set(["fnf_settlements", "fnf_settlement_lines", "employee_loans", "employee_loan_installments", "employee_loan_events", "bonus_runs", "bonus_run_lines", "gratuity_provisions"]);

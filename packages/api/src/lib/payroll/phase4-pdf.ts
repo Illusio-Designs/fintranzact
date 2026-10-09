@@ -47,8 +47,8 @@ export function fmtDay(ymd: string | null | undefined): string {
   return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(Date.UTC(y, m - 1, d)));
 }
 
-function open(title: string, business: PdfBusiness) {
-  const doc = new PDFDocument({ size: "A4", margin, info: { Title: title, Author: business.name, Creator: "Fintranzact" } });
+function open(title: string, business: PdfBusiness, opts: { landscape?: boolean; bufferPages?: boolean; margin?: number } = {}) {
+  const doc = new PDFDocument({ size: "A4", layout: opts.landscape ? "landscape" : "portrait", margin: opts.margin ?? margin, bufferPages: opts.bufferPages ?? false, info: { Title: title, Author: business.name, Creator: "Fintranzact" } });
   doc.registerFont("NotoSans", FONT_REGULAR);
   doc.registerFont("NotoSans-Bold", FONT_BOLD);
   const chunks: Buffer[] = [];
@@ -280,6 +280,197 @@ export function generateLetterPDF(l: LetterData, opts: { logo?: Buffer | null; s
   doc.font("NotoSans-Bold").fontSize(9.5).fillColor(ink).text(l.signatoryName || "Authorised signatory", margin, y + 4, { width: 260 });
   if (l.signatoryTitle) doc.font("NotoSans").fontSize(9).fillColor(soft).text(l.signatoryTitle, margin, doc.y + 1, { width: 260 });
   doc.font("NotoSans").fontSize(9).fillColor(soft).text(l.business.legalName || l.business.name, margin, doc.y + 1, { width: 260 });
+  doc.end();
+  return done;
+}
+
+// ── Registers (landscape tables) ─────────────────────────────────────────────
+
+/** Printed on every page of a register PDF and returned with it. */
+export const REGISTER_PDF_LABEL = "Working copy for CA / legal review. Formats vary by state.";
+
+/**
+ * Reads the CSV the register builders make (RFC 4180: quotes, doubled quotes, CRLF, newlines inside quotes) into rows of cells.
+ * The leading apostrophe `csvCell` puts before a cell that starts with = + - @ (so a spreadsheet cannot run it) is removed:
+ * a printed page has no formulas.
+ */
+export function parseCsvTable(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let quoted = false;
+  const src = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  const push = () => {
+    row.push(/^'[=+\-@\t\r]/.test(cell) ? cell.slice(1) : cell);
+    cell = "";
+  };
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i]!;
+    if (quoted) {
+      if (ch === '"') {
+        if (src[i + 1] === '"') {
+          cell += '"';
+          i++;
+        } else quoted = false;
+      } else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") push();
+    else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && src[i + 1] === "\n") i++;
+      push();
+      rows.push(row);
+      row = [];
+    } else cell += ch;
+  }
+  if (cell !== "" || row.length) {
+    push();
+    rows.push(row);
+  }
+  return rows;
+}
+
+export interface RegisterPdfInput {
+  business: PdfBusiness;
+  /** "Wages register" */
+  title: string;
+  /** What the register covers: "May 2026", "FY 2026-27", "as on 31 Mar 2026". */
+  period: string;
+  header: readonly string[];
+  rows: ReadonlyArray<ReadonlyArray<string>>;
+  generatedAt: string;
+}
+
+const REG = { w: 841.89, h: 595.28, m: 28, font: 7, rowH: 13, headH: 30, maxCol: 150, minCol: 22, pad: 6 };
+const KEY_HEADERS = new Set(["Employee Code", "Employee Name", "Name", "Settlement No"]);
+
+/**
+ * A register as a landscape A4 table: the business name, the register and its period on every page, the header row repeated on
+ * every page, "Page x of y" and the working-copy label in the footer. Rows are paginated (any number); a cell wider than its
+ * column is cut with an ellipsis (the CSV has the full text) and a register too wide for one page is printed in column groups,
+ * each group repeating the employee columns, so no figure is ever squeezed or cut. Numbers are right aligned.
+ */
+export function generateRegisterPDF(r: RegisterPdfInput): Promise<Buffer> {
+  const { doc, done } = open(`${r.title} ${r.period}`, r.business, { landscape: true, bufferPages: true, margin: REG.m });
+  const contentW = REG.w - REG.m * 2;
+  const bottom = REG.h - REG.m - 18;
+  const cols = r.header.length;
+  const clean = (v: string | undefined) => (v ?? "").replace(/\s+/g, " ").trim();
+
+  // Natural width of each column (header words included), capped; right alignment for numeric columns.
+  doc.font("NotoSans").fontSize(REG.font);
+  const width = new Array<number>(cols).fill(0);
+  const numeric = new Array<boolean>(cols).fill(true);
+  for (let c = 0; c < cols; c++) {
+    doc.font("NotoSans-Bold").fontSize(REG.font - 0.5);
+    for (const word of clean(r.header[c]).split(" ")) width[c] = Math.max(width[c]!, doc.widthOfString(word));
+  }
+  doc.font("NotoSans").fontSize(REG.font);
+  for (const row of r.rows) {
+    for (let c = 0; c < cols; c++) {
+      const v = clean(row[c]);
+      if (v === "") continue;
+      if (numeric[c] && !/^-?[\d,]+(\.\d+)?$/.test(v)) numeric[c] = false;
+      if (width[c]! < REG.maxCol) width[c] = Math.max(width[c]!, Math.min(REG.maxCol, doc.widthOfString(v)));
+    }
+  }
+  const w = width.map((x) => Math.min(REG.maxCol, Math.max(REG.minCol, x)) + REG.pad);
+  let keys = r.header.map((h, i) => (KEY_HEADERS.has(h) ? i : -1)).filter((i) => i >= 0);
+  if (keys.length === 0 && cols > 0) keys = [0];
+  const keyW = keys.reduce((n, i) => n + w[i]!, 0);
+  const rest = r.header.map((_, i) => i).filter((i) => !keys.includes(i));
+  const groups: number[][] = [];
+  let cur: number[] = [];
+  let curW = keyW;
+  for (const i of rest) {
+    if (cur.length && curW + w[i]! > contentW) {
+      groups.push(cur);
+      cur = [];
+      curW = keyW;
+    }
+    cur.push(i);
+    curW += w[i]!;
+  }
+  if (cur.length || groups.length === 0) groups.push(cur);
+
+  let truncated = false;
+  const cut = (txt: string, maxW: number): string => {
+    if (doc.widthOfString(txt) <= maxW) return txt;
+    truncated = true;
+    let lo = 0;
+    let hi = txt.length;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (doc.widthOfString(`${txt.slice(0, mid)}...`) <= maxW) lo = mid;
+      else hi = mid - 1;
+    }
+    return `${txt.slice(0, lo)}...`;
+  };
+
+  const business = r.business.legalName || r.business.name;
+  const topBlock = (part: string): number => {
+    doc.font("NotoSans-Bold").fontSize(11).fillColor(ink).text(business, REG.m, REG.m, { width: contentW * 0.55, lineBreak: false, ellipsis: true });
+    doc.font("NotoSans-Bold").fontSize(10).fillColor(accent).text(`${r.title}  |  ${r.period}`, REG.m + contentW * 0.45, REG.m + 1, { width: contentW * 0.55, align: "right", lineBreak: false, ellipsis: true });
+    doc.font("NotoSans").fontSize(7).fillColor(muted).text(`${REGISTER_PDF_LABEL}${part ? `  ${part}` : ""}`, REG.m, REG.m + 16, { width: contentW, lineBreak: false, ellipsis: true });
+    const y = REG.m + 28;
+    doc.moveTo(REG.m, y).lineTo(REG.m + contentW, y).strokeColor(lineColor).lineWidth(0.75).stroke();
+    return y + 6;
+  };
+
+  groups.forEach((g, gi) => {
+    if (gi > 0) doc.addPage();
+    const idx = [...keys, ...g];
+    const natural = idx.reduce((n, i) => n + w[i]!, 0);
+    // A table narrower than the page is widened a little (up to 1.4x) so it fills it.
+    const scale = natural < contentW ? Math.min(contentW / natural, 1.4) : 1;
+    const xs: number[] = [];
+    let x = REG.m;
+    for (const i of idx) {
+      xs.push(x);
+      x += w[i]! * scale;
+    }
+    const part = groups.length > 1 ? `Columns part ${gi + 1} of ${groups.length} (employee columns repeated)` : "";
+    let y = topBlock(part);
+    const head = () => {
+      doc.rect(REG.m, y, x - REG.m, REG.headH).fill(band);
+      doc.font("NotoSans-Bold").fontSize(REG.font - 0.5).fillColor(soft);
+      idx.forEach((c, k) => {
+        doc.text(clean(r.header[c]), xs[k]! + 3, y + 3, { width: w[c]! * scale - 6, height: REG.headH - 4, align: numeric[c] && !keys.includes(c) ? "right" : "left", ellipsis: true });
+      });
+      y += REG.headH + 2;
+    };
+    head();
+    if (r.rows.length === 0) {
+      doc.font("NotoSans").fontSize(8).fillColor(muted).text("No entries for this period.", REG.m + 3, y + 3, { lineBreak: false });
+    }
+    r.rows.forEach((row, ri) => {
+      if (y + REG.rowH > bottom) {
+        doc.addPage();
+        y = topBlock(part);
+        head();
+      }
+      if (ri % 2 === 1) doc.rect(REG.m, y, x - REG.m, REG.rowH).fill("#f8f9fa");
+      doc.font("NotoSans").fontSize(REG.font).fillColor(ink);
+      idx.forEach((c, k) => {
+        const colW = w[c]! * scale - 6;
+        const txt = cut(clean(row[c]), colW);
+        if (txt) doc.text(txt, xs[k]! + 3, y + 3, { width: colW, height: 9, lineBreak: false, align: numeric[c] && !keys.includes(c) ? "right" : "left" });
+      });
+      doc.moveTo(REG.m, y + REG.rowH).lineTo(x, y + REG.rowH).strokeColor(lineColor).lineWidth(0.3).stroke();
+      y += REG.rowH;
+    });
+    doc.font("NotoSans").fontSize(7).fillColor(muted).text(`${r.rows.length} row${r.rows.length === 1 ? "" : "s"}.${truncated ? " Long values are shortened with ... in this PDF; the CSV has them in full." : ""}`, REG.m, y + 6, { width: contentW, lineBreak: false, ellipsis: true });
+    truncated = false;
+  });
+
+  // Footer on every page ("Page x of y"). The bottom margin is lifted while writing so pdfkit does not start a new page for it.
+  const range = doc.bufferedPageRange();
+  for (let i = 0; i < range.count; i++) {
+    doc.switchToPage(range.start + i);
+    doc.page.margins.bottom = 0;
+    doc.font("NotoSans").fontSize(7).fillColor(muted);
+    doc.text(`${REGISTER_PDF_LABEL} Generated ${r.generatedAt.slice(0, 10)}.`, REG.m, REG.h - REG.m - 8, { width: contentW * 0.75, lineBreak: false, ellipsis: true });
+    doc.text(`Page ${i + 1} of ${range.count}`, REG.m + contentW * 0.75, REG.h - REG.m - 8, { width: contentW * 0.25, align: "right", lineBreak: false });
+  }
   doc.end();
   return done;
 }

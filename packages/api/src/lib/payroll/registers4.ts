@@ -10,6 +10,7 @@
 
 import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
 import {
+  businesses,
   employeeLoanEvents,
   employeeLoans,
   employees,
@@ -25,11 +26,15 @@ import {
   buildEmploymentRegister,
   buildFnfRegister,
   buildOvertimeRegister,
+  formatPayrollMonth,
   fyLabel,
   monthsOfFy,
   rupeesToPaise,
   type DeductionRegisterRow,
 } from "@fintranzact/shared";
+
+import { generateRegisterPDF, parseCsvTable, REGISTER_PDF_LABEL } from "./phase4-pdf.js";
+import { notFound } from "./access.js";
 
 const FINAL = ["approved", "posted", "paid"];
 
@@ -149,4 +154,56 @@ export async function buildFnfRegisterFile(db: TenantDatabase, businessId: strin
     })),
   );
   return { filename: `fnf-register-${fyLabel(fy)}.csv`, contentType: "text/csv", text, count: rows.length, note: WORKING_COPY_NOTE };
+}
+
+// ── Any register as a PDF ────────────────────────────────────────────────────
+
+const REGISTER_TITLES: Record<string, string> = {
+  wages: "Wages register",
+  attendance: "Attendance register",
+  leave: "Leave register",
+  bonus: "Bonus register",
+  gratuity: "Gratuity register",
+  employment: "Employment register",
+  deductions: "Deductions and advances register",
+  overtime: "Overtime register",
+  fnf: "Full and final settlements register",
+};
+
+/** What a register covers, worked out from the file name the builders make ("wages-register-2026-05.csv"). */
+function periodLabelOf(register: string, filename: string): string {
+  const tail = filename.replace(/^[a-z]+(?:-[a-z]+)*-register-?/, "").replace(/\.csv$/, "");
+  if (register === "wages" || register === "attendance") return /^\d{4}-\d{2}$/.test(tail) ? formatPayrollMonth(tail) : tail;
+  if (register === "leave") return `leave year ${tail}`;
+  if (register === "gratuity") return `as on ${tail}`;
+  if (register === "employment") return "all employees";
+  return `FY ${tail}`;
+}
+
+/**
+ * The same register as the CSV, as a landscape PDF (base64). The rows are read back from the CSV the builder made, so the PDF can
+ * never differ from the file (one source of truth); it is labelled as a working copy. The response keeps every key of the CSV
+ * response (`text` is empty, `count` and `note` are the same) and adds `base64`.
+ */
+export async function registerAsPdf(
+  db: TenantDatabase,
+  businessId: string,
+  register: string,
+  file: { filename: string; text: string; count: number; note?: string },
+): Promise<{ filename: string; contentType: "application/pdf"; text: ""; base64: string; count: number; note: string; pages: number }> {
+  const [biz] = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
+  if (!biz) throw notFound("Business");
+  const table = parseCsvTable(file.text);
+  const [header = [], ...rows] = table;
+  const pdf = await generateRegisterPDF({
+    business: { name: biz.name, legalName: biz.legalName, address: biz.address, city: biz.city, state: biz.state, pincode: biz.pincode, phone: biz.phone, email: biz.email },
+    title: REGISTER_TITLES[register] ?? "Register",
+    period: periodLabelOf(register, file.filename),
+    header,
+    rows,
+    generatedAt: new Date().toISOString(),
+  });
+  // The page count is the number of page objects (the "/Type /Page" entries that are not "/Type /Pages").
+  const pages = (pdf.toString("latin1").match(/\/Type \/Page(?![s\w])/g) ?? []).length;
+  return { filename: file.filename.replace(/\.csv$/, ".pdf"), contentType: "application/pdf", text: "", base64: pdf.toString("base64"), count: file.count, note: file.note ?? REGISTER_PDF_LABEL, pages };
 }
