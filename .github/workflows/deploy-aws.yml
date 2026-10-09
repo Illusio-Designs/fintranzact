@@ -1,0 +1,378 @@
+name: Deploy AWS
+
+# Manual deploy to AWS (ECS Fargate API, S3 + CloudFront web and store).
+# NOT triggered by pushes. To deploy automatically after every merge, see
+# docs/infra/OPERATIONS.md ("Turning on automatic deploys").
+#
+# Every AWS-specific value comes from GitHub repository (or environment)
+# VARIABLES, never secrets. The list is printed by `terraform output
+# github_actions_variables` plus AWS_ROLE_ARN from infra/bootstrap.
+# AWS sign-in uses OIDC: there are no access keys anywhere.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "GitHub environment to deploy (holds the variables, can require approval)"
+        type: choice
+        options: [production, staging]
+        default: production
+      target:
+        description: "What to deploy"
+        type: choice
+        options: [all, api, web, store]
+        default: all
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-aws-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  api:
+    name: API (image, migration, service)
+    if: ${{ inputs.target == 'all' || inputs.target == 'api' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_ECR_REPOSITORY: ${{ vars.AWS_ECR_REPOSITORY }}
+      AWS_ECS_CLUSTER: ${{ vars.AWS_ECS_CLUSTER }}
+      AWS_ECS_SERVICE: ${{ vars.AWS_ECS_SERVICE }}
+      AWS_ECS_TASK_FAMILY: ${{ vars.AWS_ECS_TASK_FAMILY }}
+      AWS_TASK_SUBNETS: ${{ vars.AWS_TASK_SUBNETS }}
+      AWS_TASK_SECURITY_GROUP: ${{ vars.AWS_TASK_SECURITY_GROUP }}
+      AWS_TASK_ASSIGN_PUBLIC_IP: ${{ vars.AWS_TASK_ASSIGN_PUBLIC_IP }}
+      AWS_LOG_GROUP: ${{ vars.AWS_LOG_GROUP }}
+      AWS_API_ARCH: ${{ vars.AWS_API_ARCH || 'X86_64' }}
+      AWS_API_URL: ${{ vars.AWS_API_URL }}
+      AWS_API_DESIRED_COUNT_FIRST: ${{ vars.AWS_API_DESIRED_COUNT_FIRST || '1' }}
+    steps:
+      - name: Check configuration
+        env:
+          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+        run: |
+          missing=""
+          for v in AWS_ROLE_ARN AWS_REGION AWS_ECR_REPOSITORY AWS_ECS_CLUSTER AWS_ECS_SERVICE AWS_ECS_TASK_FAMILY AWS_TASK_SUBNETS AWS_TASK_SECURITY_GROUP AWS_TASK_ASSIGN_PUBLIC_IP AWS_LOG_GROUP AWS_API_URL; do
+            if [ -z "${!v}" ]; then missing="$missing $v"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing GitHub variables:$missing. See docs/infra/SETUP.md, step 'GitHub variables'."
+            exit 1
+          fi
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Sign in to AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1
+
+      - name: Work out the image name
+        id: image
+        run: |
+          echo "uri=${{ steps.ecr.outputs.registry }}/${AWS_ECR_REPOSITORY}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          if aws ecr describe-images --repository-name "$AWS_ECR_REPOSITORY" --image-ids "imageTag=${GITHUB_SHA}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Image for ${GITHUB_SHA} is already in ECR; skipping the build."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "$AWS_API_ARCH" = "ARM64" ]; then
+            echo "platform=linux/arm64" >> "$GITHUB_OUTPUT"
+          else
+            echo "platform=linux/amd64" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up QEMU (only to build arm64 on an x86 runner)
+        if: ${{ steps.image.outputs.exists == 'false' && steps.image.outputs.platform == 'linux/arm64' }}
+        uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf # v3.2.0
+
+      - name: Set up Docker Buildx
+        if: ${{ steps.image.outputs.exists == 'false' }}
+        uses: docker/setup-buildx-action@c47758b77c9736f4b2ef4073d4d51994fabfe349 # v3.7.1
+
+      - name: Build and push the API image
+        if: ${{ steps.image.outputs.exists == 'false' }}
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.9.0
+        with:
+          context: .
+          push: true
+          platforms: ${{ steps.image.outputs.platform }}
+          build-args: VERSION=${{ github.sha }}
+          tags: ${{ steps.image.outputs.uri }}
+          provenance: false
+          cache-from: type=gha,scope=aws-api
+          cache-to: type=gha,mode=max,scope=aws-api
+
+      - name: Register a new task definition revision
+        id: taskdef
+        run: |
+          set -euo pipefail
+          # Start from the latest revision Terraform (or the last deploy) wrote and swap only the image.
+          aws ecs describe-task-definition --task-definition "$AWS_ECS_TASK_FAMILY" --query taskDefinition > current.json
+          jq --arg IMG "${{ steps.image.outputs.uri }}" '
+            .containerDefinitions |= map(if .name == "api" then .image = $IMG else . end)
+            | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)
+          ' current.json > new.json
+          ARN=$(aws ecs register-task-definition --cli-input-json file://new.json --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "arn=$ARN" >> "$GITHUB_OUTPUT"
+          echo "Registered $ARN"
+
+      - name: Run database migrations (one-off task)
+        id: migrate
+        timeout-minutes: 20
+        run: |
+          set -euo pipefail
+          NET="awsvpcConfiguration={subnets=[${AWS_TASK_SUBNETS}],securityGroups=[${AWS_TASK_SECURITY_GROUP}],assignPublicIp=${AWS_TASK_ASSIGN_PUBLIC_IP}}"
+          RUN=$(aws ecs run-task \
+            --cluster "$AWS_ECS_CLUSTER" \
+            --task-definition "${{ steps.taskdef.outputs.arn }}" \
+            --launch-type FARGATE \
+            --network-configuration "$NET" \
+            --overrides '{"containerOverrides":[{"name":"api","command":["migrate"]}]}' \
+            --started-by "github-${GITHUB_RUN_ID}" \
+            --count 1)
+          TASK_ARN=$(echo "$RUN" | jq -r '.tasks[0].taskArn // empty')
+          if [ -z "$TASK_ARN" ]; then
+            echo "::error::Could not start the migration task: $(echo "$RUN" | jq -c '.failures')"
+            exit 1
+          fi
+          echo "Migration task: $TASK_ARN"
+          aws ecs wait tasks-stopped --cluster "$AWS_ECS_CLUSTER" --tasks "$TASK_ARN"
+          DESC=$(aws ecs describe-tasks --cluster "$AWS_ECS_CLUSTER" --tasks "$TASK_ARN")
+          EXIT_CODE=$(echo "$DESC" | jq -r '.tasks[0].containers[] | select(.name == "api") | .exitCode // "none"')
+          TASK_ID="${TASK_ARN##*/}"
+          echo "--- migration log (last lines) ---"
+          aws logs get-log-events --log-group-name "$AWS_LOG_GROUP" --log-stream-name "api/api/${TASK_ID}" --limit 60 --query 'events[].message' --output text || true
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "::error::Migration failed (exit code: $EXIT_CODE, reason: $(echo "$DESC" | jq -r '.tasks[0].stoppedReason')). The service was NOT updated; the old version is still running."
+            exit 1
+          fi
+
+      - name: Update the service and wait for the rollout
+        timeout-minutes: 25
+        run: |
+          set -euo pipefail
+          NEW="${{ steps.taskdef.outputs.arn }}"
+          CURRENT_COUNT=$(aws ecs describe-services --cluster "$AWS_ECS_CLUSTER" --services "$AWS_ECS_SERVICE" --query 'services[0].desiredCount' --output text)
+          COUNT_ARGS=()
+          if [ "$CURRENT_COUNT" = "0" ]; then
+            echo "Service has 0 tasks (first deploy): starting ${AWS_API_DESIRED_COUNT_FIRST}."
+            COUNT_ARGS=(--desired-count "$AWS_API_DESIRED_COUNT_FIRST")
+          fi
+          aws ecs update-service --cluster "$AWS_ECS_CLUSTER" --service "$AWS_ECS_SERVICE" --task-definition "$NEW" "${COUNT_ARGS[@]}" >/dev/null
+          DEADLINE=$((SECONDS + 1200))
+          while [ "$SECONDS" -lt "$DEADLINE" ]; do
+            STATE=$(aws ecs describe-services --cluster "$AWS_ECS_CLUSTER" --services "$AWS_ECS_SERVICE" \
+              --query "services[0].deployments[?taskDefinition=='${NEW}'].rolloutState | [0]" --output text)
+            echo "rollout state: $STATE"
+            if [ "$STATE" = "COMPLETED" ]; then
+              echo "Deployed $NEW"
+              exit 0
+            fi
+            if [ "$STATE" = "FAILED" ]; then
+              echo "::error::The new version failed its health checks. ECS rolled the service back to the previous version automatically. Look at the API log group ${AWS_LOG_GROUP}."
+              exit 1
+            fi
+            sleep 15
+          done
+          echo "::error::Timed out waiting for the rollout. Check the ECS service events in the AWS console."
+          exit 1
+
+      - name: Smoke test the API
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsS --max-time 10 "${AWS_API_URL}/health?deep=true"; then
+              echo
+              echo "API healthy."
+              exit 0
+            fi
+            echo "attempt $i failed; retrying in 15s"
+            sleep 15
+          done
+          echo "::error::${AWS_API_URL}/health did not answer 200 (is DNS set? see docs/infra/SETUP.md)."
+          exit 1
+
+  web:
+    name: Web app (build, S3, CloudFront)
+    needs: [api]
+    if: ${{ !cancelled() && (needs.api.result == 'success' || needs.api.result == 'skipped') && (inputs.target == 'all' || inputs.target == 'web') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SITE_BUCKET: ${{ vars.AWS_WEB_BUCKET }}
+      DISTRIBUTION_ID: ${{ vars.AWS_WEB_DISTRIBUTION_ID }}
+      SITE_URL: ${{ vars.AWS_WEB_URL }}
+      # Public build-time values (baked into the JavaScript; never put secrets here).
+      VITE_SITE_URL: ${{ vars.AWS_WEB_URL }}
+      VITE_STORE_DOMAIN: ${{ vars.VITE_STORE_DOMAIN }}
+      VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY }}
+    steps:
+      - name: Check configuration
+        env:
+          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          missing=""
+          for v in AWS_ROLE_ARN AWS_REGION SITE_BUCKET DISTRIBUTION_ID SITE_URL; do
+            if [ -z "${!v}" ]; then missing="$missing $v"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing GitHub variables:$missing (AWS_WEB_BUCKET, AWS_WEB_DISTRIBUTION_ID, AWS_WEB_URL...). See docs/infra/SETUP.md."
+            exit 1
+          fi
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
+
+      - uses: actions/setup-node@0a44ba7841725637a19e28fa30b79a866c81b0a6 # v4.0.4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the web app
+        run: pnpm turbo run build --filter=@fintranzact/web
+
+      - name: Sign in to AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Upload to S3 (assets first, pages last)
+        working-directory: apps/web/dist
+        run: |
+          set -euo pipefail
+          # 1. Hashed build assets: cache for a year.
+          if [ -d assets ]; then
+            aws s3 sync assets "s3://${SITE_BUCKET}/assets" --cache-control "public,max-age=31536000,immutable" --only-show-errors
+          fi
+          # 2. Other files (icons, robots, sitemap, images): short cache. Old hashed assets are kept for open tabs.
+          aws s3 sync . "s3://${SITE_BUCKET}" --exclude "assets/*" --exclude "*.html" --cache-control "public,max-age=300" --delete --only-show-errors
+          # 3. Pages last, never cached, so visitors never see a page pointing at assets that are not there yet.
+          aws s3 sync . "s3://${SITE_BUCKET}" --exclude "*" --include "*.html" --cache-control "no-cache" --only-show-errors
+
+      - name: Invalidate CloudFront
+        run: |
+          set -euo pipefail
+          INV=$(aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*" --query 'Invalidation.Id' --output text)
+          aws cloudfront wait invalidation-completed --distribution-id "$DISTRIBUTION_ID" --id "$INV"
+
+      - name: Smoke test the web app
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS --max-time 15 "${SITE_URL}/" | grep -q '<div id="root"'; then
+              echo "Web index is served."
+              # /api/plans is public: proves the CloudFront route to the API works.
+              curl -fsS --max-time 15 "${SITE_URL}/api/plans" >/dev/null
+              echo "Web to API route works."
+              exit 0
+            fi
+            echo "attempt $i failed; retrying in 10s"
+            sleep 10
+          done
+          echo "::error::${SITE_URL}/ did not serve the app (or ${SITE_URL}/api/plans failed)."
+          exit 1
+
+  store:
+    name: Online store (build, S3, CloudFront)
+    needs: [api]
+    if: ${{ !cancelled() && (needs.api.result == 'success' || needs.api.result == 'skipped') && (inputs.target == 'all' || inputs.target == 'store') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SITE_BUCKET: ${{ vars.AWS_STORE_BUCKET }}
+      DISTRIBUTION_ID: ${{ vars.AWS_STORE_DISTRIBUTION_ID }}
+      SITE_URL: ${{ vars.AWS_STORE_URL }}
+      VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY }}
+    steps:
+      - name: Check configuration
+        env:
+          AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          missing=""
+          for v in AWS_ROLE_ARN AWS_REGION SITE_BUCKET DISTRIBUTION_ID SITE_URL; do
+            if [ -z "${!v}" ]; then missing="$missing $v"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing GitHub variables:$missing (AWS_STORE_BUCKET, AWS_STORE_DISTRIBUTION_ID, AWS_STORE_URL...). See docs/infra/SETUP.md."
+            exit 1
+          fi
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
+
+      - uses: actions/setup-node@0a44ba7841725637a19e28fa30b79a866c81b0a6 # v4.0.4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the store
+        run: pnpm --filter @fintranzact/store build
+
+      - name: Sign in to AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Upload to S3 (assets first, pages last)
+        working-directory: apps/store/dist
+        run: |
+          set -euo pipefail
+          if [ -d assets ]; then
+            aws s3 sync assets "s3://${SITE_BUCKET}/assets" --cache-control "public,max-age=31536000,immutable" --only-show-errors
+          fi
+          aws s3 sync . "s3://${SITE_BUCKET}" --exclude "assets/*" --exclude "*.html" --cache-control "public,max-age=300" --delete --only-show-errors
+          aws s3 sync . "s3://${SITE_BUCKET}" --exclude "*" --include "*.html" --cache-control "no-cache" --only-show-errors
+
+      - name: Invalidate CloudFront
+        run: |
+          set -euo pipefail
+          INV=$(aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION_ID" --paths "/*" --query 'Invalidation.Id' --output text)
+          aws cloudfront wait invalidation-completed --distribution-id "$DISTRIBUTION_ID" --id "$INV"
+
+      - name: Smoke test the store
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS --max-time 15 "${SITE_URL}/some-store" | grep -q '<div id="root"'; then
+              echo "Store app is served."
+              exit 0
+            fi
+            echo "attempt $i failed; retrying in 10s"
+            sleep 10
+          done
+          echo "::error::${SITE_URL}/ did not serve the store app."
+          exit 1

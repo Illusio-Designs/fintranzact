@@ -16,9 +16,13 @@ export function TrialSettingsCard() {
   const [partnerDays, setPartnerDays] = useState("");
   const [ai, setAi] = useState("");
   const [payroll, setPayroll] = useState("");
+  // The fields are filled from the saved settings in an effect, one render after the data
+  // arrives. Until then they are empty, which must not read as invalid input.
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     if (!data) return;
+    setHydrated(true);
     setDays(String(data.days));
     setPartnerDays(String(data.partnerDays));
     setAi(String(data.caps.aiQuestions));
@@ -41,8 +45,8 @@ export function TrialSettingsCard() {
   const changed =
     !!data && (Number(days) !== data.days || Number(partnerDays) !== data.partnerDays || Number(ai) !== data.caps.aiQuestions || Number(payroll) !== data.caps.payrollEmployees);
   const dayHint = `Whole days, ${TRIAL_MIN_DAYS} to ${TRIAL_MAX_DAYS}`;
-  // No error toast while the saved figures are still loading (the fields start empty).
-  const bad = (v: string, min: number, max: number) => !!data && !(Number.isInteger(Number(v)) && v.trim() !== "" && Number(v) >= min && Number(v) <= max);
+  // No error toast until the saved figures are loaded and copied into the fields.
+  const bad = (v: string, min: number, max: number) => hydrated && !(Number.isInteger(Number(v)) && v.trim() !== "" && Number(v) >= min && Number(v) <= max);
 
   return (
     <section className="rounded-2xl border border-border-light bg-surface-0 p-4" aria-labelledby="trial-settings-heading">

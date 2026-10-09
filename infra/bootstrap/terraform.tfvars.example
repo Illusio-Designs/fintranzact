@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars (git-ignored). All of these have working defaults;
+# change only what differs for you. Nothing here is a secret.
+
+# project           = "fintranzact"
+# region            = "ap-south-1"
+# environments      = ["prod"]            # add "staging" when you create it
+# github_repository = "illusio-designs/fintranzact"
+# github_branch     = "main"
+# github_environments = ["production"]    # GitHub Environments that may deploy
+
+# Already have a GitHub OIDC provider in this AWS account? (one per account)
+# create_github_oidc_provider       = false
+# existing_github_oidc_provider_arn = "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
+
+# Let GitHub Actions run `terraform plan` on pull requests (read-only role).
+# enable_plan_role = true
