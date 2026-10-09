@@ -1,0 +1,18 @@
+# Files Semgrep does not scan (CI job "Static analysis").
+node_modules/
+dist/
+build/
+.turbo/
+coverage/
+target/
+pnpm-lock.yaml
+# Fixtures that contain the bad patterns on purpose
+security/semgrep/
+# Test code: fake keys and deliberately unsafe input live here. Secrets in tests are covered by gitleaks.
+__tests__/
+*.test.ts
+*.test.tsx
+*.spec.ts
+# Generated and vendored
+packages/db/drizzle/
+apps/desktop/src-tauri/

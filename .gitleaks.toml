@@ -1,0 +1,51 @@
+# gitleaks configuration for CI job "Secret scan" (.github/workflows/security.yml).
+# Starts from the default ruleset and only adds NARROW allowlists for known fake values.
+# Never allowlist a whole directory of source code. If a real secret is found: rotate it first,
+# then remove it; adding it here is not a fix. See docs/security/vulnerability-management.md.
+title = "Fintranzact gitleaks config"
+
+[extend]
+useDefault = true
+
+# 1. Placeholders and made-up example values that appear in API documentation, the developer pages,
+#    help articles and seed data. Each regex is matched against the secret value only.
+[[allowlists]]
+description = "Documentation placeholders and fake example credentials"
+condition = "OR"
+regexTarget = "secret"
+regexes = [
+  '''^YOUR_[A-Z0-9_]+$''',                                  # YOUR_SESSION_TOKEN, YOUR_API_KEY ...
+  '''^abc123def456ghi789jkl012mno345pq[a-z0-9]*$''',       # docs example ids
+  '''^(hisaabo|fintranzact)_key_[a-z0-9_]*(abc|xyz|testkey)[a-z0-9_.]*$''',  # docs example API keys (not issued by us)
+  '''^sess_VbK2mQ9xP4nR7wA1''',                             # docs example session token
+  '''^at_q3Vx9mK2pL7wR4nT8yB1cD6fH0jZ5sA2eG9uI4oP7kM3xN8vQ1wE6rT0y''',  # docs example access token
+  '''^eyJhbGciOiJIUzI1NiIs''',                              # docs example JWT-shaped string
+  '''^key_test_abcdef1234567890$''',                        # docs example Sandbox test key
+  '''^secret_zyxwvu9876543210$''',
+  '''^20\d\d-\d\d-[a-z0-9-]+$''',                            # roadmap slugs that look like keys
+]
+
+# 2. Fake keys inside automated tests only (fixtures, never real credentials).
+[[allowlists]]
+description = "Fake credentials in test files"
+condition = "AND"
+paths = [
+  '''(^|/)__tests__/''',
+  '''\.(test|spec)\.tsx?$''',
+  '''^e2e/''',
+]
+regexTarget = "match"
+regexes = [
+  '''(?i)(test|fake|dummy|example|fixture|placeholder|0011223344|aaaaaaaa|bbbbbbbb|abcdef|eyJhbGciOiJIUzI1NiJ9)''',
+]
+
+# 3. The all-zero/sequential key used only by the unit-test fallback in field-encryption.ts.
+[[allowlists]]
+description = "Fixed test-only encryption key (used only when NODE_ENV=test)"
+regexTarget = "secret"
+regexes = ['''^00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff$''']
+
+# 4. Environment templates hold empty or placeholder values by design.
+[[allowlists]]
+description = "Env templates"
+paths = ['''^\.env(\.prod)?\.example$''']

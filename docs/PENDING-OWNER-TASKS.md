@@ -46,7 +46,7 @@ never commit it, never paste it in chat).
 | `DATABASE_URL` | Reference to the Railway Postgres `DATABASE_URL` | Fills itself when referenced |
 | `NODE_ENV` | `production` | |
 | `PORT` | `3000` | |
-| `ENCRYPTION_KEY` | 64 hex characters | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Never change it later: saved Razorpay and e-invoice credentials become unreadable |
+| `ENCRYPTION_KEY` | 64 hex characters | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. Do not just replace it later (saved Razorpay and e-invoice credentials would become unreadable): rotate it with [`docs/security/key-rotation.md`](security/key-rotation.md), see section 20 |
 | `CORS_ORIGINS` | Your web address, e.g. `https://fintranzact-web.vercel.app` | |
 | `APP_URL` | Same web address | Used for email links and for sending customers back after paying |
 | `API_URL` | Your public API address, `https://fintranzact-production.up.railway.app` | Shown in the webhook URLs businesses copy |
@@ -537,3 +537,63 @@ because the AWS account does not exist. These steps need you. Full detail and ex
     (it leaves India; ask your lawyer or CA) and on the load-balancer firewall.
 14. **Make a quarterly calendar item** for the backup restore test and a monthly one to read the AWS bill.
 15. **Turn on MFA on every other account** that can change production (GitHub, Razorpay, Sandbox, Resend, Cloudflare, domain registrar, email).
+
+## 20. Security: what only you can do (and the yearly key rotation)
+
+The security documents are in `docs/security/` (start with `README.md`, which lists
+what is in place and what is only planned). The code now scans every change for
+vulnerable dependencies, risky code, leaked secrets and image problems, and the
+encryption key can be rotated. The items below cannot be done from the repository.
+Tick them off and keep the evidence (screenshots, reports) in one folder.
+
+1. **Check the new "Security" workflow on GitHub.** Open the Actions tab after the
+   first run. The checkout action is pinned by a commit SHA written without network
+   access: confirm it with `git ls-remote https://github.com/actions/checkout v4.2.2`.
+   Fix anything red, then add Dependency audit, Static analysis, Secret scan and Image
+   scan to the required checks of the `main` branch. Confirm the other branch
+   protection settings listed in `docs/security/change-management.md`.
+2. **Independent penetration test** before real customers rely on the product, and
+   then every year. Give the tester a staging copy, not production. Keep the report
+   and the fix list.
+3. **AWS account hardening** (when you move to AWS): root user with MFA and no access
+   keys; named admin users with MFA; CloudTrail on in all regions with logs kept 180
+   days; GuardDuty on; a WAF in front of the API; RDS and EBS encrypted; databases in
+   private subnets; security groups that open only 443 to the load balancer and the
+   database port only to the API; billing alerts; Amazon Time Sync Service (CERT-In
+   asks for clocks synced to NTP).
+4. **Turn on MFA on every account:** GitHub, Railway, Vercel, AWS, Razorpay, Sandbox.co.in,
+   Resend, MSG91, Anthropic console, Cloudflare, the domain registrar, your email.
+5. **Backups with a restore test.** Confirm what backs up production today, that
+   backups are encrypted and copied to another region or provider, and do the first
+   restore test (`docs/security/backup-and-recovery.md`). Put the quarterly restore
+   test in your calendar.
+6. **Secrets manager.** Plan the move of the environment variables to AWS Secrets
+   Manager or SSM (`docs/security/secrets-management.md`). Until then, limit who can
+   open the Railway variables screen.
+7. **Rotate the encryption key yearly.** Runbook in `docs/security/key-rotation.md`:
+   old key into `ENCRYPTION_KEYS_PREVIOUS`, new key in `ENCRYPTION_KEY`, deploy, run
+   `pnpm --filter @fintranzact/api exec tsx src/bin/rotate-encryption-key.ts --dry-run`
+   then without `--dry-run`, check it ends with "problems: 0", and remove the old key
+   only after the backups that need it have expired. Do one rehearsal on a restored
+   copy first. Do NOT roll the app back to a build older than this release after
+   values have been re-written (they use a new format older builds cannot read).
+8. **DPDP notice and consent text.** Have a lawyer review the privacy notice, the
+   consent wording for employee selfies and location, the customer terms (who is
+   controller and who is processor) and the retention periods before about May 2027.
+   Collect data-processing terms from each vendor listed in
+   `docs/security/third-parties-and-data-flows.md` and fill in the blanks there.
+9. **App store data-safety forms** (Play Store data safety, App Store privacy
+   labels): use `docs/security/third-parties-and-data-flows.md` and
+   `data-classification-and-handling.md` (camera for the check-in selfie, precise
+   location at a punch, microphone only on the web for voice input, contact and
+   financial info, data not sold, encrypted in transit).
+10. **CERT-In point of contact.** Designate a person, register the contact details
+    with CERT-In as the Directions require, and fill the contacts table in
+    `docs/security/incident-response-plan.md`. Read the 6-hour rule to everyone who
+    can notice an incident.
+11. **Decide the open items** the documents mark with [brackets]: security owner,
+    incident roles and phone numbers, RPO and RTO targets, log retention store,
+    retention periods, and who approves the policy.
+12. **Employee Aadhaar, PAN and bank numbers are stored as plain columns** (masked in
+    screens). Decide whether to store them at all, and if yes ask for field
+    encryption for them as the next security build (`docs/security/key-rotation.md`).

@@ -21,6 +21,9 @@ This folder contains **internal architecture documents, audit reports, and desig
 - [`ACCOUNTANT-ACCESS.md`](ACCOUNTANT-ACCESS.md) — Accountant roles (bookkeeping, read-only auditor, filing-only CA), their grants, the mutation backstop and its allowlist, how to add a filing procedure, enum migration note
 - [`TWO-FACTOR.md`](TWO-FACTOR.md) — Two-factor authentication: tables, enrolment procedures, error codes, lockout, replay guards and key handling (`ENCRYPTION_KEY`, backup codes independent of it)
 
+### Security
+- [`security/README.md`](security/README.md) — Security document pack: policy, data classification, access control, retention and deletion, incident response (CERT-In 6-hour and DPDP 72-hour clocks), vulnerability management, encryption key rotation, backup and recovery, change management, vendors and data flows, logging, secrets, calendar, questionnaire answers, HTTP headers; with a control status table that says what is in place and what is only planned
+
 ### Audits
 - [`compliance-audit.md`](compliance-audit.md) — Indian regulatory compliance assessment (GST, DPDPA, financial accuracy)
 - [`security-cross-tenant-audit.md`](security-cross-tenant-audit.md) — Multi-tenant isolation verification (every endpoint checked)

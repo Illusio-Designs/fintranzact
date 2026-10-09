@@ -1,0 +1,37 @@
+{
+  "$comment": "Reviewed exceptions to the dependency audit (docs/security/vulnerability-management.md). Each entry needs advisory (GHSA id), package, reason, owner, added (YYYY-MM-DD) and expires (YYYY-MM-DD, at most 90 days after added). The CI job fails when an entry has expired. Prefer upgrading the dependency over adding an entry.",
+  "entries": [
+    {
+      "advisory": "GHSA-VFJ7-8CJW-P6XM",
+      "package": "braces",
+      "reason": "braces 3.0.3 comes in through micromatch inside Expo's CLI and Metro bundler (apps/mobile build tooling, run on a developer or CI machine, never in the shipped app or the server) and no fixed 3.x release exists yet. Re-check each week; upgrade Expo when a fix lands.",
+      "owner": "[security owner]",
+      "added": "2026-10-09",
+      "expires": "2027-01-07"
+    },
+    {
+      "advisory": "GHSA-86W9-CPQP-85RV",
+      "package": "node-forge",
+      "reason": "node-forge 1.4.0 comes in through @expo/code-signing-certificates inside the Expo CLI (mobile build tooling only, signs nothing for customers' data) and no fixed release exists yet. Upgrade when one is published.",
+      "owner": "[security owner]",
+      "added": "2026-10-09",
+      "expires": "2027-01-07"
+    },
+    {
+      "advisory": "GHSA-5P2G-FCMC-QVQQ",
+      "package": "image-size",
+      "reason": "image-size 1.2.1 comes in through the Metro bundler (mobile build tooling). The fix is in 2.x, a major upgrade Metro has to make itself; it reads local project images only. Upgrade Expo/Metro when it moves to image-size 2.",
+      "owner": "[security owner]",
+      "added": "2026-10-09",
+      "expires": "2027-01-07"
+    },
+    {
+      "advisory": "GHSA-W3RX-R6R6-PGPR",
+      "package": "image-size",
+      "reason": "Same dependency and reason as GHSA-5P2G-FCMC-QVQQ above (Metro bundler, mobile build tooling, fix needs image-size 2.x).",
+      "owner": "[security owner]",
+      "added": "2026-10-09",
+      "expires": "2027-01-07"
+    }
+  ]
+}
