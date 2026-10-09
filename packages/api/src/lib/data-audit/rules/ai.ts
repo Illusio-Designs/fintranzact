@@ -11,6 +11,12 @@ export const aiTables: TableCoverage[] = [
       "A conversation is a title, its owner (a plain user id, users live in the control database) and two timestamps; nothing is derived and nothing must reconcile.",
   },
   {
+    table: "ai_user_prefs",
+    rules: [],
+    noExtraRequirements:
+      "A person's reply language and tips switch (one row per business and person, a plain user id); nothing is derived and nothing must reconcile.",
+  },
+  {
     table: "ai_pending_actions",
     rules: [
       rule("ai_pending_actions", "confirmed-has-result", "warning",

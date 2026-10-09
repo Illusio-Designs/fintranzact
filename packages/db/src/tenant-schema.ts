@@ -3259,6 +3259,24 @@ export const aiMessages = pgTable("ai_messages", {
   index("ai_messages_conversation_idx").on(t.conversationId, t.createdAt),
 ]);
 
+// ── AI business assistant, Phase 3: per-person preferences ─────────
+// One row per (business, person): the reply language for the assistant and
+// whether the dashboard shows its proactive tips. No row = defaults (language
+// "auto", tips on). Private to the person; not part of the data export (like
+// conversations). See docs/architecture/ai-assistant.md.
+
+export const aiUserPrefs = pgTable("ai_user_prefs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull(),
+  /** auto | en | hi | gu | hinglish (validated by the shared aiLanguageSchema on write and read). */
+  language: text("language").notNull().default("auto"),
+  tipsEnabled: boolean("tips_enabled").notNull().default(true),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (t) => [
+  uniqueIndex("ai_user_prefs_user_uq").on(t.businessId, t.userId),
+]);
+
 // ── AI business assistant, Phase 2: pending actions ────────────────
 // A PROPOSAL the assistant prepared for one person to review: never a
 // write. The payload is validated against the same zod input the real tRPC
