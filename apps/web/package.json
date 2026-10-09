@@ -32,7 +32,7 @@
     "goey-toast": "^0.5.0",
     "jszip": "^3.10.1",
     "papaparse": "^5.5.3",
-    "pdfjs-dist": "^5.5.207",
+    "pdfjs-dist": "^6.4.299",
     "prismjs": "^1.29.0",
     "react": "^19.0.0",
     "react-dom": "^19.2.4",
