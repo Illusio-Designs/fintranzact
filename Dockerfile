@@ -59,10 +59,13 @@ COPY packages/db/drizzle-tenant/ packages/db/drizzle-tenant/
 # -- Shared package: package.json only (code is inlined by tsup)
 COPY packages/shared/package.json packages/shared/
 
-# Install production deps only — keeps the image lean (no tsup, vitest, etc.)
+# Install production deps only, which keeps the image lean (no tsup, vitest, etc.).
+# `--prod` is explicit: NODE_ENV=production is only set further down, so without it
+# pnpm also installed every devDependency (vitest, vite, esbuild...) into the runtime
+# image, which the image scan correctly flagged.
 # argon2 needs a rebuild on alpine (native addon).
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store,id=s/0f05d75b-399b-48ea-b2c4-bb88b6255a91-/root/.local/share/pnpm/store \
- pnpm install 
+ pnpm install --prod
 
 # ── Smoke test: catch module resolution errors at build time ──
 # This would have caught the control-schema.js error before deployment.
@@ -70,6 +73,13 @@ RUN node --check packages/api/dist/server.js && \
     node -e "import('file:///app/packages/api/dist/server.js').catch(e => { \
       if (e.code === 'ERR_MODULE_NOT_FOUND') { console.error('FATAL:', e.message); process.exit(1); } \
     })"
+
+# The runtime only ever runs `node` (entrypoint, migrations, server) and `wget` (health
+# check). Remove the package managers so their bundled dependencies (npm's tar, glob,
+# cross-spawn..., and pnpm itself) are not shipped and cannot be used from a shell.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+      /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/pnpm /usr/local/bin/pnpx \
+      /root/.cache/node/corepack /root/.local/share/pnpm
 
 # Copy entrypoint
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
