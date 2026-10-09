@@ -18,7 +18,12 @@ export const DEFAULT_RESOURCE_POLICY = "same-origin";
 
 export function apiSecureHeaders(): MiddlewareHandler[] {
   return [
-    secureHeaders({ crossOriginResourcePolicy: false }),
+    secureHeaders({
+      crossOriginResourcePolicy: false,
+      // Same policy as the web app (apps/web/vercel.json): the browser features the product uses
+      // (AI voice, mobile check-in selfie and location) are for our own origin only.
+      permissionsPolicy: { camera: ["self"], microphone: ["self"], geolocation: ["self"] },
+    }),
     async (c, next) => {
       await next();
       if (!c.res.headers.has("Cross-Origin-Resource-Policy")) {
