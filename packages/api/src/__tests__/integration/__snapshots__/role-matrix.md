@@ -15,9 +15,12 @@
 | ai.conversation | query | authorized | read:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | ai.conversations | query | authorized | read:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | ai.deleteConversation | mutation | authorized | create:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| ai.preferences | query | authorized | read:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | ai.settings | query | tenant | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | ai.status | query | authorized | read:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| ai.tips | query | authorized | read:Ai, read:Invoice, read:Report | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | ai.updateAction | mutation | authorized | create:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+| ai.updatePreferences | mutation | authorized | create:Ai | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
 | ai.updateSettings | mutation | tenant | — (+ org owner only) | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
 | apiKey.create | mutation | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | apiKey.list | query | protected | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |

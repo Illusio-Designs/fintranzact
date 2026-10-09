@@ -1,6 +1,6 @@
 ---
 title: Ask Fintranzact AI
-description: "Ask questions about your business in plain English, Hindi or Hinglish and get answers from your live data, or have it prepare an invoice, payment, party, item or reminder for you to confirm. What it can do, the confirmation card, its limits, privacy and the owner's controls."
+description: "Ask questions about your business in English, Hindi, Gujarati or Hinglish, by typing or speaking, and get answers from your live data and the help centre, or have it prepare an invoice, payment, party, item or reminder for you to confirm. Tips on your dashboard, what it can do, the confirmation card, its limits, privacy and the owner's controls."
 sidebar:
   order: 5
 ---
@@ -23,7 +23,7 @@ If you do not see the button, your role does not include the assistant (the audi
 
 ## What you can ask
 
-Ask in English, Hindi or Hinglish. It answers in the language you asked in.
+Ask in English, Hindi, Gujarati or Hinglish (Hindi in English letters). By default it answers in the language you asked in; you can choose the language instead, see Reply language below.
 
 | You can ask | For example |
 |---|---|
@@ -37,8 +37,60 @@ Ask in English, Hindi or Hinglish. It answers in the language you asked in.
 | Comparisons | "Compare this month's sales with last month" |
 | Lookups | "Find invoice INV-12", "What does Asha Traders owe?" |
 | Recent activity | "What was entered in the last 7 days?" |
+| How to use Fintranzact | "How do I create an invoice?", "Where do I record a payment?" (answered from the help centre, with a link to the article) |
 
-The panel suggests a few questions to start with. Tap one to ask it.
+The panel suggests a few questions to start with, in your reply language. Tap one to ask it.
+
+## Speak your question
+
+If your browser supports it, a **microphone** button sits next to the question box.
+
+1. Tap the microphone and allow microphone access if your browser asks.
+2. Speak your question. The words appear in the box as you speak.
+3. Tap the microphone again, or press **Esc**, to stop. It also stops by itself when you pause.
+4. Read the text, fix anything it heard wrongly, and press **Send**.
+
+Nothing is sent until you press Send. A question you speak counts as one question, exactly like one you type.
+
+- The microphone listens for your reply language: English and Hinglish are heard as Indian English, Hindi as Hindi, Gujarati as Gujarati. Change it under Reply language below.
+- If the microphone button is missing, your browser has no speech recognition (Chrome, Edge and Safari have it; Firefox does not). Type your question instead.
+- If it says the microphone is blocked, allow microphone access for this site in your browser's settings and try again. If it says it could not hear you, check your microphone or move closer. If it asks for an internet connection, your browser's speech service could not be reached.
+- Voice input is on the web app only for now. The mobile app does not have the assistant yet.
+
+**Privacy of your voice.** Voice input uses your browser's own speech recognition. Fintranzact does not receive, record or keep your audio. Depending on your browser, the browser itself may send what you say to its maker's speech service (for example Google for Chrome, Microsoft for Edge, Apple for Safari) to turn it into text, under that company's terms. Only the text that ends up in the box is sent to Fintranzact, when you press Send.
+
+## Reply language
+
+Open **Preferences** (the gear button at the top of the panel) and choose **Reply language**:
+
+| Choice | The assistant replies in |
+|---|---|
+| Auto | The language of your question: English, Hindi, Gujarati or Hinglish |
+| English | English |
+| Hindi | Hindi, in Devanagari |
+| Gujarati | Gujarati, in Gujarati script |
+| Hinglish | Hindi written in English letters |
+
+Amounts always use the ₹ sign and lakh and crore grouping, for example ₹12,34,567.50. Amounts, dates, names and invoice numbers are copied exactly from your books and are never translated. Terms such as GST, GSTIN, HSN and e-way bill stay as they are. The setting belongs to you and does not change anyone else's.
+
+The assistant is an AI model, so its Hindi and Gujarati can still contain mistakes. Check important figures against the report it names.
+
+## Tips on your dashboard
+
+The dashboard can show a **Tips from your assistant** card: a few short, useful things worked out from your books, without you asking.
+
+- **Overdue invoices**: how many, how much is owed, and how long the oldest has been overdue.
+- **Low stock**: how many items are at or below their reorder level.
+- **Expiring batches**: batches that have expired or will expire in the next 30 days.
+- **GST due dates**: GSTR-1 (11th) and GSTR-3B (20th) for the month just ended, in the week before they are due, if you are registered for regular GST and had sales that month. Due dates are often extended, so check with your CA.
+
+Each tip links to the report behind it, and **Ask AI about this** opens the assistant with a question filled in for you to send. Tips are worked out by Fintranzact from your books. They **do not use up your questions**, and they show even when your monthly questions have run out. They only use what **you** are allowed to see: if your role cannot open a report, you get no tip from it. Payroll is never part of tips.
+
+You can **Dismiss for today** on a tip and **Hide** the card; both are remembered in this browser. To switch tips off for yourself, choose **Turn tips off** on the card, or untick **Show tips on my dashboard** in Preferences. This affects only you. If the owner has switched the assistant off for the organisation or your role, you get no tips either.
+
+## Ask "how do I...?"
+
+Ask how to do something in Fintranzact, for example "How do I record a payment?" or "Batch expiry kaise set karein?". The assistant looks in the help centre, gives you a short summary of the steps and links to the article, which opens in a new tab. Questions about your own figures are answered from your books instead. If it cannot find a matching article it says so rather than guessing.
 
 ## Have it prepare work for you
 
@@ -86,7 +138,7 @@ Answers stream in as they are written. Press **Stop** to end one early.
 - It never saves, sends, changes or deletes anything on its own. It can only prepare the actions listed above, and only you can confirm them. It cannot edit or delete an existing invoice, payment or party, and it cannot do anything else in the app: use the normal screens.
 - It never makes up numbers. If it cannot find something, it says so.
 - It is not a tax or legal adviser. For filing and tax decisions, check with your CA. A GST payable figure comes from your books and may differ from a filed return.
-- It does not answer questions that are not about your business.
+- It does not answer questions that are not about your business or about using Fintranzact.
 - Payroll is not included.
 
 ## Your permissions still apply
@@ -130,7 +182,7 @@ Every question and each lookup the assistant makes is recorded in the activity l
 
 ## Privacy
 
-To answer, we send the AI provider your question and only the figures and names needed to answer it. We do not use your data to train AI models. Names and notes in your books are treated as data, never as instructions. Please do not type passwords, PAN, Aadhaar or bank account numbers into the chat: the assistant never asks for them and does not receive them from your books.
+To answer, we send the AI provider your question and only the figures and names needed to answer it. We do not use your data to train AI models. Names and notes in your books are treated as data, never as instructions. Please do not type passwords, PAN, Aadhaar or bank account numbers into the chat: the assistant never asks for them and does not receive them from your books. Voice input uses your browser's own speech recognition and Fintranzact does not receive your audio (see Speak your question above).
 
 ## Using it from your own tools
 

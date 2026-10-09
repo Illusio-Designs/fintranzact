@@ -7,7 +7,7 @@
  * Goes to the STRONG model when any of these holds:
  *  - the question is long (over 220 characters),
  *  - it asks for a comparison, a trend, a reason, a forecast, a recommendation
- *    or an explanation (English, Hindi or Hinglish keywords below),
+ *    or an explanation (English, Hindi, Gujarati or Hinglish keywords below),
  *  - it asks several things at once (two or more question marks, or "and then"),
  *  - it names three or more different measures in one go.
  * Everything else ("how much did Asha Traders owe me?", "is mahine ki sales
@@ -53,11 +53,16 @@ const ANALYSIS_WORDS = [
   "salah", "kya karna chahiye", "kaaran",
   // Hindi (Devanagari)
   "तुलना", "क्यों", "विश्लेषण", "बढ़ोतरी", "पिछले महीने से", "सलाह", "कारण",
+  // Gujarati (Gujarati script)
+  "સરખામણી", "કેમ ", "શા માટે", "વિશ્લેષણ", "વૃદ્ધિ", "ઘટાડો", "ગયા મહિના કરતાં", "સલાહ", "કારણ", "અંદાજ", "શું ફેરફાર",
+  // Gujarati (Roman letters)
+  "sarkhamani", "shu karvu joie", "shu pherfar",
 ];
 
 const MEASURES = [
   "sales", "purchase", "expense", "profit", "receivable", "payable", "outstanding", "stock", "gst", "tax", "cash", "bank",
   "bikri", "kharid", "kharcha", "munafa", "udhaar", "baaki", "maal", "बिक्री", "खर्च", "मुनाफा", "उधार", "बाकी",
+  "વેચાણ", "ખરીદી", "ખર્ચ", "નફો", "ઉધાર", "બાકી", "માલ", "સ્ટોક", "રોકડ", "બેંક",
 ];
 
 export function chooseAiModel(question: string, models: AiModels, opts: { historyTurns?: number } = {}): AiModelChoice {
@@ -67,7 +72,7 @@ export function chooseAiModel(question: string, models: AiModels, opts: { histor
   if (question.length > LONG_QUESTION_CHARS) return strong("long question");
   const hit = ANALYSIS_WORDS.find((w) => q.includes(w));
   if (hit) return strong(`analysis: "${hit.trim()}"`);
-  if ((question.match(/[?？]/g) ?? []).length >= 2 || / and then | aur phir | phir /.test(q)) return strong("several questions at once");
+  if ((question.match(/[?？]/g) ?? []).length >= 2 || / and then | aur phir | phir | અને પછી /.test(q)) return strong("several questions at once");
   const measures = new Set(MEASURES.filter((m) => q.includes(m)));
   if (measures.size >= 3) return strong("several measures");
   return { model: models.fast, tier: "fast", reason: (opts.historyTurns ?? 0) > 0 ? "simple follow-up" : "simple lookup" };

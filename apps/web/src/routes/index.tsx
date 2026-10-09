@@ -17,6 +17,7 @@ import { canAccess } from "@/lib/permissions";
 import { formatCurrency, cn, formatDateShort, formatMonthYearShort } from "@/lib/utils";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { AskAiButton } from "@/components/ai/AskAiButton";
+import { AiTipsCard } from "@/components/ai/AiTipsCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PillTabs } from "@/components/ui/Tabs";
 import { DateRangeBar } from "@/components/ui/DateRangeBar";
@@ -1521,6 +1522,9 @@ function DashboardPage() {
         {isSellerRole && myTargets.length > 0 && (
           <TargetsWidget targets={myTargets} />
         )}
+
+        {/* Proactive tips from the AI assistant (hidden unless the add-on is available and tips are on) */}
+        <AiTipsCard role={session?.role} />
 
         {/* Overdue invoices alert */}
         {overdueCount > 0 && (

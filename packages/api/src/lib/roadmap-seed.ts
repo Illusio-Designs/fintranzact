@@ -2826,6 +2826,41 @@ export const ROADMAP_PROGRESS: { key: string; updates: RoadmapProgress[] }[] = [
       },
     ],
   },
+  {
+    key: "2026-10-15-ai-phase-3",
+    updates: [
+      {
+        // Built and tested on the WEB (shared unit tests, API unit and integration tests against Postgres with a
+        // scripted fake provider, web component tests with a mock SpeechRecognition). The real Anthropic API, a real
+        // microphone, a real speech engine and a real browser were never used when this was written. Gated by the AI
+        // add-on (ADDON_FEATURES.ai_assistant and ai_plus `implemented` stay false).
+        // NOT ticked: "Voice input on web and mobile". Web voice input is built (the browser's own Web Speech
+        // API, nothing recorded or sent by us, the transcript only fills the box), but the native app has no
+        // assistant screen at all, so there is no mobile half: it needs an SSE client for React Native, the card
+        // components and an on-device speech module (a new native build), which is a separate piece of work.
+        // "Hindi replies" and "Gujarati replies": built are the reply-language rule in the system prompt (script,
+        // Indian grouping, names and figures copied, legal terms kept), the per-person language preference, localised
+        // starter questions, the model-router keywords and the speech recognition language (hi-IN, gu-IN). How well
+        // the LIVE model writes Hindi and Gujarati is NOT verified; that needs real users once the key is set (owner
+        // tasks, section 21). "Proactive dashboard tips": a deterministic ai.tips query (no model, no question used)
+        // for overdue invoices, items below reorder level, expiring or expired batches and GST returns near the
+        // 11th and 20th, through the person's own permissions, cached 5 minutes, on the web dashboard only (no mobile
+        // dashboard card). The business records no filing frequency, so GST tips assume monthly filing.
+        // "Help-centre answers with article links": a read-only search_help tool over a generated help index and a
+        // validated `help` link kind. "Switch off tips per user": a per-person switch beside the owner's
+        // organisation and role switches.
+        title: "AI business assistant — Phase 3: voice, languages and proactive tips",
+        status: "in_progress",
+        done: [
+          "Hindi replies",
+          "Gujarati replies",
+          "Proactive dashboard tips (overdue, low stock, expiring batches, GST due)",
+          "Help-centre answers with article links",
+          "Switch off tips per user",
+        ],
+      },
+    ],
+  },
 ];
 
 /** Titles pulled to the front of their stage/priority group, in build order. */

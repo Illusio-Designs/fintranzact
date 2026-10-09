@@ -91,16 +91,21 @@ export function AiBarChart({ card }: { card: AiBarChartCard }) {
 
 export function AiLink({ card, onNavigate }: { card: AiLinkCard; onNavigate?: () => void }) {
   const href = aiLinkHref(card);
+  // A help article opens in a new tab so the chat (and the page behind it) stay where they are.
+  const isHelp = card.target.kind === "help";
   return (
     <Link
       to={href.to as never}
       search={href.search as never}
-      onClick={onNavigate}
+      onClick={isHelp ? undefined : onNavigate}
+      {...(isHelp ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+      data-link-kind={card.target.kind}
       className="inline-flex items-center gap-1 rounded-lg border border-border-light bg-surface-0 px-3 py-1.5 text-xs font-medium text-brand-600 hover:bg-surface-1 hover:underline dark:text-brand-400"
       data-testid="ai-card-link"
     >
       {card.label}
-      <span aria-hidden="true">→</span>
+      {isHelp && <span className="sr-only"> (help article, opens in a new tab)</span>}
+      <span aria-hidden="true">{isHelp ? "↗" : "→"}</span>
     </Link>
   );
 }

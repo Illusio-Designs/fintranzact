@@ -43,3 +43,6 @@ export * from "./payroll-self.js";
 export * from "./payroll-phase4.js";
 export * from "./ai.js";
 export * from "./ai-actions.js";
+export * from "./ai-language.js";
+export * from "./ai-tips.js";
+export * from "./ai-help.js";

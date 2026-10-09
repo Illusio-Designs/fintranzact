@@ -46,6 +46,7 @@ import { defineAbilityFor } from "../lib/permissions.js";
 import { newAiLoopState, runAiLoop } from "../lib/ai/loop.js";
 import { auditToolCall, finishQuestion, refundPending } from "../lib/ai/service.js";
 import { loadAiAccount } from "../lib/ai/quota.js";
+import { getAiUserPrefs } from "../lib/ai/prefs.js";
 import { getEntitlements } from "../lib/entitlements.js";
 import { businesses } from "@fintranzact/db";
 import { eq } from "drizzle-orm";
@@ -176,7 +177,10 @@ export function registerAiStreamRoute(app: Hono, opts: AiStreamOptions = {}): vo
                 conversationId: begun.conversationId, kinds: begun.actionKinds, proposed: { count: 0 },
               }
             : undefined;
+        // The person's stored reply language (never taken from the request): only a value from the fixed list gets into the prompt.
+        const prefs = await getAiUserPrefs(db, businessId, userId).catch(() => null);
         const system = buildSystemPrompt({
+          language: prefs?.language ?? "auto",
           today: `${today.year}-${String(today.month).padStart(2, "0")}-${String(today.day).padStart(2, "0")}`,
           businessName: biz?.name ?? "this business",
           actions: begun.actionKinds,
