@@ -31,6 +31,7 @@ import {
   recomputeAmountPaid,
   type RecomputeWarning,
 } from "./recomputeDerived.js";
+import { encryptSensitive } from "./field-encryption.js";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -375,7 +376,16 @@ export async function importTenantBackup(
   try {
     await tenantDb.transaction(async (tx) => {
       for (const entry of TABLE_REGISTRY) {
-        const rows = parsedRows.get(entry.tableName) ?? [];
+        const parsed = parsedRows.get(entry.tableName) ?? [];
+        // Identity and bank numbers travel in plain text in the file and are encrypted at rest here.
+        const encryptedFields = entry.encryptedFields ?? [];
+        const rows = encryptedFields.length
+          ? parsed.map((r) => {
+              const row = { ...(r as Record<string, unknown>) };
+              for (const f of encryptedFields) if (typeof row[f] === "string") row[f] = encryptSensitive(row[f] as string);
+              return row;
+            })
+          : parsed;
 
         if (!entry.importable) {
           rowsSkipped[entry.tableName] = rows.length;

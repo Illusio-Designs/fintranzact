@@ -47,6 +47,7 @@ import {
 } from "@fintranzact/shared";
 import { assertPeriodOpen } from "../period-lock.js";
 import { badRequest, notFound } from "./access.js";
+import { decryptSensitive } from "../field-encryption.js";
 import { bookDate, cashOrBankAccountId, ensurePayrollAccounts, moveBank, writeJournalEntry } from "./books.js";
 import { loadStatutoryRates } from "./statutory.js";
 import type { Actor } from "./run.js";
@@ -450,7 +451,7 @@ export async function bonusBankFile(db: TenantDatabase, businessId: string, id: 
   const built = buildBankPaymentCsv(
     payable.map((l) => {
       const e = empById.get(l.employeeId);
-      return { employeeCode: l.employeeCode, beneficiaryName: e?.bankAccountName || l.employeeName, accountNumber: e?.bankAccountNumber ?? "", ifsc: e?.bankIfsc ?? "", amountPaise: rupeesToPaise(l.bonus), narration: `Bonus ${label}` };
+      return { employeeCode: l.employeeCode, beneficiaryName: e?.bankAccountName || l.employeeName, accountNumber: decryptSensitive(e?.bankAccountNumber) ?? "", ifsc: e?.bankIfsc ?? "", amountPaise: rupeesToPaise(l.bonus), narration: `Bonus ${label}` };
     }),
   );
   return { filename: `bonus-${label}.csv`, contentType: "text/csv" as const, csv: built.csv, count: built.count, total: paiseToRupees(built.totalPaise), skipped: built.skipped };

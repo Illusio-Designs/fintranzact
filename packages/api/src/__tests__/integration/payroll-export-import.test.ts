@@ -8,7 +8,7 @@
  * from before Phase 2 (no statutory columns) still imports with the defaults.
  */
 
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Hono } from "hono";
 import { createHash } from "node:crypto";
 import zlib from "node:zlib";
@@ -16,6 +16,7 @@ import { Readable } from "node:stream";
 import { promisify } from "node:util";
 import tarStream from "tar-stream";
 import { eq } from "drizzle-orm";
+import { isEncrypted } from "@fintranzact/db";
 import {
   bankAccounts, businessMembers, employees, employeeTaxDeclarations, payrollRunLines, payrollRuns, payrollSettings, payrollStatutoryPayments, payrollStatutorySettings, payslips,
 } from "@fintranzact/db";
@@ -25,13 +26,22 @@ import { getTenantTestDb, truncateAllTables, closeTestDb } from "../helpers/test
 import { seedChartOfAccounts } from "../../lib/coa-seed.js";
 import { registerExportRoute } from "../../http/exportStream.js";
 import { registerImportRoute } from "../../http/importStream.js";
+import { decryptSensitive } from "../../lib/field-encryption.js";
 
 const db = () => getTenantTestDb();
 const app = new Hono();
 registerExportRoute(app);
 registerImportRoute(app);
 
+// A real key for the whole file, so identity and bank numbers are really stored encrypted.
+const savedKey = process.env.ENCRYPTION_KEY;
+beforeAll(() => {
+  process.env.ENCRYPTION_KEY = "ab".repeat(32);
+});
+
 afterAll(async () => {
+  if (savedKey === undefined) delete process.env.ENCRYPTION_KEY;
+  else process.env.ENCRYPTION_KEY = savedKey;
   await truncateAllTables();
   await closeTestDb();
 });
@@ -100,6 +110,23 @@ describe("payroll in a self-export", () => {
     await c.payrollRun.markPaid({ runId: run.id, bankAccountId: bank.id, paidOn: "2026-08-01" });
     const before = await c.payrollRun.get({ id: run.id });
 
+    // ── Identity and bank numbers are encrypted at rest (employees and the run's payment copy),
+    //    and the bank file still carries the real account numbers ──
+    const rawBoss = (await db().select().from(employees)).find((e) => e.employeeCode === "B1")!;
+    for (const v of [rawBoss.pan, rawBoss.aadhaar, rawBoss.bankAccountNumber]) expect(isEncrypted(v!)).toBe(true);
+    for (const l of await db().select().from(payrollRunLines)) expect(isEncrypted(l.bankAccountNumber!)).toBe(true);
+    const bankFile = await c.payrollRun.bankFile({ id: run.id });
+    expect(bankFile.csv).toContain("50100123456789");
+    expect(bankFile.csv).toContain("123456789012");
+    expect(bankFile.csv).not.toMatch(/v\d+:/);
+    // The tax files print the real PAN, never ciphertext.
+    const form16 = await c.payrollStatutory.form16Data({ financialYear: 2026, employeeId: boss.id });
+    expect(form16.csv).toContain("ABCDE1234F");
+    expect(form16.csv).not.toMatch(/v\d+:/);
+    const form24q = JSON.stringify(await c.payrollStatutory.form24q({ financialYear: 2026, quarter: 2 }));
+    expect(form24q).toContain("ABCDE1234F");
+    expect(form24q).not.toMatch(/v\d+:/);
+
     // ── Export ──
     const { token } = await c.selfExport.request({ tenantId: tenant.id });
     const exportRes = await app.request(`http://localhost:3000/api/export/${tenant.id}?token=${encodeURIComponent(token)}`, { method: "GET" });
@@ -107,6 +134,11 @@ describe("payroll in a self-export", () => {
     const files = await unpack(Buffer.from(await exportRes.arrayBuffer()));
     const manifest = JSON.parse(files.get("manifest.json")!.toString("utf8")) as { rowCounts: Record<string, number> };
     expect(manifest.rowCounts).toMatchObject({ employees: 2, payroll_runs: 1, payroll_run_lines: 2, payslips: 2, salary_templates: 1, salary_template_lines: 2, employee_salary_assignments: 2, payroll_statutory_settings: 1, employee_tax_declarations: 1, payroll_statutory_payments: 1 });
+    // The file carries PAN and bank numbers in plain text (ciphertext would only open on this server) and no Aadhaar.
+    for (const name of ["employees.ndjson", "payroll_run_lines.ndjson"]) expect(files.get(name)!.toString("utf8")).not.toMatch(/v\d+:/);
+    expect(files.get("employees.ndjson")!.toString("utf8")).toContain("ABCDE1234F");
+    expect(files.get("employees.ndjson")!.toString("utf8")).toContain("50100123456789");
+    expect(files.get("payroll_run_lines.ndjson")!.toString("utf8")).toContain("50100123456789");
     expect(manifest.rowCounts.leave_ledger).toBeGreaterThan(0);
     expect(manifest.rowCounts.attendance_records).toBeGreaterThan(0);
 
@@ -183,7 +215,12 @@ describe("payroll in a self-export", () => {
     const importedBoss = emps.find((e) => e.employeeCode === "B1")!;
     const importedWorker = emps.find((e) => e.employeeCode === "W1")!;
     // The Aadhaar number is stored encrypted under this server's key, so the export leaves it out.
-    expect(importedBoss).toMatchObject({ pan: "ABCDE1234F", aadhaar: null, bankAccountNumber: "50100123456789" });
+    expect(importedBoss.aadhaar).toBeNull();
+    // PAN and bank numbers come back and are encrypted again on the way in.
+    for (const v of [importedBoss.pan, importedBoss.bankAccountNumber]) expect(isEncrypted(v!)).toBe(true);
+    expect(decryptSensitive(importedBoss.pan)).toBe("ABCDE1234F");
+    expect(decryptSensitive(importedBoss.bankAccountNumber)).toBe("50100123456789");
+    for (const l of await db().select().from(payrollRunLines)) expect(isEncrypted(l.bankAccountNumber!)).toBe(true);
     expect(files.get("employees.ndjson")!.toString("utf8")).not.toContain("234567890123");
     expect(importedWorker.managerId).toBe(importedBoss.id);
     const [importedRun] = await db().select().from(payrollRuns);

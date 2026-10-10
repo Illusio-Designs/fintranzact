@@ -1,5 +1,6 @@
 /**
- * payroll-aadhaar-encryption.test.ts — an employee's Aadhaar number is encrypted at rest.
+ * payroll-aadhaar-encryption.test.ts — an employee's Aadhaar number, PAN and bank account number
+ * are encrypted at rest.
  *
  * Invariants:
  *   1. The column never holds the digits once a key is configured; the API still returns
@@ -129,5 +130,82 @@ describe("the self-export", () => {
   it("leaves the Aadhaar column out of the employees table", () => {
     const entry = TABLE_REGISTRY.find((t) => t.tableName === "employees");
     expect(entry?.redactedFields).toContain("aadhaar");
+  });
+});
+
+describe("PAN and bank account numbers are encrypted at rest", () => {
+  const PAN = "ABCDE1234F";
+  const OTHER_PAN = "FGHIJ5678K";
+  const ACCOUNT = "50100123456789";
+  let id: string;
+
+  const raw = async () => {
+    const [row] = await db().select({ pan: employees.pan, account: employees.bankAccountNumber }).from(employees).where(eq(employees.id, id));
+    return row!;
+  };
+
+  it("stores ciphertext, shows the owner the numbers and an accountant only the masks", async () => {
+    const e = await ownerC.payrollEmployee.create({ employeeCode: "P001", name: "Pan Holder", dateOfJoining: "2026-04-01", pan: PAN, bankAccountNumber: ACCOUNT, bankIfsc: "HDFC0001234" });
+    id = e.id;
+    expect(e).toMatchObject({ pan: PAN, bankAccountNumber: ACCOUNT, panMasked: "XXXXXX234F", bankAccountMasked: "XXXXXXXXXX6789" });
+
+    const stored = await raw();
+    for (const v of [stored.pan, stored.account]) expect(isEncrypted(v!)).toBe(true);
+    expect(stored.pan).not.toContain(PAN);
+    expect(stored.account).not.toContain(ACCOUNT);
+    expect(stored.account).not.toContain("6789");
+
+    expect(await ownerC.payrollEmployee.get({ id })).toMatchObject({ pan: PAN, bankAccountNumber: ACCOUNT });
+    const masked = await accountantC.payrollEmployee.get({ id });
+    expect(masked).toMatchObject({ pan: null, bankAccountNumber: null, panMasked: "XXXXXX234F", bankAccountMasked: "XXXXXXXXXX6789" });
+    for (const secret of [PAN, ACCOUNT]) expect(JSON.stringify(masked)).not.toContain(secret);
+
+    const list = JSON.stringify(await ownerC.payrollEmployee.list({ status: "active", page: 1, limit: 10 }));
+    expect(list).toContain("XXXXXX234F");
+    for (const secret of [PAN, ACCOUNT]) expect(list).not.toContain(secret);
+    expect(JSON.parse(list).data.find((r: { employeeCode: string }) => r.employeeCode === "P001")).toMatchObject({ hasBankDetails: true });
+  });
+
+  it("leaves the stored values alone when other fields change, and replaces or clears them on request", async () => {
+    const before = await raw();
+    await ownerC.payrollEmployee.update({ id, branch: "Pune" });
+    expect(await raw()).toEqual(before);
+
+    await ownerC.payrollEmployee.update({ id, pan: OTHER_PAN, bankAccountNumber: "998877665544" });
+    const changed = await raw();
+    for (const v of [changed.pan, changed.account]) expect(isEncrypted(v!)).toBe(true);
+    expect(changed.pan).not.toBe(before.pan);
+    expect(await ownerC.payrollEmployee.get({ id })).toMatchObject({ pan: OTHER_PAN, bankAccountNumber: "998877665544" });
+
+    await ownerC.payrollEmployee.update({ id, pan: "", bankAccountNumber: "" });
+    expect(await raw()).toEqual({ pan: null, account: null });
+    expect(await ownerC.payrollEmployee.get({ id })).toMatchObject({ pan: null, bankAccountNumber: null, panMasked: null, bankAccountMasked: null });
+  });
+
+  it("never puts the numbers in the audit trail", async () => {
+    await ownerC.payrollEmployee.update({ id, pan: PAN, bankAccountNumber: ACCOUNT });
+    const blob = JSON.stringify(await db().select().from(auditLog).where(eq(auditLog.businessId, biz.id)));
+    for (const secret of [PAN, OTHER_PAN, ACCOUNT, "998877665544"]) expect(blob).not.toContain(secret);
+  });
+
+  it("still reads numbers saved as plain text before encryption was added", async () => {
+    await db().update(employees).set({ pan: OTHER_PAN, bankAccountNumber: "112233445566" }).where(eq(employees.id, id));
+    expect(await ownerC.payrollEmployee.get({ id })).toMatchObject({ pan: OTHER_PAN, bankAccountNumber: "112233445566", panMasked: "XXXXXX678K" });
+  });
+
+  it("never returns ciphertext when the key that wrote them is not configured", async () => {
+    await ownerC.payrollEmployee.update({ id, pan: PAN, bankAccountNumber: ACCOUNT });
+    const stored = await raw();
+    process.env.ENCRYPTION_KEY = KEY_B;
+    try {
+      const res = await ownerC.payrollEmployee.get({ id });
+      expect(res).toMatchObject({ pan: null, bankAccountNumber: null, panMasked: null, bankAccountMasked: null });
+      const text = JSON.stringify(res) + JSON.stringify(await ownerC.payrollEmployee.list({ status: "active", page: 1, limit: 10 }));
+      expect(text).not.toContain(stored.pan!);
+      expect(text).not.toContain(stored.account!);
+    } finally {
+      process.env.ENCRYPTION_KEY = KEY_A;
+    }
+    expect(await ownerC.payrollEmployee.get({ id })).toMatchObject({ pan: PAN, bankAccountNumber: ACCOUNT });
   });
 });

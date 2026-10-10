@@ -25,7 +25,7 @@ import { router, viewerProcedure, memberProcedure } from "../trpc.js";
 import { withAudit } from "../lib/audit.js";
 import { assertInBusiness } from "../lib/business-scope.js";
 import { escapeLike } from "../lib/escape-like.js";
-import { encryptAadhaar } from "../lib/field-encryption.js";
+import { encryptAadhaar, encryptBankAccount, encryptPan } from "../lib/field-encryption.js";
 import { getEntitlements } from "../lib/entitlements.js";
 import { assertPayroll, badRequest, canSeeSensitive, countOrganisationActiveEmployees, enforceEmployeeCap, isUniqueViolation, notFound } from "../lib/payroll/access.js";
 import { blankToNull, changedFieldNames, employeeDetail, employeeListItem } from "../lib/payroll/data.js";
@@ -33,12 +33,13 @@ import { revokeEmployeeAccess } from "../lib/payroll/employee-access.js";
 
 const idInput = z.object({ id: z.string().uuid() });
 
-/** Form fields -> columns: blanks become null, the Aadhaar number is encrypted, everything else is kept as sent. */
+/** Form fields -> columns: blanks become null, the Aadhaar, PAN and bank account numbers are encrypted, everything else is kept as sent. */
 function toColumns(input: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(input)) {
     if (v === undefined || k === "id") continue;
-    out[k] = k === "aadhaar" ? encryptAadhaar(blankToNull(v) as string | null) : blankToNull(v);
+    const value = blankToNull(v);
+    out[k] = k === "aadhaar" ? encryptAadhaar(value as string | null) : k === "pan" ? encryptPan(value as string | null) : k === "bankAccountNumber" ? encryptBankAccount(value as string | null) : value;
   }
   return out;
 }

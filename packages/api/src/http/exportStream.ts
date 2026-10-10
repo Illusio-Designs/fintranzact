@@ -27,6 +27,7 @@ import { TABLE_REGISTRY } from "../lib/tableRegistry.js";
 import type { Manifest } from "@fintranzact/shared/selfExport";
 import { verifyExportToken } from "../lib/exportToken.js";
 import { logger } from "../lib/logger.js";
+import { decryptSensitive } from "../lib/field-encryption.js";
 import { getEntitlements } from "../lib/entitlements.js";
 import { featureRefusalBody } from "../lib/feature-gate.js";
 import { APP_VERSION, SCHEMA_CHECKSUM } from "../lib/exportManifest.js";
@@ -106,6 +107,7 @@ function serializeRow(
   row: Record<string, unknown>,
   redactedFields: string[],
   snakeToCamel: Map<string, string>,
+  decryptedFields: string[] = [],
 ): string {
   const out: Record<string, unknown> = {};
   for (const [snakeKey, value] of Object.entries(row)) {
@@ -113,6 +115,9 @@ function serializeRow(
     const camelKey = snakeToCamel.get(snakeKey) ?? snakeKey;
     if (redactedFields.includes(camelKey)) {
       out[camelKey] = null;
+    } else if (decryptedFields.includes(camelKey) && (typeof value === "string" || value === null)) {
+      // Stored encrypted under this server's key: written in plain so it can be imported anywhere.
+      out[camelKey] = decryptSensitive(value);
     } else if (value instanceof Date) {
       // Should rarely occur with raw db.execute, but handle just in case
       out[camelKey] = value.toISOString();
@@ -242,6 +247,7 @@ export function registerExportRoute(app: Hono): void {
 
     for (const entry of TABLE_REGISTRY) {
       const { tableName, drizzleTable, redactedFields, scope } = entry;
+      const decryptedFields = entry.encryptedFields ?? [];
 
       // Defensive: validate table name before embedding in SQL
       assertSafeTableName(tableName);
@@ -276,7 +282,7 @@ export function registerExportRoute(app: Hono): void {
             )) as Array<Record<string, unknown>>;
 
             for (const row of rows) {
-              const line = serializeRow(row, redactedFields, snakeToCamel) + "\n";
+              const line = serializeRow(row, redactedFields, snakeToCamel, decryptedFields) + "\n";
               const buf = Buffer.from(line, "utf8");
               await fileHandle.write(buf);
               hasher.update(buf);
@@ -305,7 +311,7 @@ export function registerExportRoute(app: Hono): void {
             )) as Array<Record<string, unknown>>;
 
             for (const row of rows) {
-              const line = serializeRow(row, redactedFields, snakeToCamel) + "\n";
+              const line = serializeRow(row, redactedFields, snakeToCamel, decryptedFields) + "\n";
               const buf = Buffer.from(line, "utf8");
               await fileHandle.write(buf);
               hasher.update(buf);
@@ -340,7 +346,7 @@ export function registerExportRoute(app: Hono): void {
             )) as Array<Record<string, unknown>>;
 
             for (const row of rows) {
-              const line = serializeRow(row, redactedFields, snakeToCamel) + "\n";
+              const line = serializeRow(row, redactedFields, snakeToCamel, decryptedFields) + "\n";
               const buf = Buffer.from(line, "utf8");
               await fileHandle.write(buf);
               hasher.update(buf);

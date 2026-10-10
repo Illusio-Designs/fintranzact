@@ -236,35 +236,36 @@ export function decryptGatewaySecret(stored: string): string {
   throw new Error("ENCRYPTION_KEY is not configured; cannot decrypt a gateway secret");
 }
 
-// ── Employee Aadhaar numbers ────────────────────────────────────────────────
+// ── Employee identity and bank numbers ─────────────────────────────────────
 
 /**
- * Encrypt an employee's Aadhaar number before it is stored. Null and "" pass through.
+ * Encrypt an employee's Aadhaar, PAN or bank account number before it is stored. Null and ""
+ * pass through.
  *
- * Aadhaar should be stored encrypted or not at all, so a production server with no
+ * These should be stored encrypted or not at all, so a production server with no
  * ENCRYPTION_KEY refuses to save one instead of writing it in plain text (encryptField
  * would silently do that). Development and tests keep the plain-text fallback.
  */
-export function encryptAadhaar(value: string | null | undefined): string | null {
+export function encryptSensitive(value: string | null | undefined, what = "a sensitive number"): string | null {
   if (value === null || value === undefined || value === "") return value as string | null;
   if (configuredKeyHex()) {
     const out = encryptField(value);
-    if (!VERSIONED_CIPHERTEXT_RE.test(out)) throw new Error("Aadhaar number was not encrypted");
+    if (!VERSIONED_CIPHERTEXT_RE.test(out)) throw new Error(`${what} was not encrypted`);
     return out;
   }
   if (process.env.NODE_ENV === "production") {
-    throw new Error("ENCRYPTION_KEY is not configured; refusing to store an Aadhaar number in plaintext");
+    throw new Error(`ENCRYPTION_KEY is not configured; refusing to store ${what} in plaintext`);
   }
   return value;
 }
 
 /**
- * Decrypt a stored Aadhaar number. A value written before encryption was added (plain
- * digits) is returned as is, until the rotation tool encrypts it. A value that is
- * encrypted but that no configured key opens gives null, never the ciphertext, so a lost
- * or wrong key cannot put a ciphertext on screen as if it were the number.
+ * Decrypt a stored number. A value written before encryption was added (plain text) is
+ * returned as is, until the rotation tool encrypts it. A value that is encrypted but that
+ * no configured key opens gives null, never the ciphertext, so a lost or wrong key cannot
+ * put a ciphertext on screen, in a bank file or on a tax form as if it were the number.
  */
-export function decryptAadhaar(stored: string | null | undefined): string | null {
+export function decryptSensitive(stored: string | null | undefined): string | null {
   if (stored === null || stored === undefined || stored === "") return null;
   if (!isEncrypted(stored)) return stored;
   try {
@@ -273,3 +274,17 @@ export function decryptAadhaar(stored: string | null | undefined): string | null
     return null;
   }
 }
+
+/**
+ * A value to be copied into another column (the bank details a payroll run keeps for the
+ * payment file): already ciphertext stays as it is, plain text is encrypted.
+ */
+export function ensureEncrypted(value: string | null | undefined, what = "a sensitive number"): string | null {
+  if (value === null || value === undefined || value === "") return value as string | null;
+  return isEncrypted(value) ? value : encryptSensitive(value, what);
+}
+
+export const encryptAadhaar = (value: string | null | undefined): string | null => encryptSensitive(value, "an Aadhaar number");
+export const decryptAadhaar = decryptSensitive;
+export const encryptPan = (value: string | null | undefined): string | null => encryptSensitive(value, "a PAN");
+export const encryptBankAccount = (value: string | null | undefined): string | null => encryptSensitive(value, "a bank account number");

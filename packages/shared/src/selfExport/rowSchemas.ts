@@ -969,7 +969,9 @@ export const tds26asEntryRowSchema = z.object({
 // in the file only because the owner exports the whole business, and the
 // import accepts files without them. The exporter writes aadhaar as null (it is
 // stored encrypted under this server's key, so the value would be useless, or a
-// leak, anywhere else).
+// leak, anywhere else). pan and bankAccountNumber are stored encrypted too, but
+// are written to the file in plain text so a business can move its data; the
+// importer encrypts them again.
 
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const dateStringNullable = dateString.nullable();
