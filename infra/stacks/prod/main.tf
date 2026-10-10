@@ -1,5 +1,11 @@
 data "aws_caller_identity" "current" {}
 
+# AWS's list of the addresses CloudFront uses to reach an origin (the load balancer sees one
+# of these as the connecting address for web and store traffic). Global, so the region is irrelevant.
+data "aws_ec2_managed_prefix_list" "cloudfront_origin_facing" {
+  name = "com.amazonaws.global.cloudfront.origin-facing"
+}
+
 locals {
   name       = "${var.project}-${var.environment}"
   account_id = data.aws_caller_identity.current.account_id
@@ -19,6 +25,14 @@ locals {
       STORE_URL    = local.store_url
       API_URL      = local.api_url
       CORS_ORIGINS = "${local.web_url},${local.store_url}"
+    },
+    {
+      # The app finds the visitor behind CloudFront and the load balancer (see
+      # packages/api/src/lib/client-ip.ts). CloudFront's origin-facing addresses are skipped
+      # in X-Forwarded-For, and a cf-connecting-ip header is NOT trusted: nothing here strips
+      # it, so a client could send any value and dodge every per-IP rate limit.
+      TRUSTED_PROXY_CIDRS    = join(",", [for e in data.aws_ec2_managed_prefix_list.cloudfront_origin_facing.entries : e.cidr])
+      TRUST_CF_CONNECTING_IP = "false"
     },
     var.platform_admin_email != "" ? { PLATFORM_ADMIN_EMAIL = var.platform_admin_email } : {},
     var.platform_admin_name != "" ? { PLATFORM_ADMIN_NAME = var.platform_admin_name } : {},

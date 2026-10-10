@@ -7,6 +7,7 @@ import { sessions, users, apiKeys, accessTokens } from "@fintranzact/db";
 import { eq, gt, and } from "drizzle-orm";
 import { getEntitlements } from "./lib/entitlements.js";
 import { apiKeyUsable } from "./lib/plan-limits.js";
+import { clientIpFromHeaders } from "./lib/client-ip.js";
 
 // Bearer session sliding-window constants — must mirror auth.ts values
 const BEARER_SESSION_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7-day sliding window
@@ -51,14 +52,7 @@ export function revokeAllUserSessions(userId: string) {
 }
 
 function getClientIp(req: Request): string | null {
-  const cfIp = req.headers.get("cf-connecting-ip");
-  if (cfIp) return cfIp.trim();
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) {
-    const parts = xff.split(",").map((s) => s.trim()).filter(Boolean);
-    if (parts.length > 0) return parts[parts.length - 1];
-  }
-  return null;
+  return clientIpFromHeaders((name) => req.headers.get(name));
 }
 
 export async function createContext(opts: FetchCreateContextFnOptions) {
