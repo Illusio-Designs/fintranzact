@@ -175,14 +175,16 @@ describe("payroll in a self-export", () => {
     expect(oldSettings).toMatchObject({ pfRegistered: false, esiRegistered: false, ptStates: [], tdsEnabled: false });
     expect((await db().select().from(payrollRuns))[0]!.statutory).toBeNull();
 
-    // ── Then the full file: everything comes back, including the manager link and the sensitive numbers ──
+    // ── Then the full file: everything comes back, including the manager link and the sensitive numbers (except Aadhaar) ──
     const full = await importInto(await pack(files));
     expect(full.res.status).toBe(200);
     expect(full.body.rowsInserted).toMatchObject({ employees: 2, payroll_runs: 1, payroll_run_lines: 2, payslips: 2, employee_salary_assignments: 2 });
     const emps = await db().select().from(employees);
     const importedBoss = emps.find((e) => e.employeeCode === "B1")!;
     const importedWorker = emps.find((e) => e.employeeCode === "W1")!;
-    expect(importedBoss).toMatchObject({ pan: "ABCDE1234F", aadhaar: "234567890123", bankAccountNumber: "50100123456789" });
+    // The Aadhaar number is stored encrypted under this server's key, so the export leaves it out.
+    expect(importedBoss).toMatchObject({ pan: "ABCDE1234F", aadhaar: null, bankAccountNumber: "50100123456789" });
+    expect(files.get("employees.ndjson")!.toString("utf8")).not.toContain("234567890123");
     expect(importedWorker.managerId).toBe(importedBoss.id);
     const [importedRun] = await db().select().from(payrollRuns);
     expect(importedRun).toMatchObject({ month: "2026-07", status: "paid", netTotal: before.run.netTotal, grossTotal: before.run.grossTotal });

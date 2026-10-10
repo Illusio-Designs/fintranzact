@@ -14,6 +14,7 @@ import {
   businesses,
   decryptField,
   eInvoiceConfigs,
+  employees,
   ewayBillConfigs,
   razorpayConnections,
   shareLinks,
@@ -375,4 +376,66 @@ describe("rotate-encryption-key bin", () => {
     const noKey = bin([], {});
     expect(noKey.status).toBe(3);
   }, 120_000);
+});
+
+describe("employee Aadhaar numbers", () => {
+  const AADHAAR_A = "234567890123";
+  const AADHAAR_B = "345678901234";
+  const AADHAAR_C = "456789012345";
+
+  async function addEmployees() {
+    const t = getTenantTestDb();
+    const base = { businessId, dateOfJoining: "2026-04-01" };
+    await t.insert(employees).values([
+      { ...base, employeeCode: "R1", name: "Plain Digits", aadhaar: AADHAAR_A },
+      { ...base, employeeCode: "R2", name: "Old Key", aadhaar: v2(AADHAAR_B) },
+      { ...base, employeeCode: "R3", name: "No Aadhaar", aadhaar: null },
+    ]);
+    const rows = await t.select({ code: employees.employeeCode, aadhaar: employees.aadhaar }).from(employees);
+    return Object.fromEntries(rows.map((r) => [r.code, r.aadhaar]));
+  }
+
+  it("encrypts numbers saved as plain digits and re-encrypts the ones on an old key", async () => {
+    await addEmployees();
+    setEnv({ ENCRYPTION_KEY: KEY_NEW, ENCRYPTION_KEYS_PREVIOUS: KEY_OLD });
+    const t = await rotateScope(tenantDb(), "tenant", run(false));
+    expect(t.failures).toEqual([]);
+    // 12 from the seed, plus the plain-digit number and the old-key one; the empty one is not counted
+    expect(t.counts).toMatchObject({ rotated: 12 + 2, fromPlaintext: 1, failed: 0 });
+
+    setEnv({ ENCRYPTION_KEY: KEY_NEW });
+    const after = await getTenantTestDb().select({ code: employees.employeeCode, aadhaar: employees.aadhaar }).from(employees);
+    const byCode = Object.fromEntries(after.map((r) => [r.code, r.aadhaar]));
+    expect(byCode.R3).toBeNull();
+    expect(byCode.R1).not.toContain(AADHAAR_A);
+    expect(byCode.R2).not.toContain(AADHAAR_B);
+    expect(decryptField(byCode.R1!)).toBe(AADHAAR_A);
+    expect(decryptField(byCode.R2!)).toBe(AADHAAR_B);
+
+    const vt = await verifyScope(tenantDb(), "tenant", { batchSize: 2 });
+    expect(vt.failures).toEqual([]);
+    expect(vt.checked).toBe(12 + 2);
+  });
+
+  it("a dry run changes nothing, and a second run rotates nothing", async () => {
+    const before = await addEmployees();
+    setEnv({ ENCRYPTION_KEY: KEY_NEW, ENCRYPTION_KEYS_PREVIOUS: KEY_OLD });
+    const dry = await rotateScope(tenantDb(), "tenant", run(true));
+    expect(dry.counts.fromPlaintext).toBe(1);
+    const unchanged = await getTenantTestDb().select({ code: employees.employeeCode, aadhaar: employees.aadhaar }).from(employees);
+    expect(Object.fromEntries(unchanged.map((r) => [r.code, r.aadhaar]))).toEqual(before);
+
+    await rotateScope(tenantDb(), "tenant", run(false));
+    const again = await rotateScope(tenantDb(), "tenant", run(false));
+    expect(again.counts.rotated).toBe(0);
+  });
+
+  it("reports a number no configured key opens, and leaves it unchanged", async () => {
+    const t = getTenantTestDb();
+    await t.insert(employees).values({ businessId, employeeCode: "R4", name: "Lost Key", dateOfJoining: "2026-04-01", aadhaar: v2(AADHAAR_C, "5c".repeat(32)) });
+    setEnv({ ENCRYPTION_KEY: KEY_NEW, ENCRYPTION_KEYS_PREVIOUS: KEY_OLD });
+    const res = await rotateScope(tenantDb(), "tenant", run(false));
+    expect(res.failures).toEqual([expect.objectContaining({ table: "employees", column: "aadhaar" })]);
+    expect(JSON.stringify(res.failures)).not.toContain(AADHAAR_C);
+  });
 });

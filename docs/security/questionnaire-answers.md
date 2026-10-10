@@ -12,7 +12,7 @@ Owner: [security owner]. Last reviewed: 2026-10-09. Next review: each time befor
 
 **Is data encrypted in transit?** Yes. HTTPS is required in production, with HSTS.
 
-**Is data encrypted at rest?** Credentials we store on behalf of customers (their Razorpay keys, e-invoice and e-way bill logins, courier keys, two-factor secrets) are encrypted at application level with AES-256-GCM and a rotatable key. The database disks and backups are encrypted by [provider setting: confirm]. Some personal identifiers (for example employee PAN, Aadhaar and bank account numbers) are masked in the product but stored as ordinary database columns today; field-level encryption for them is planned.
+**Is data encrypted at rest?** Credentials we store on behalf of customers (their Razorpay keys, e-invoice and e-way bill logins, courier keys, two-factor secrets) are encrypted at application level with AES-256-GCM and a rotatable key. The database disks and backups are encrypted by [provider setting: confirm]. Employee Aadhaar numbers are also encrypted at application level. Some other personal identifiers (for example employee PAN and bank account numbers) are masked in the product but stored as ordinary database columns today; field-level encryption for them is planned.
 
 **How are passwords stored? Do you support MFA?** Passwords are hashed with Argon2id. Users can enable authenticator-app two-factor authentication with backup codes, and an organisation owner can require it for admins or all members. SMS codes are not used.
 
