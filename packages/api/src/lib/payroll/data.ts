@@ -21,7 +21,7 @@ import {
   type TenantDatabase,
 } from "@fintranzact/db";
 import { formatPayrollMonth, maskSensitive, monthEnd, monthOf, monthStart } from "@fintranzact/shared";
-import { decryptAadhaar } from "../field-encryption.js";
+import { decryptSensitive } from "../field-encryption.js";
 
 export interface PayrollSettingsValues {
   defaultWeeklyOffDays: number[];
@@ -133,9 +133,9 @@ export function employeeListItem(row: EmployeeRow, names: { department?: string 
     lastWorkingDay: row.lastWorkingDay,
     phone: row.phone,
     email: row.email,
-    panMasked: maskSensitive(row.pan),
+    panMasked: maskSensitive(decryptSensitive(row.pan)),
     uanMasked: maskSensitive(row.uan),
-    bankAccountMasked: maskSensitive(row.bankAccountNumber),
+    bankAccountMasked: maskSensitive(decryptSensitive(row.bankAccountNumber)),
     hasBankDetails: !!(row.bankAccountNumber && row.bankIfsc),
   };
 }
@@ -145,10 +145,13 @@ export function employeeListItem(row: EmployeeRow, names: { department?: string 
  * bank numbers are included; without it only their masked forms are.
  */
 export function employeeDetail(row: EmployeeRow, opts: { full: boolean }) {
-  // The Aadhaar number is stored encrypted; decrypt once for both the full value and its mask.
-  const aadhaar = decryptAadhaar(row.aadhaar);
+  // Aadhaar, PAN and the bank account number are stored encrypted; decrypt once for both the
+  // full value and its mask.
+  const pan = decryptSensitive(row.pan);
+  const aadhaar = decryptSensitive(row.aadhaar);
+  const bankAccountNumber = decryptSensitive(row.bankAccountNumber);
   const sensitive = opts.full
-    ? { pan: row.pan, aadhaar, uan: row.uan, esicNumber: row.esicNumber, bankAccountNumber: row.bankAccountNumber, bankIfsc: row.bankIfsc }
+    ? { pan, aadhaar, uan: row.uan, esicNumber: row.esicNumber, bankAccountNumber, bankIfsc: row.bankIfsc }
     : { pan: null, aadhaar: null, uan: null, esicNumber: null, bankAccountNumber: null, bankIfsc: null };
   return {
     id: row.id,
@@ -181,11 +184,11 @@ export function employeeDetail(row: EmployeeRow, opts: { full: boolean }) {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     ...sensitive,
-    panMasked: maskSensitive(row.pan),
+    panMasked: maskSensitive(pan),
     aadhaarMasked: maskSensitive(aadhaar),
     uanMasked: maskSensitive(row.uan),
     esicMasked: maskSensitive(row.esicNumber),
-    bankAccountMasked: maskSensitive(row.bankAccountNumber),
+    bankAccountMasked: maskSensitive(bankAccountNumber),
     /** True when the full numbers above are included. */
     sensitiveIncluded: opts.full,
   };

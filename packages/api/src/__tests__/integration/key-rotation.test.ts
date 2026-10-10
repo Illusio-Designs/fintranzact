@@ -378,52 +378,75 @@ describe("rotate-encryption-key bin", () => {
   }, 120_000);
 });
 
-describe("employee Aadhaar numbers", () => {
+describe("employee Aadhaar, PAN and bank account numbers", () => {
   const AADHAAR_A = "234567890123";
   const AADHAAR_B = "345678901234";
   const AADHAAR_C = "456789012345";
+  const PAN_A = "ABCDE1234F";
+  const PAN_B = "FGHIJ5678K";
+  const BANK_A = "50100123456789";
+  const BANK_B = "123456789012";
+
+  const readAll = async () => {
+    const rows = await getTenantTestDb().select({ code: employees.employeeCode, aadhaar: employees.aadhaar, pan: employees.pan, bank: employees.bankAccountNumber }).from(employees);
+    return Object.fromEntries(rows.map((r) => [r.code, r]));
+  };
 
   async function addEmployees() {
     const t = getTenantTestDb();
     const base = { businessId, dateOfJoining: "2026-04-01" };
     await t.insert(employees).values([
-      { ...base, employeeCode: "R1", name: "Plain Digits", aadhaar: AADHAAR_A },
-      { ...base, employeeCode: "R2", name: "Old Key", aadhaar: v2(AADHAAR_B) },
-      { ...base, employeeCode: "R3", name: "No Aadhaar", aadhaar: null },
+      { ...base, employeeCode: "R1", name: "Plain Digits", aadhaar: AADHAAR_A, pan: PAN_A, bankAccountNumber: BANK_A },
+      { ...base, employeeCode: "R2", name: "Old Key", aadhaar: v2(AADHAAR_B), pan: v2(PAN_B), bankAccountNumber: v2(BANK_B) },
+      { ...base, employeeCode: "R3", name: "No Numbers", aadhaar: null },
     ]);
-    const rows = await t.select({ code: employees.employeeCode, aadhaar: employees.aadhaar }).from(employees);
-    return Object.fromEntries(rows.map((r) => [r.code, r.aadhaar]));
+    return readAll();
   }
 
-  it("encrypts numbers saved as plain digits and re-encrypts the ones on an old key", async () => {
+  it("lists the payroll columns that hold identity and bank numbers, and they exist", async () => {
+    const listed = ENCRYPTED_TARGETS.filter((t) => t.scope === "tenant").flatMap((t) => t.columns.map((c) => `${t.table}.${c}`));
+    for (const col of ["employees.aadhaar", "employees.pan", "employees.bank_account_number", "payroll_run_lines.bank_account_number"]) expect(listed).toContain(col);
+    const rows = (await getTenantTestDb().execute(sql`
+      SELECT table_name, column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name IN ('employees', 'payroll_run_lines') AND column_name IN ('aadhaar', 'pan', 'bank_account_number')`)) as unknown as Array<{
+      table_name: string;
+      column_name: string;
+    }>;
+    const present = rows.map((r) => `${r.table_name}.${r.column_name}`);
+    expect(present).toEqual(expect.arrayContaining(["employees.aadhaar", "employees.pan", "employees.bank_account_number", "payroll_run_lines.bank_account_number"]));
+  });
+
+  it("encrypts numbers saved as plain text and re-encrypts the ones on an old key", async () => {
     await addEmployees();
     setEnv({ ENCRYPTION_KEY: KEY_NEW, ENCRYPTION_KEYS_PREVIOUS: KEY_OLD });
     const t = await rotateScope(tenantDb(), "tenant", run(false));
     expect(t.failures).toEqual([]);
-    // 12 from the seed, plus the plain-digit number and the old-key one; the empty one is not counted
-    expect(t.counts).toMatchObject({ rotated: 12 + 2, fromPlaintext: 1, failed: 0 });
+    // 12 from the seed, plus three plain-text numbers and three on the old key; the empty ones are not counted
+    expect(t.counts).toMatchObject({ rotated: 12 + 6, fromPlaintext: 3, failed: 0 });
 
     setEnv({ ENCRYPTION_KEY: KEY_NEW });
-    const after = await getTenantTestDb().select({ code: employees.employeeCode, aadhaar: employees.aadhaar }).from(employees);
-    const byCode = Object.fromEntries(after.map((r) => [r.code, r.aadhaar]));
-    expect(byCode.R3).toBeNull();
-    expect(byCode.R1).not.toContain(AADHAAR_A);
-    expect(byCode.R2).not.toContain(AADHAAR_B);
-    expect(decryptField(byCode.R1!)).toBe(AADHAAR_A);
-    expect(decryptField(byCode.R2!)).toBe(AADHAAR_B);
+    const after = await readAll();
+    expect(after.R3).toMatchObject({ aadhaar: null, pan: null, bank: null });
+    for (const [code, plains] of [["R1", [AADHAAR_A, PAN_A, BANK_A]], ["R2", [AADHAAR_B, PAN_B, BANK_B]]] as const) {
+      const row = after[code]!;
+      const stored = [row.aadhaar!, row.pan!, row.bank!];
+      stored.forEach((v, i) => {
+        expect(v).not.toContain(plains[i]);
+        expect(decryptField(v)).toBe(plains[i]);
+      });
+    }
 
     const vt = await verifyScope(tenantDb(), "tenant", { batchSize: 2 });
     expect(vt.failures).toEqual([]);
-    expect(vt.checked).toBe(12 + 2);
+    expect(vt.checked).toBe(12 + 6);
   });
 
   it("a dry run changes nothing, and a second run rotates nothing", async () => {
     const before = await addEmployees();
     setEnv({ ENCRYPTION_KEY: KEY_NEW, ENCRYPTION_KEYS_PREVIOUS: KEY_OLD });
     const dry = await rotateScope(tenantDb(), "tenant", run(true));
-    expect(dry.counts.fromPlaintext).toBe(1);
-    const unchanged = await getTenantTestDb().select({ code: employees.employeeCode, aadhaar: employees.aadhaar }).from(employees);
-    expect(Object.fromEntries(unchanged.map((r) => [r.code, r.aadhaar]))).toEqual(before);
+    expect(dry.counts.fromPlaintext).toBe(3);
+    expect(await readAll()).toEqual(before);
 
     await rotateScope(tenantDb(), "tenant", run(false));
     const again = await rotateScope(tenantDb(), "tenant", run(false));
@@ -432,10 +455,10 @@ describe("employee Aadhaar numbers", () => {
 
   it("reports a number no configured key opens, and leaves it unchanged", async () => {
     const t = getTenantTestDb();
-    await t.insert(employees).values({ businessId, employeeCode: "R4", name: "Lost Key", dateOfJoining: "2026-04-01", aadhaar: v2(AADHAAR_C, "5c".repeat(32)) });
+    await t.insert(employees).values({ businessId, employeeCode: "R4", name: "Lost Key", dateOfJoining: "2026-04-01", aadhaar: v2(AADHAAR_C, "5c".repeat(32)), pan: v2(PAN_A, "5c".repeat(32)) });
     setEnv({ ENCRYPTION_KEY: KEY_NEW, ENCRYPTION_KEYS_PREVIOUS: KEY_OLD });
     const res = await rotateScope(tenantDb(), "tenant", run(false));
-    expect(res.failures).toEqual([expect.objectContaining({ table: "employees", column: "aadhaar" })]);
-    expect(JSON.stringify(res.failures)).not.toContain(AADHAAR_C);
+    expect(res.failures.map((f) => `${f.table}.${f.column}`).sort()).toEqual(["employees.aadhaar", "employees.pan"]);
+    for (const secret of [AADHAAR_C, PAN_A]) expect(JSON.stringify(res.failures)).not.toContain(secret);
   });
 });

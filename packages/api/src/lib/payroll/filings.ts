@@ -10,6 +10,7 @@
  */
 
 import { and, asc, eq, inArray } from "drizzle-orm";
+import { decryptSensitive } from "../field-encryption.js";
 import {
   businesses,
   employeeTaxDeclarations,
@@ -219,7 +220,7 @@ export async function buildForm24qFile(db: Reader, businessId: string, fyStartYe
     return {
       employeeCode: e.employeeCode,
       name: e.name,
-      pan: e.pan,
+      pan: decryptSensitive(e.pan),
       months: runs.flatMap((r) => {
         const l = lines.find((x) => x.runId === r.id && x.employeeId === id);
         return l ? [{ month: r.month, grossPaise: rupeesToPaise(l.grossEarnings), tdsPaise: amountOf(l, "income_tax_tds"), deductedOn: monthEnd(r.month) }] : [];
@@ -272,7 +273,7 @@ export async function buildForm16(db: Reader, businessId: string, fyStartYear: n
   const data = buildForm16Data({
     fyStartYear,
     regime: emp.taxRegime === "old" ? "old" : "new",
-    employee: { code: emp.employeeCode, name: emp.name, pan: emp.pan },
+    employee: { code: emp.employeeCode, name: emp.name, pan: decryptSensitive(emp.pan) },
     months,
     declaration: parsed?.success ? parsed.data : EMPTY_DECLARATION,
     rates: loaded.rates,

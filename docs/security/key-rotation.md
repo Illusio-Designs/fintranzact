@@ -17,11 +17,12 @@ One AES-256-GCM key encrypts these columns (single list in code: `ENCRYPTED_TARG
 | tenant | `eway_bill_configs.client_id, client_secret, username, password, auth_token` | E-way bill (NIC) credentials of a business |
 | tenant | `razorpay_connections.key_id_encrypted, key_secret_encrypted, webhook_secret_encrypted, webhook_token_encrypted` | A business's own Razorpay keys and webhook secret and token |
 | tenant | `businesses.carrier_credentials` (JSON: `apiKey`, `apiSecret`, `accountId` per carrier) | Courier API credentials |
-| tenant | `employees.aadhaar` | An employee's Aadhaar number (payroll). Numbers saved before encryption was added are plain digits until the tool runs; it encrypts them and counts them as "from plaintext" |
+| tenant | `employees.aadhaar, pan, bank_account_number` | An employee's Aadhaar number, PAN and bank account number (payroll). Numbers saved before encryption was added are plain text until the tool runs; it encrypts them and counts them as "from plaintext" |
+| tenant | `payroll_run_lines.bank_account_number` | The bank account number a payroll run keeps for its payment file (copied, encrypted, from the employee when the run is approved) |
 
 "Tenant" tables live in the same database as the control tables in single-database mode (`MULTI_TENANT=false`) and in one database per organisation in multi-tenant mode. The tool handles both.
 
-**Not encrypted but arguably should be** (not changed here): employee PAN, UAN, ESIC number and bank account number, and the bank account numbers on businesses and parties, are plain text columns (masked on read, never logged). See [data-classification-and-handling.md](data-classification-and-handling.md). If they are encrypted later, add them to `ENCRYPTED_TARGETS` so rotation covers them. The employee Aadhaar number is already encrypted (see the table above): a production server with no `ENCRYPTION_KEY` refuses to save one, and a value that no configured key opens is shown as empty, never as ciphertext.
+**Not encrypted but arguably should be** (not changed here): employee UAN and ESIC number, and the bank account numbers on businesses and parties (`bank_accounts.account_number`, `parties.bank_account_number`), are plain text columns (masked on read, never logged). See [data-classification-and-handling.md](data-classification-and-handling.md). If they are encrypted later, add them to `ENCRYPTED_TARGETS` so rotation covers them. The employee Aadhaar number, PAN and bank account number are encrypted (see the table above): a production server with no `ENCRYPTION_KEY` refuses to save one, and a value that no configured key opens is shown as empty, never as ciphertext.
 
 Also derived from the key, but **not stored**:
 

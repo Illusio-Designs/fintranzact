@@ -110,6 +110,12 @@ export interface TableRegistryEntry {
   drizzleTable: PgTable;
   /** camelCase column names whose values must be set to null on export. */
   redactedFields: string[];
+  /**
+   * camelCase text columns stored encrypted at rest (payroll identity and bank numbers). The
+   * export writes them decrypted (ciphertext only opens with this server's key) and the import
+   * encrypts them again when it inserts the rows, so a customer can take their data elsewhere.
+   */
+  encryptedFields?: string[];
   /** Whether the importer should insert rows from this table. */
   importable: boolean;
   /**
@@ -707,7 +713,7 @@ export const TABLE_REGISTRY: TableRegistryEntry[] = [
   { tableName: "payroll_designations", drizzleTable: payrollDesignations, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
   { tableName: "payroll_shifts", drizzleTable: payrollShifts, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
   // An employee's manager is another employee: two-pass insert.
-  { tableName: "employees", drizzleTable: employees, redactedFields: ["aadhaar"], importable: true, selfFkFields: ["managerId"], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "employees", drizzleTable: employees, redactedFields: ["aadhaar"], encryptedFields: ["pan", "bankAccountNumber"], importable: true, selfFkFields: ["managerId"], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
   { tableName: "employee_tax_declarations", drizzleTable: employeeTaxDeclarations, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
   { tableName: "salary_components", drizzleTable: salaryComponents, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
   { tableName: "salary_templates", drizzleTable: salaryTemplates, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
@@ -720,7 +726,7 @@ export const TABLE_REGISTRY: TableRegistryEntry[] = [
   { tableName: "leave_applications", drizzleTable: leaveApplications, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
   { tableName: "leave_encashments", drizzleTable: leaveEncashments, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
   { tableName: "payroll_runs", drizzleTable: payrollRuns, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
-  { tableName: "payroll_run_lines", drizzleTable: payrollRunLines, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "payroll_run_lines", drizzleTable: payrollRunLines, redactedFields: [], encryptedFields: ["bankAccountNumber"], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
   { tableName: "payroll_statutory_payments", drizzleTable: payrollStatutoryPayments, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
   { tableName: "payroll_run_adjustments", drizzleTable: payrollRunAdjustments, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
   { tableName: "payslips", drizzleTable: payslips, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },

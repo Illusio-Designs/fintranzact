@@ -71,6 +71,7 @@ import { assertPeriodOpen } from "../period-lock.js";
 import { STATUTORY_PAYABLE_KEYS, bookDate, cashOrBankAccountId, ensurePayrollAccounts, writeJournalEntry, type PayrollAccountKey } from "./books.js";
 import { holidayDatesFor, loadHolidays, loadMonthAttendance, loadPayrollSettings, type PayrollSettingsValues } from "./data.js";
 import { badRequest, isUniqueViolation, notFound } from "./access.js";
+import { decryptSensitive, ensureEncrypted } from "../field-encryption.js";
 import { applyRunLoanRecoveries, loadLoanDues } from "./loans.js";
 import { applyStatutoryForEmployee, dedupeConfigWarnings, lineStatutoryJson, loadStatutoryRunContext, runSnapshot } from "./statutory.js";
 
@@ -622,10 +623,10 @@ export function buildPayslipSnapshot(input: {
       employmentType: e.employmentType,
       dateOfJoining: e.dateOfJoining,
       lastWorkingDay: e.lastWorkingDay,
-      panMasked: maskSensitive(e.pan),
+      panMasked: maskSensitive(decryptSensitive(e.pan)),
       uanMasked: reg.pf ? maskSensitive(e.uan) : null,
       esicMasked: reg.esi ? maskSensitive(e.esicNumber) : null,
-      bankAccountMasked: maskSensitive(e.bankAccountNumber),
+      bankAccountMasked: maskSensitive(decryptSensitive(e.bankAccountNumber)),
       bankName: e.bankName,
     },
     attendance: { daysInMonth: l.daysInMonth, employedDays: l.employedDays, paidDays: l.paidDays, lopDays: l.lopDays, overtimeHours: l.overtimeHours },
@@ -692,7 +693,7 @@ export async function approveRun(db: TenantDatabase, input: { businessId: string
       });
       await tx
         .update(payrollRunLines)
-        .set({ bankAccountNumber: e.bankAccountNumber, bankIfsc: e.bankIfsc, bankAccountName: e.bankAccountName || e.name })
+        .set({ bankAccountNumber: ensureEncrypted(e.bankAccountNumber, "a bank account number"), bankIfsc: e.bankIfsc, bankAccountName: e.bankAccountName || e.name })
         .where(eq(payrollRunLines.id, l.id));
       if (l.isFinalSettlement) await tx.update(employees).set({ fnfPayrollRunId: run.id, updatedAt: new Date() }).where(eq(employees.id, l.employeeId));
     }

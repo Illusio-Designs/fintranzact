@@ -26,6 +26,7 @@ import {
   runCreateSchema,
 } from "@fintranzact/shared";
 import { router, viewerProcedure, memberProcedure } from "../trpc.js";
+import { decryptSensitive } from "../lib/field-encryption.js";
 import { withAudit } from "../lib/audit.js";
 import { emailService } from "../lib/email.js";
 import { assertPayroll, assertPayrollPosting, notFound, badRequest } from "../lib/payroll/access.js";
@@ -263,7 +264,7 @@ export const payrollRunRouter = router({
       lines.map((l) => ({
         employeeCode: l.employeeCode,
         beneficiaryName: l.bankAccountName || l.employeeName,
-        accountNumber: l.bankAccountNumber ?? "",
+        accountNumber: decryptSensitive(l.bankAccountNumber) ?? "",
         ifsc: l.bankIfsc ?? "",
         amountPaise: rupeesToPaise(l.netPay),
         narration: `Salary ${label}`,
