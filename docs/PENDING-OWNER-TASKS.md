@@ -680,3 +680,24 @@ AES-256-GCM key as your Razorpay and e-invoice credentials). What only you can d
    `docs/security/data-classification-and-handling.md` are updated. The public
    privacy page is legal text and I did not change it.
 
+## 23. Real visitor IP behind CloudFront (rate limits and the audit trail)
+
+The API now works out the visitor's address properly behind CloudFront and the load
+balancer, instead of seeing a CloudFront address. On AWS nothing for you to do: the
+Terraform sets two settings (`TRUSTED_PROXY_CIDRS`, `TRUST_CF_CONNECTING_IP=false`) the
+next time you apply it (`docs/infra/README.md`). What needs a decision from you:
+
+1. **Today's hosting (Railway and Vercel).** Nothing changes unless you set the new
+   variables, so behaviour is as before. One thing to know: the API trusts a
+   `cf-connecting-ip` header from anyone unless the API is really behind Cloudflare. If it
+   is **not**, a client can send a different value on every request and get a fresh
+   rate-limit bucket each time (sign-in attempts, store orders, PDFs). The fix is to set
+   `TRUST_CF_CONNECTING_IP=false` on the API. If you **are** behind Cloudflare, leave it as
+   it is; turning it off there would count all visitors under Cloudflare's addresses. Tell
+   me which it is and I will make the safe choice the default.
+2. **Railway or other proxy chains.** If the API sits behind more than one proxy, set
+   `TRUSTED_PROXY_HOPS` to the number of proxies (usually 1 or 2) so the visitor, not the
+   proxy, is counted.
+3. **Check it after the AWS deploy.** Sign in from your phone and from your laptop, then
+   open Settings, Account and look at the IP shown for each active session. They should be
+   your two real addresses, not CloudFront's (`130.176.x.x`, `15.158.x.x`, ...).

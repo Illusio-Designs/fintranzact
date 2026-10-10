@@ -173,14 +173,16 @@ and is recommended once you have revenue.
 
 ## Known limitations
 
-- **Client IP and rate limits.** The API reads the last entry of `X-Forwarded-For`.
-  Behind CloudFront and the load balancer that is a CloudFront address, not the
-  visitor, so the app's per-IP limits (store orders, sign-in) see CloudFront's address
-  for traffic that arrives through the web or store domain. Traffic on `api.example.com`
-  (mobile, webhooks) is fine. This already exists today behind Vercel and Railway. The
-  fix is a small application change (trust one more proxy hop); the WAF login rate limit
-  at the edge uses the real visitor address and covers the most important case in the
-  meantime.
+- **Client IP and rate limits.** Behind CloudFront and the load balancer the connecting
+  address is a CloudFront address, so the API skips the CloudFront origin-facing ranges
+  in `X-Forwarded-For` (the Terraform sets `TRUSTED_PROXY_CIDRS` from AWS's managed
+  prefix list) and finds the visitor, on the web and store domains and on `api.` alike.
+  It also sets `TRUST_CF_CONNECTING_IP=false`, because nothing on AWS strips that header
+  and a client could otherwise send any value to dodge the per-IP limits. See
+  `packages/api/src/lib/client-ip.ts`. If AWS adds new CloudFront ranges, the next
+  `terraform apply` picks them up; until then a request from a new range is counted
+  under that CloudFront address (the old behaviour), never under a forged one. The WAF
+  login rate limit at the edge uses the real visitor address as well.
 - **Limits per task.** The app's rate limiters are in memory, so each API task counts
   separately.
 - **Provider lock file.** `.terraform.lock.hcl` is not committed because it could not be

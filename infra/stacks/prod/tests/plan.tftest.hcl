@@ -29,6 +29,14 @@ mock_provider "aws" {
       arn = "arn:aws:iam::718504428378:root"
     }
   }
+  mock_data "aws_ec2_managed_prefix_list" {
+    defaults = {
+      entries = [
+        { cidr = "130.176.0.0/18", description = "mock" },
+        { cidr = "15.158.0.0/16", description = "mock" },
+      ]
+    }
+  }
   mock_data "aws_iam_policy_document" {
     defaults = {
       json = "{\"Version\":\"2012-10-17\",\"Statement\":[]}"

@@ -70,6 +70,9 @@ The web and store frontends are deployed by Vercel's Git integration (see `apps/
 | `PORT` | No | API port (default 3000) | `3000` |
 | `NODE_ENV` | Yes | Environment | `production` |
 | `CORS_ORIGINS` | Yes | Comma-separated allowed origins | `https://fintranzact-web.vercel.app,https://store.fintranzact.com` |
+| `TRUSTED_PROXY_CIDRS` | No | Networks of proxies in front of the API whose `X-Forwarded-For` entries are skipped to find the visitor (rate limits, audit trail). On AWS the Terraform sets the CloudFront ranges | `130.176.0.0/18,15.158.0.0/16` |
+| `TRUSTED_PROXY_HOPS` | No | Alternative to the above: how many `X-Forwarded-For` entries to skip from the right (0 to 10). Default 0 | `1` |
+| `TRUST_CF_CONNECTING_IP` | No | Set `false` unless the API is behind Cloudflare. Anywhere else a client can send this header and dodge every per-IP rate limit. Default: trusted | `false` |
 | `APP_URL` | Yes | Frontend URL (for email-change and invitation links) | `https://fintranzact-web.vercel.app` |
 | `ENCRYPTION_KEY` | Yes | AES-256-GCM key for field-level encryption (64-char hex). Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` | `a1b2c3...` |
 | `SANDBOX_API_KEY` | No | Sandbox.co.in API key for GST e-invoice, e-way bill, GSTIN lookup and TDS/TCS. `key_test_…` uses the test host, `key_live_…` the live host | `key_live_abc…` |

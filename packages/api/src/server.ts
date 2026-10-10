@@ -60,6 +60,7 @@ import { createSharePaymentLink, shareOnlinePaymentAvailable } from "./lib/razor
 import { createFixedWindowLimiter } from "./lib/fixed-window-limiter.js";
 import { listPublicPlansJson } from "./lib/public-plans.js";
 import { apiSecureHeaders } from "./lib/security-headers.js";
+import { clientIpFromHeaders } from "./lib/client-ip.js";
 
 // ── Process crash handlers ────────────────────────────────────
 process.on("unhandledRejection", (reason) => {
@@ -134,24 +135,11 @@ app.use("*", cors({
 }));
 
 // ── Safe IP extraction ─────────────────────────────────────────
-// x-forwarded-for is client-controlled when not behind a trusted proxy.
-// Trusting it directly allows anyone to spoof their IP and bypass rate limits.
-// Cloudflare's cf-connecting-ip is stripped of spoofed values by the CDN layer.
-// When behind a reverse proxy we take the LAST entry in x-forwarded-for
-// (appended by the proxy itself), not the first (which the client can forge).
+// See lib/client-ip.ts: x-forwarded-for is client-controlled except for the entries our own
+// proxies append at the end, so the visitor is the first entry from the right that is not one
+// of them (TRUSTED_PROXY_CIDRS / TRUSTED_PROXY_HOPS).
 function getClientIp(c: Context): string {
-  // Cloudflare provides the real client IP — trust it unconditionally
-  const cfIp = c.req.header("cf-connecting-ip");
-  if (cfIp) return cfIp.trim();
-
-  // Behind a reverse proxy take the LAST entry — the proxy's own addition
-  const xff = c.req.header("x-forwarded-for");
-  if (xff) {
-    const parts = xff.split(",").map((s) => s.trim()).filter(Boolean);
-    if (parts.length > 0) return parts[parts.length - 1];
-  }
-
-  return "unknown";
+  return clientIpFromHeaders((name) => c.req.header(name)) ?? "unknown";
 }
 
 // ── Rate limiting (in-memory, per IP, origin-aware) ───────────

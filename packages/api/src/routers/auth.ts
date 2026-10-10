@@ -5,6 +5,7 @@ import { nanoid } from "nanoid";
 import { createHash, randomBytes } from "node:crypto";
 import * as argon2 from "argon2";
 import { isPlatformAdmin } from "../lib/platform-admin.js";
+import { clientIpFromHeaders } from "../lib/client-ip.js";
 import { controlDb, users, sessions, tenants, tenantMembers, emailChangeTokens, invitations, accessTokens, provisionTenantDatabase, cleanupTenantDatabase, type TenantDbConfig } from "@fintranzact/db";
 import { normalizeReferralCode } from "@fintranzact/shared";
 import { partnerForReferralCode } from "../lib/partner-program.js";
@@ -153,20 +154,9 @@ function hashToken(token: string): string {
 
 const IS_SECURE = (process.env.APP_URL || "").startsWith("https");
 
-// Safe IP extraction from a raw Request — mirrors the logic in server.ts getClientIp().
-// Prefers cf-connecting-ip (Cloudflare, strips spoofed values at CDN edge).
-// Falls back to the LAST entry of x-forwarded-for (set by the closest trusted proxy).
+// Safe IP extraction from a raw Request: see lib/client-ip.ts.
 function getClientIpFromRequest(req: Request): string | null {
-  const cfIp = req.headers.get("cf-connecting-ip");
-  if (cfIp) return cfIp.trim();
-
-  const xff = req.headers.get("x-forwarded-for");
-  if (xff) {
-    const parts = xff.split(",").map((s) => s.trim()).filter(Boolean);
-    if (parts.length > 0) return parts[parts.length - 1];
-  }
-
-  return null;
+  return clientIpFromHeaders((name) => req.headers.get(name));
 }
 
 /**

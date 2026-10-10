@@ -28,6 +28,7 @@ import { createFixedWindowLimiter } from "../lib/fixed-window-limiter.js";
 import { logAudit } from "../lib/audit.js";
 import { logger } from "../lib/logger.js";
 import { tenantBusinessIds } from "../lib/business-membership.js";
+import { clientIpFromHeaders } from "../lib/client-ip.js";
 import { importPunches, punchClock } from "../lib/payroll/punches.js";
 import { DEVICE_KEY_PREFIX, hashDeviceKey } from "../routers/payrollPunch.js";
 
@@ -49,7 +50,7 @@ const rateLimitDisabled = () => process.env.DISABLE_RATE_LIMIT === "1" && proces
 
 export function registerAttendancePushRoute(app: Hono): void {
   app.post("/api/attendance/push", bodyLimit({ maxSize: 256 * 1024 }), async (c: Context) => {
-    const ip = c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for")?.split(",").pop()?.trim() ?? "unknown";
+    const ip = clientIpFromHeaders((name) => c.req.header(name)) ?? "unknown";
     if (!rateLimitDisabled() && !perIp.hit(ip)) return c.json({ error: "Too many requests", code: "rate_limited" }, 429);
 
     const auth = c.req.header("authorization") ?? "";

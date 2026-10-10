@@ -36,6 +36,7 @@ import { appRouter } from "../router.js";
 import { refuseIfReadOnly } from "./entitlement-guard.js";
 import { entitlementDataOf } from "../lib/entitlement-error.js";
 import { createFixedWindowLimiter } from "../lib/fixed-window-limiter.js";
+import { clientIpFromHeaders } from "../lib/client-ip.js";
 import { logger } from "../lib/logger.js";
 import { AiProviderError, getAiClient, type AiClient } from "../lib/ai/client.js";
 import { chooseAiModel, resolveAiModels } from "../lib/ai/model-router.js";
@@ -97,7 +98,7 @@ export function registerAiStreamRoute(app: Hono, opts: AiStreamOptions = {}): vo
   const getClient = opts.getClient ?? (() => getAiClient());
 
   app.post("/api/ai/stream", bodyLimit({ maxSize: 16 * 1024 }), async (c: Context) => {
-    const ip = c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for")?.split(",").pop()?.trim() ?? "unknown";
+    const ip = clientIpFromHeaders((name) => c.req.header(name)) ?? "unknown";
     if (!rateLimitDisabled() && !perIp.hit(ip)) return c.json({ error: "Too many requests", code: "rate_limited" satisfies ErrorCode }, 429);
 
     // Same identity, tenant and business resolution as tRPC.
