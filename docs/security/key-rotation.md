@@ -17,10 +17,11 @@ One AES-256-GCM key encrypts these columns (single list in code: `ENCRYPTED_TARG
 | tenant | `eway_bill_configs.client_id, client_secret, username, password, auth_token` | E-way bill (NIC) credentials of a business |
 | tenant | `razorpay_connections.key_id_encrypted, key_secret_encrypted, webhook_secret_encrypted, webhook_token_encrypted` | A business's own Razorpay keys and webhook secret and token |
 | tenant | `businesses.carrier_credentials` (JSON: `apiKey`, `apiSecret`, `accountId` per carrier) | Courier API credentials |
+| tenant | `employees.aadhaar` | An employee's Aadhaar number (payroll). Numbers saved before encryption was added are plain digits until the tool runs; it encrypts them and counts them as "from plaintext" |
 
 "Tenant" tables live in the same database as the control tables in single-database mode (`MULTI_TENANT=false`) and in one database per organisation in multi-tenant mode. The tool handles both.
 
-**Not encrypted but arguably should be** (found while listing the above; not changed here): employee Aadhaar, PAN, UAN, ESIC number and bank account number, and the bank account numbers on businesses and parties, are plain text columns (masked on read, never logged). See [data-classification-and-handling.md](data-classification-and-handling.md). If they are encrypted later, add them to `ENCRYPTED_TARGETS` so rotation covers them.
+**Not encrypted but arguably should be** (not changed here): employee PAN, UAN, ESIC number and bank account number, and the bank account numbers on businesses and parties, are plain text columns (masked on read, never logged). See [data-classification-and-handling.md](data-classification-and-handling.md). If they are encrypted later, add them to `ENCRYPTED_TARGETS` so rotation covers them. The employee Aadhaar number is already encrypted (see the table above): a production server with no `ENCRYPTION_KEY` refuses to save one, and a value that no configured key opens is shown as empty, never as ciphertext.
 
 Also derived from the key, but **not stored**:
 

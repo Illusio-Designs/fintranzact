@@ -707,7 +707,7 @@ export const TABLE_REGISTRY: TableRegistryEntry[] = [
   { tableName: "payroll_designations", drizzleTable: payrollDesignations, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
   { tableName: "payroll_shifts", drizzleTable: payrollShifts, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
   // An employee's manager is another employee: two-pass insert.
-  { tableName: "employees", drizzleTable: employees, redactedFields: [], importable: true, selfFkFields: ["managerId"], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
+  { tableName: "employees", drizzleTable: employees, redactedFields: ["aadhaar"], importable: true, selfFkFields: ["managerId"], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
   { tableName: "employee_tax_declarations", drizzleTable: employeeTaxDeclarations, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 1000, recomputeOnImport: [], scope: { type: "direct" } },
   { tableName: "salary_components", drizzleTable: salaryComponents, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },
   { tableName: "salary_templates", drizzleTable: salaryTemplates, redactedFields: [], importable: true, selfFkFields: [], chunkSize: 0, recomputeOnImport: [], scope: { type: "direct" } },

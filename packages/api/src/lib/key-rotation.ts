@@ -52,6 +52,8 @@ export const ENCRYPTED_TARGETS: EncryptedTarget[] = [
     columns: ["key_id_encrypted", "key_secret_encrypted", "webhook_secret_encrypted", "webhook_token_encrypted"],
   },
   { scope: "tenant", table: "businesses", pk: "id", columns: [], carrierJson: "carrier_credentials" },
+  // Also the way to encrypt Aadhaar numbers saved before they were encrypted: plain values are encrypted here.
+  { scope: "tenant", table: "employees", pk: "id", columns: ["aadhaar"] },
 ];
 
 const CARRIER_FIELDS = ["apiKey", "apiSecret", "accountId"] as const;

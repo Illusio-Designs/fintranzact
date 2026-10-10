@@ -645,3 +645,38 @@ things only you can do or decide:
    `pnpm --filter @fintranzact/web gen:help-index` and commit
    `packages/shared/src/help-index.generated.ts` (a web test fails if it is stale, and
    the web build regenerates it).
+
+## 22. Employee Aadhaar numbers are now encrypted (do this once after you deploy)
+
+Aadhaar numbers in Payroll are now stored encrypted in the database (the same
+AES-256-GCM key as your Razorpay and e-invoice credentials). What only you can do:
+
+1. **Make sure `ENCRYPTION_KEY` is set on the server that runs the API** (on AWS it is
+   in Secrets Manager). A production server with no key now refuses to save an
+   Aadhaar number instead of storing it as plain text; you will see an error when
+   someone adds or edits one. Everything else in the app works as before.
+2. **Encrypt the numbers already saved.** New and edited numbers are encrypted at once;
+   the ones saved earlier stay plain digits (and still display correctly) until you
+   run the key rotation tool once, which encrypts them:
+   `pnpm --filter @fintranzact/api exec tsx src/bin/rotate-encryption-key.ts --dry-run`
+   first (it shows how many numbers it would encrypt, in the "from plaintext" count),
+   then the same command without `--dry-run`. Run it from a checkout of the repository
+   with the production `ENCRYPTION_KEY` and database settings, as described in
+   `docs/security/key-rotation.md` (which also covers the yearly rotation). Take a
+   database backup before the first real run.
+3. **Do not lose the key.** If a number cannot be opened with any configured key, the
+   Payroll screen shows it as empty (it never shows scrambled text). Keep the key and
+   any previous keys safe (section 20).
+4. **The data export no longer contains Aadhaar numbers.** The encrypted value only
+   works on this server, and a readable copy in a download file would defeat the
+   point. If a customer moves to another server through export and import, their
+   employees' Aadhaar numbers need to be entered again.
+5. **Still not encrypted:** employee PAN, UAN, ESIC number and bank account numbers
+   (and the bank numbers on parties and businesses). They are masked on screen and
+   kept out of logs, but are plain text columns. Tell me if you want those encrypted
+   the same way; PAN and bank numbers are used by Form 16, challans and bank files,
+   so each place that reads them needs a check.
+6. **Privacy policy / questionnaires:** `docs/security/questionnaire-answers.md` and
+   `docs/security/data-classification-and-handling.md` are updated. The public
+   privacy page is legal text and I did not change it.
+

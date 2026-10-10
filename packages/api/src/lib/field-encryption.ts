@@ -11,7 +11,7 @@
  * and null/undefined fields.
  */
 
-import { encryptField, decryptField } from "@fintranzact/db";
+import { encryptField, decryptField, decryptFieldStrict, isEncrypted } from "@fintranzact/db";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -234,4 +234,42 @@ export function decryptGatewaySecret(stored: string): string {
     }
   }
   throw new Error("ENCRYPTION_KEY is not configured; cannot decrypt a gateway secret");
+}
+
+// ── Employee Aadhaar numbers ────────────────────────────────────────────────
+
+/**
+ * Encrypt an employee's Aadhaar number before it is stored. Null and "" pass through.
+ *
+ * Aadhaar should be stored encrypted or not at all, so a production server with no
+ * ENCRYPTION_KEY refuses to save one instead of writing it in plain text (encryptField
+ * would silently do that). Development and tests keep the plain-text fallback.
+ */
+export function encryptAadhaar(value: string | null | undefined): string | null {
+  if (value === null || value === undefined || value === "") return value as string | null;
+  if (configuredKeyHex()) {
+    const out = encryptField(value);
+    if (!VERSIONED_CIPHERTEXT_RE.test(out)) throw new Error("Aadhaar number was not encrypted");
+    return out;
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("ENCRYPTION_KEY is not configured; refusing to store an Aadhaar number in plaintext");
+  }
+  return value;
+}
+
+/**
+ * Decrypt a stored Aadhaar number. A value written before encryption was added (plain
+ * digits) is returned as is, until the rotation tool encrypts it. A value that is
+ * encrypted but that no configured key opens gives null, never the ciphertext, so a lost
+ * or wrong key cannot put a ciphertext on screen as if it were the number.
+ */
+export function decryptAadhaar(stored: string | null | undefined): string | null {
+  if (stored === null || stored === undefined || stored === "") return null;
+  if (!isEncrypted(stored)) return stored;
+  try {
+    return decryptFieldStrict(stored);
+  } catch {
+    return null;
+  }
 }

@@ -21,6 +21,7 @@ import {
   type TenantDatabase,
 } from "@fintranzact/db";
 import { formatPayrollMonth, maskSensitive, monthEnd, monthOf, monthStart } from "@fintranzact/shared";
+import { decryptAadhaar } from "../field-encryption.js";
 
 export interface PayrollSettingsValues {
   defaultWeeklyOffDays: number[];
@@ -144,8 +145,10 @@ export function employeeListItem(row: EmployeeRow, names: { department?: string 
  * bank numbers are included; without it only their masked forms are.
  */
 export function employeeDetail(row: EmployeeRow, opts: { full: boolean }) {
+  // The Aadhaar number is stored encrypted; decrypt once for both the full value and its mask.
+  const aadhaar = decryptAadhaar(row.aadhaar);
   const sensitive = opts.full
-    ? { pan: row.pan, aadhaar: row.aadhaar, uan: row.uan, esicNumber: row.esicNumber, bankAccountNumber: row.bankAccountNumber, bankIfsc: row.bankIfsc }
+    ? { pan: row.pan, aadhaar, uan: row.uan, esicNumber: row.esicNumber, bankAccountNumber: row.bankAccountNumber, bankIfsc: row.bankIfsc }
     : { pan: null, aadhaar: null, uan: null, esicNumber: null, bankAccountNumber: null, bankIfsc: null };
   return {
     id: row.id,
@@ -179,7 +182,7 @@ export function employeeDetail(row: EmployeeRow, opts: { full: boolean }) {
     updatedAt: row.updatedAt,
     ...sensitive,
     panMasked: maskSensitive(row.pan),
-    aadhaarMasked: maskSensitive(row.aadhaar),
+    aadhaarMasked: maskSensitive(aadhaar),
     uanMasked: maskSensitive(row.uan),
     esicMasked: maskSensitive(row.esicNumber),
     bankAccountMasked: maskSensitive(row.bankAccountNumber),

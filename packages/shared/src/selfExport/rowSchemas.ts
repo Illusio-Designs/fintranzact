@@ -967,7 +967,9 @@ export const tds26asEntryRowSchema = z.object({
 // export simply has no rows for them. Identity and bank numbers (pan, aadhaar,
 // uan, esicNumber, bankAccountNumber, bankIfsc) are optional columns: they are
 // in the file only because the owner exports the whole business, and the
-// import accepts files without them.
+// import accepts files without them. The exporter writes aadhaar as null (it is
+// stored encrypted under this server's key, so the value would be useless, or a
+// leak, anywhere else).
 
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const dateStringNullable = dateString.nullable();
