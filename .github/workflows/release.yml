@@ -157,7 +157,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: pnpm
@@ -216,7 +216,7 @@ jobs:
 
       - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: pnpm
@@ -263,7 +263,7 @@ jobs:
 
       # Node 24 ships with npm 11.x, which satisfies Trusted Publishing's
       # npm >= 11.5.1 requirement without a separate upgrade step.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
@@ -309,7 +309,7 @@ jobs:
 
       # Node 24 ships with npm 11.x, which satisfies Trusted Publishing's
       # npm >= 11.5.1 requirement without a separate upgrade step.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: pnpm
