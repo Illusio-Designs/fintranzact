@@ -286,9 +286,18 @@ export async function beginTwoFactorSetup(
     throw new TRPCError({ code: "BAD_REQUEST", message: "Two-factor authentication is already on." });
   }
   const secret = generateSecret();
-  const stored = await deps.store.upsertPendingSecret(user.id, encryptTotpSecret(secret));
-  if (!stored) throw new TRPCError({ code: "BAD_REQUEST", message: "Two-factor authentication is already on." });
-
+  try {
+    const stored = await deps.store.upsertPendingSecret(user.id, encryptTotpSecret(secret));
+    if (!stored) throw new TRPCError({ code: "BAD_REQUEST", message: "Two-factor authentication is already on." });
+  } catch (err) {
+    if (err instanceof Error && /ENCRYPTION_KEY/.test(err.message)) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Two-factor authentication cannot be started because server encryption is not configured.",
+      });
+    }
+    throw err;
+  }
   const uri = otpauthUri({ secret, accountName: user.email, issuer: TWO_FACTOR_ISSUER });
   const qrDataUrl = await deps.renderQr(uri);
   await deps.record({ userId: user.id, type: "2fa.setup_started", ip: event.ip, userAgent: event.userAgent });

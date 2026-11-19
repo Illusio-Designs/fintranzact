@@ -86,10 +86,17 @@ describe("registerSchema — validates new user registration input", () => {
     username: "rahulsharma",
     password: "mypassword123",
     confirmPassword: "mypassword123",
+    phone: "9876543210",
   };
 
   it("accepts valid registration data with matching passwords", () => {
     expect(registerSchema.safeParse(validInput).success).toBe(true);
+  });
+
+  it("requires a valid Indian mobile number", () => {
+    expect(registerSchema.safeParse({ ...validInput, phone: "" }).success).toBe(false);
+    expect(registerSchema.safeParse({ ...validInput, phone: "9876543210" }).success).toBe(true);
+    expect(registerSchema.safeParse({ ...validInput, phone: undefined }).success).toBe(true);
   });
 
   it("keeps the referral code in the validated registration payload", () => {
@@ -109,6 +116,7 @@ describe("registerSchema — validates new user registration input", () => {
       email: "rahul@example.in",
       password: "mypassword123",
       confirmPassword: "mypassword123",
+      phone: "9876543210",
     });
     expect(result.success).toBe(false);
     expect(result.error?.issues[0].path).toContain("username");

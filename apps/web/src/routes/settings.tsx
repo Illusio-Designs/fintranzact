@@ -77,6 +77,21 @@ function SettingsPage() {
     );
   }
 
+  if (businessesFailed) {
+    return (
+      <div>
+        <PageHeader title="Settings" description="Manage your business and preferences" />
+        <div className="card mt-4 px-6 py-8 text-center" role="alert">
+          <p className="text-sm font-medium text-text-primary">Could not load settings</p>
+          <p className="mt-1 text-sm text-text-tertiary">Check your connection, then try again.</p>
+          <button type="button" className="btn-secondary mt-4" onClick={() => window.location.reload()}>
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // First-run: no business yet. A failed list (e.g. a blocked member) is not "no business".
   if (!biz && !businessesFailed && !showWhatsNext) {
     if (!canCreateBusiness) {

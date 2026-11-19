@@ -13,7 +13,7 @@ function OnboardingPage() {
 
   const { data: session, isLoading: sessionLoading } = trpc.auth.me.useQuery();
 
-  const { data: businesses, isLoading: businessesLoading } =
+  const { data: businesses, isLoading: businessesLoading, isError: businessesFailed, refetch: refetchBusinesses } =
     trpc.business.list.useQuery();
 
   const { data: canCreate } = trpc.business.canCreate.useQuery(undefined, {
@@ -26,6 +26,23 @@ function OnboardingPage() {
 
   if (sessionLoading || businessesLoading || !session) {
     return <BootSplash className="bg-surface-1" />;
+  }
+
+  if (businessesFailed) {
+    return (
+      <div className="min-h-screen bg-surface-1 px-4 py-10">
+        <div className="mx-auto max-w-2xl">
+          <StandaloneHeader />
+          <div className="card p-8 text-center" role="alert">
+            <h1 className="text-lg font-semibold text-text-primary">Could not load business setup</h1>
+            <p className="mt-2 text-sm text-text-tertiary">Check your connection, then try again.</p>
+            <button type="button" className="btn-secondary mt-5" onClick={() => void refetchBusinesses()}>
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!canManageBusinesses) {

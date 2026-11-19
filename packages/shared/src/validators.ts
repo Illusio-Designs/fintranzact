@@ -47,20 +47,14 @@ export const registerSchema = z.object({
   referralCode: z.string().trim().max(50).optional().or(z.literal("")),
   /** The plan chosen at sign-up (starter, growth or business); Growth when left out. Removed plan ids are refused by the API. */
   plan: z.string().trim().max(40).optional(),
-  /**
-   * Mobile number (Indian: 10 digits starting 6-9, optional +91 / 0). Optional here so
-   * API, CLI and MCP clients keep working; the web and mobile sign-up forms require it.
-   * Kept for the one-trial-per-business check and account recovery.
-   */
-  phone: z.string().trim().max(30).optional().or(z.literal("")),
+  /** Mobile number (Indian: 10 digits starting 6-9, optional +91 / 0). */
+   phone: z.string().trim().max(30).optional().or(z.literal("")),
   turnstileToken: z.string().optional(),
 }).superRefine((data, ctx) => {
-  if (data.phone && !isValidIndianMobile(data.phone)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["phone"],
-      message: PHONE_INVALID_MESSAGE,
-    });
+   if (data.phone === "") {
+     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["phone"], message: "Mobile number is required" });
+   } else if (data.phone && !isValidIndianMobile(data.phone)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["phone"], message: PHONE_INVALID_MESSAGE });
   }
   const username = (data.username ?? data.name)?.trim();
   if (!username) {
@@ -110,8 +104,8 @@ export const createBusinessSchema = z.object({
   legalName: z.string().max(200).optional(),
   businessType: z.enum(businessTypes).default("proprietorship"),
 
-  phone: z.string().min(1).max(15),
-  email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().trim().min(1).max(15),
+  email: z.string().trim().email().max(255).optional().or(z.literal("")),
   address: z.string().min(1).max(500),
   addressLine1: z.string().optional(),
   addressLine2: z.string().optional(),
@@ -124,7 +118,7 @@ export const createBusinessSchema = z.object({
   city: z.string().max(100).optional(),
   state: z.string().max(100).optional(),
   stateCode: z.string().max(2).optional(),
-  pincode: z.string().max(10).optional(),
+  pincode: z.string().trim().max(10).optional(),
 
   // Statutory details
   gstRegistrationType: z.enum(gstRegistrationTypes).default("unregistered"),
@@ -136,7 +130,7 @@ export const createBusinessSchema = z.object({
   pan: z
     .string()
     .regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/),
-  tan: z.string().max(10).optional().or(z.literal("")),
+  tan: z.string().trim().max(10).optional().or(z.literal("")),
   deductorType: z
     .string()
     .max(50)
@@ -160,10 +154,10 @@ export const createBusinessSchema = z.object({
     .max(100)
     .optional()
     .or(z.literal("")),
-  cin: z.string().max(21).optional().or(z.literal("")),
-  llpin: z.string().max(7).optional().or(z.literal("")),
-  udyamNumber: z.string().max(30).optional().or(z.literal("")),
-  iecCode: z.string().max(10).optional().or(z.literal("")),
+  cin: z.string().trim().max(21).optional().or(z.literal("")),
+  llpin: z.string().trim().max(7).optional().or(z.literal("")),
+  udyamNumber: z.string().trim().max(30).optional().or(z.literal("")),
+  iecCode: z.string().trim().max(10).optional().or(z.literal("")),
   lutArn: z.string().max(100).optional().or(z.literal("")),
   eInvoiceEnabled: z.boolean().default(false),
   eWayBillEnabled: z.boolean().default(false),
@@ -176,28 +170,36 @@ export const createBusinessSchema = z.object({
   eWayBillPassword: z.string().max(200).optional().or(z.literal("")),
   assesseeOfOtherTerritory: z.boolean().default(false),
   gstReturnPeriodicity: z.enum(["monthly", "quarterly"]).default("monthly"),
-  eWayBillThreshold: z.coerce
-    .number()
-    .nonnegative()
-    .optional()
-    .nullable(),
+  eWayBillThreshold: z.union([
+    z.string().trim().regex(/^\d{1,13}(\.\d{1,2})?$/, "Enter an amount with at most two decimal places").transform(Number),
+    z.number().finite().nonnegative().refine((value) => {
+      const [whole, decimal = ""] = String(value).split(".");
+      return whole.length <= 13 && decimal.length <= 2;
+    }, "Enter an amount with at most 13 whole digits and two decimal places"),
+  ]).optional().nullable(),
 
   // Document defaults
-  invoicePrefix: z.string().min(1).max(10).default("INV"),
-  currency: z.string().length(3).default("INR"),
-  paymentPrefix: z.string().min(1).max(10).default("PAY"),
-  quotationPrefix: z.string().min(1).max(10).default("QTN"),
-  creditNotePrefix: z.string().min(1).max(10).default("CN"),
-  deliveryChallanPrefix: z.string().min(1).max(10).default("DC"),
-  proformaPrefix: z.string().min(1).max(10).default("PI"),
-  debitNotePrefix: z.string().min(1).max(10).default("DN"),
-  salesReturnPrefix: z.string().min(1).max(10).default("SR"),
-  purchaseReturnPrefix: z.string().min(1).max(10).default("PR"),
-  purchaseOrderPrefix: z.string().min(1).max(10).default("PO"),
-  salesOrderPrefix: z.string().min(1).max(10).default("SO"),
-  goodsReceiptNotePrefix: z.string().min(1).max(10).default("GRN"),
+  invoicePrefix: z.string().trim().min(1).max(10).default("INV"),
+  currency: z.string().trim().length(3).default("INR"),
+  paymentPrefix: z.string().trim().min(1).max(10).default("PAY"),
+  quotationPrefix: z.string().trim().min(1).max(10).default("QTN"),
+  creditNotePrefix: z.string().trim().min(1).max(10).default("CN"),
+  deliveryChallanPrefix: z.string().trim().min(1).max(10).default("DC"),
+  proformaPrefix: z.string().trim().min(1).max(10).default("PI"),
+  debitNotePrefix: z.string().trim().min(1).max(10).default("DN"),
+  salesReturnPrefix: z.string().trim().min(1).max(10).default("SR"),
+  purchaseReturnPrefix: z.string().trim().min(1).max(10).default("PR"),
+  purchaseOrderPrefix: z.string().trim().min(1).max(10).default("PO"),
+  salesOrderPrefix: z.string().trim().min(1).max(10).default("SO"),
+  goodsReceiptNotePrefix: z.string().trim().min(1).max(10).default("GRN"),
   // Drives HSN digit enforcement and the e-invoicing threshold.
-  annualTurnover: z.number().nonnegative().nullable().optional(),
+  annualTurnover: z.union([
+    z.string().trim().regex(/^\d{1,13}(\.\d{1,2})?$/, "Enter an amount with at most two decimal places").transform(Number),
+    z.number().finite().nonnegative().refine((value) => {
+      const [whole, decimal = ""] = String(value).split(".");
+      return whole.length <= 13 && decimal.length <= 2;
+    }, "Enter an amount with at most 13 whole digits and two decimal places"),
+  ]).nullable().optional(),
   defaultRoundOff: z.boolean().default(true),
   defaultTermsAndConditions: z.string().max(2000).nullable().optional(),
   // Print settings (Settings → Documents → Invoice design). No defaults here:
